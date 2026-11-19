@@ -159,7 +159,7 @@ pub fn running_list(ctx: &mut Ctx, project: ProjectId, rows: &[RunningRow]) -> E
 /// A row (`Running row` `MDsM7`): its state's icon, *KON-12 · Implement* and *11m*.
 fn running_row(ctx: &mut Ctx, navigation: &Navigation, project: ProjectId, row: &RunningRow) -> Element {
   let (glyph, color, state) = match row.state {
-    RowState::Working => (Icon::LoaderCircle, PaletteColor::TextSecondary, "working"),
+    RowState::Working => (Icon::LoaderCircle, ExtraColor::TextSecondary.role(), "working"),
     RowState::NeedsYou => (Icon::Hand, PaletteColor::Warning, "needs-you"),
     RowState::Stopped => (Icon::CirclePause, PaletteColor::Warning, "stopped"),
   };

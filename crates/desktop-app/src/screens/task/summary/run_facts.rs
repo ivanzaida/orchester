@@ -203,7 +203,7 @@ fn disclosure(ctx: &Ctx, more: &Signal<bool>) -> Element {
     .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(value("task-facts-more-label", &words, Look::Secondary))
     .into()
 }

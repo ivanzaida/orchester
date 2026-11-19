@@ -53,7 +53,7 @@ use crate::{
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route, TaskView},
   screens::{orchestrator::draft, settings::orchester::moment},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     field::field_error,
     icon::{Icon, icon},
@@ -304,7 +304,7 @@ impl View {
     frame("overview-decided")
       .child(head(
         "overview-decided",
-        (Icon::Waypoints, PaletteColor::TextSecondary),
+        (Icon::Waypoints, ExtraColor::TextSecondary.role()),
         (&title, &ctx.t("overview.away.decided.order")),
         Some(all),
       ))
@@ -336,7 +336,7 @@ impl View {
       &ctx.t("overview.away.decided.conversation"),
       Press::Open(Navigation::of(ctx).to(chat)),
     );
-    let line = line(&id, (glyph, PaletteColor::TextMuted), &what, "")
+    let line = line(&id, (glyph, PaletteColor::MutedForeground), &what, "")
       .child(mono_time(&format!("{id}-time"), &moment(ctx, made.at)))
       .child(seen)
       .child(overrule);
@@ -410,7 +410,7 @@ fn head(id: &str, (glyph, tone): (Icon, PaletteColor), (title, meta): (&str, &st
     .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .child(icon(glyph, IconSize::Base, tone))
     .child(
       Text::new(title)
@@ -433,11 +433,11 @@ fn group(ctx: &Ctx, module: Option<&str>, count: usize) -> Element {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::Boxes, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Boxes, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&name)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(muted(&count.to_string()))
@@ -463,7 +463,7 @@ fn line(id: &str, (glyph, tone): (Icon, PaletteColor), what: &str, aside: &str) 
     .child(
       Text::new(aside)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex(1.0)

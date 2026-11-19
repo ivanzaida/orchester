@@ -235,7 +235,7 @@ fn fold_row(
   } else {
     (
       Icon::CircleDashed,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t_args("merges.page.notReached", [("count", folded.len().to_string())]),
     )
   };
@@ -256,9 +256,9 @@ fn fold_row(
           TypographyStyle::Body
         })
         .color(if passed && !compact {
-          PaletteColor::TextPrimary
+          PaletteColor::Foreground
         } else {
-          PaletteColor::TextSecondary
+          ExtraColor::TextSecondary.role()
         })
         .nowrap(),
     )
@@ -266,7 +266,7 @@ fn fold_row(
       Text::new(&names.join(&ctx.t("merges.separator")))
         .id(format!("{id}-{suffix}-names"))
         .variant(ExtraTypography::Property.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap()
@@ -276,7 +276,7 @@ fn fold_row(
       Text::new(&label)
         .id(format!("{id}-{suffix}-toggle"))
         .variant(TypographyStyle::Button)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     );
   let row = pressable(toggle)
@@ -308,7 +308,7 @@ impl Check {
     let (glyph, color) = match result {
       StageResult::Passed => (Icon::CircleCheck, PaletteColor::Success),
       StageResult::Refused => (Icon::CircleX, PaletteColor::Warning),
-      StageResult::NotReached => (Icon::CircleDashed, PaletteColor::TextMuted),
+      StageResult::NotReached => (Icon::CircleDashed, PaletteColor::MutedForeground),
     };
     let (said, said_color) = stage_result(ctx, attempt, self.stage);
     let refused = result == StageResult::Refused;
@@ -320,9 +320,9 @@ impl Check {
       .id(format!("{}-name", self.id))
       .variant(self.name_style(refused))
       .color(if refused {
-        PaletteColor::TextPrimary
+        PaletteColor::Foreground
       } else {
-        PaletteColor::TextSecondary
+        ExtraColor::TextSecondary.role()
       })
       .nowrap();
     let line = line(self.compact)
@@ -384,7 +384,7 @@ fn cause_box(id: &str, cause: &str) -> Element {
           Text::new(cause)
             .id(format!("{id}-cause-text"))
             .variant(TypographyStyle::Mono)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .selectable(true)
             .width(Dimension::Pct(100.0)),
         ),

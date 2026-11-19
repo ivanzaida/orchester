@@ -214,7 +214,7 @@ impl AccessFields {
     let sub = match &errors.environment {
       Some(error) => Sub {
         words: message_text(ctx, error),
-        color: PaletteColor::Danger,
+        color: PaletteColor::Destructive,
       },
       None => Sub::quiet(ctx.t("team_new.tool.access.environmentSub")),
     };
@@ -258,7 +258,7 @@ impl AccessFields {
     let sub = match error {
       Some(words) => Sub {
         words,
-        color: PaletteColor::Danger,
+        color: PaletteColor::Destructive,
       },
       None => Sub::quiet(ctx.t("team_new.tool.access.window.sub")),
     };

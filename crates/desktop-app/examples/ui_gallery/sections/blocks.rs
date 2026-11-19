@@ -11,7 +11,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_app::{
-  theme::ExtraTypography,
+  theme::{ExtraColor, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -111,7 +111,7 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
         "Markdown · plan text (Q5J0r)",
         HALF,
         MarkdownView::new("g-markdown", PLAN, state.link.clone())
-          .style(ExtraTypography::Lead.role(), PaletteColor::TextSecondary)
+          .style(ExtraTypography::Lead.role(), ExtraColor::TextSecondary.role())
           .render(ctx),
       ),
     ])
@@ -156,7 +156,7 @@ fn cards() -> Row {
     card(id, surface).width(Dimension::Px(200.0)).child(
       Text::new(title)
         .variant(ExtraTypography::Strong.role())
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
   };
   Row::new()

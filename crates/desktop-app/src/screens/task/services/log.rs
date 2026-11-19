@@ -192,7 +192,7 @@ impl LogPanel {
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Loose.role())
       .align_items(Alignment::Center)
-      .child(icon(Icon::ScrollText, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::ScrollText, IconSize::Base, PaletteColor::MutedForeground))
       .child(
         Text::new(&ctx.t_args("run_services.log.title", [("name", props.service.to_string())]))
           .id("task-services-log-title")
@@ -203,7 +203,7 @@ impl LogPanel {
         Text::new(&shown)
           .id("task-services-log-count")
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
       .child(Spacer::new().flex(1.0))
@@ -239,7 +239,7 @@ pub(super) fn line(line: &ServiceLogLine) -> Element {
     .flex(1.0)
     .min_width(Dimension::Px(0.0));
   let text = if line.stderr {
-    text.color(PaletteColor::Danger)
+    text.color(PaletteColor::Destructive)
   } else {
     text
   };
@@ -263,7 +263,7 @@ fn failed(ctx: &Ctx, props: &LogProps) -> Element {
       Text::new(&ctx.t_args("run_services.log.failed", [("name", props.service.to_string())]))
         .id("task-services-log-failed")
         .variant(RunServicesText::LogLine.role())
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }

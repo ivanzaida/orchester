@@ -120,7 +120,7 @@ impl DisplayControl {
       .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Info, IconSize::Base, PaletteColor::MutedForeground))
       .child(Text::new(&ctx.t("tasks.display.note")).variant(ExtraTypography::Note.role()));
     menu_panel("tasks-display-menu")
       .width(Dimension::Px(MENU_WIDTH))

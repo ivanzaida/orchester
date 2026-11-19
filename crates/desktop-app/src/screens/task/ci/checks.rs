@@ -37,10 +37,10 @@ const SHOWN_TAIL_LINES: usize = 8;
 fn mark(state: CiState) -> (Icon, PaletteColor) {
   match state {
     CiState::Passed => (Icon::CircleCheck, PaletteColor::Success),
-    CiState::Skipped => (Icon::CircleCheck, PaletteColor::TextMuted),
-    CiState::Running => (Icon::LoaderCircle, PaletteColor::TextSecondary),
-    CiState::Queued => (Icon::CircleDashed, PaletteColor::TextMuted),
-    CiState::Failed | CiState::Cancelled => (Icon::CircleX, PaletteColor::Danger),
+    CiState::Skipped => (Icon::CircleCheck, PaletteColor::MutedForeground),
+    CiState::Running => (Icon::LoaderCircle, ExtraColor::TextSecondary.role()),
+    CiState::Queued => (Icon::CircleDashed, PaletteColor::MutedForeground),
+    CiState::Failed | CiState::Cancelled => (Icon::CircleX, PaletteColor::Destructive),
   }
 }
 
@@ -58,8 +58,8 @@ pub fn row(ctx: &mut Ctx, (card, index): (&str, usize), check: &CiCheck, place: 
   let (glyph, tone) = mark(check.state);
   let failing = matches!(check.state, CiState::Failed | CiState::Cancelled);
   let state_word = match check.state {
-    CiState::Failed => Some(("ci.check.failed", PaletteColor::Danger)),
-    CiState::Cancelled => Some(("ci.check.cancelled", PaletteColor::Danger)),
+    CiState::Failed => Some(("ci.check.failed", PaletteColor::Destructive)),
+    CiState::Cancelled => Some(("ci.check.cancelled", PaletteColor::Destructive)),
     _ => None,
   };
   let tail = check.log_tail.as_deref().map(agent_log_tail);
@@ -90,7 +90,7 @@ pub fn row(ctx: &mut Ctx, (card, index): (&str, usize), check: &CiCheck, place: 
     .with_children((check.state == CiState::Queued).then(|| {
       Text::new(&ctx.t("ci.check.queued"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     }))
     .with_children(details(ctx, &id, check));
@@ -131,7 +131,7 @@ fn tail_box(ctx: &Ctx, id: &str, tail: Option<&str>) -> Element {
     vec![
       Text::new(&ctx.t("ci.check.noLog"))
         .variant(CiText::LogTail.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .into(),
     ]
   } else {
@@ -143,7 +143,7 @@ fn tail_box(ctx: &Ctx, id: &str, tail: Option<&str>) -> Element {
           .variant(CiText::LogTail.role())
           .width(Dimension::Pct(100.0));
         if index == last {
-          text.color(PaletteColor::TextPrimary)
+          text.color(PaletteColor::Foreground)
         } else {
           text
         }
@@ -183,12 +183,12 @@ pub fn passed_fold(ctx: &Ctx, id: &str, passed: &[&CiCheck]) -> Element {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::CircleCheck, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::CircleCheck, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .id(format!("{id}-text"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

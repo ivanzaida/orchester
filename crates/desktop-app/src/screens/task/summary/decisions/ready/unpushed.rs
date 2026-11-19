@@ -63,7 +63,7 @@ pub(super) fn question(ctx: &Ctx, unpushed: &Unpushed<'_>, choices: Choices) -> 
   let args = [("base", unpushed.base.as_str()), ("remote", unpushed.remote.as_str())];
   let (title, push) = words(ctx, unpushed);
   card("task-pull-request-unpushed", CardSurface::Decision)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(ExtraRadius::Tile.role())
     .padding(SpacingSize::Lg)
     .spacing(ExtraSpacing::Loose.role())

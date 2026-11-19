@@ -20,7 +20,7 @@ use super::{
   row::{self, ROW_HEIGHT, RowProps},
 };
 use crate::{
-  theme::{ExtraSpacing, IconSize, TasksSpacing},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TasksSpacing},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -106,7 +106,7 @@ impl Component for ReviewLine {
 const fn look(group: Group) -> (Icon, PaletteColor) {
   match group {
     Group::Waiting => (Icon::Eye, PaletteColor::Info),
-    Group::WithAgent => (Icon::LoaderCircle, PaletteColor::TextMuted),
+    Group::WithAgent => (Icon::LoaderCircle, PaletteColor::MutedForeground),
     Group::Approved => (Icon::CircleCheck, PaletteColor::Success),
   }
 }
@@ -158,21 +158,21 @@ fn group(ctx: &mut Ctx, line: &GroupLine) -> Element {
         Icon::ChevronDown
       },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .child(icon(glyph, IconSize::Base, color).id(format!("{id}-icon")))
     .child(
       Text::new(&label)
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(
       Text::new(&line.count.to_string())
         .id(format!("{id}-count"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()
@@ -188,19 +188,19 @@ fn nothing(ctx: &Ctx, id: &str, words: &str, hint: Option<&str>) -> Element {
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Check, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::Check, IconSize::Md, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t(words))
         .id(format!("{id}-text"))
         .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .with_children(hint.map(|hint| {
       Text::new(&ctx.t(hint))
         .id(format!("{id}-hint"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     }))
     .into()

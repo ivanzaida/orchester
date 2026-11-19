@@ -22,7 +22,7 @@ use crate::{
 
 /// The bar with `buttons` at its start and `hint` at its end; the kind's panels each say what they put in them.
 pub(in crate::screens) fn bar(buttons: Vec<Element>, hint: Option<String>) -> Element {
-  bar_saying(buttons, hint.map(|hint| (hint, PaletteColor::TextMuted)))
+  bar_saying(buttons, hint.map(|hint| (hint, PaletteColor::MutedForeground)))
 }
 
 /// [`bar`] with `hint` in `color`: the form that creates a resource says in `danger` why Create cannot be pressed.
@@ -51,7 +51,7 @@ pub(in crate::screens) fn bar_ending(
     .padding(Padding::symmetric(HubSpacing::Sections.role(), SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .with_children(buttons);
   // The hint takes what the buttons leave and wraps, so a long one is never cut at the panel's edge.

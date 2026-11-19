@@ -26,7 +26,7 @@ use super::{
   refusal::{self, Shown},
 };
 use crate::{
-  theme::{DROP_VEIL_OPACITY, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DROP_VEIL_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -171,7 +171,7 @@ pub fn zones(ctx: &Ctx, state: &BoardState, id: &str, zones: &Zones) -> Element 
     zone(
       ctx,
       &format!("{id}-zone-canceled"),
-      (Icon::CircleX, PaletteColor::TextSecondary),
+      (Icon::CircleX, ExtraColor::TextSecondary.role()),
       ("task_close.menu.cancel", *over),
     )
     .ref_element(state.target_ref(target.clone()))
@@ -199,7 +199,7 @@ fn zone(ctx: &Ctx, id: &str, (glyph, color): (Icon, PaletteColor), (key, over): 
     .child(
       Text::new(&ctx.t(key))
         .variant(ExtraTypography::OptionTitle.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     );
   let zone = Stack::new()
@@ -213,17 +213,17 @@ fn zone(ctx: &Ctx, id: &str, (glyph, color): (Icon, PaletteColor), (key, over): 
     .describe("state", if over { "over" } else { "offered" });
   if over {
     return zone
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Lg, PaletteColor::BorderFocus))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Lg, PaletteColor::Ring))
       .child(label);
   }
   zone
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .child(
       Column::new()
         .id(format!("{id}-veil"))
         .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
-        .background(PaletteColor::SurfaceBase)
+        .background(PaletteColor::Background)
         .opacity(DROP_VEIL_OPACITY),
     )
     .child(label)
@@ -282,6 +282,6 @@ fn line() -> Row {
     .id("tasks-board-insertion")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(LINE))
-    .background(PaletteColor::BorderFocus)
+    .background(PaletteColor::Ring)
     .hit_test(HitTestBehavior::None)
 }

@@ -73,7 +73,7 @@ pub fn dots(id: &str) -> Element {
             .width(Dimension::Px(DOT_SIZE))
             .height(Dimension::Px(DOT_SIZE))
             .rounded(ExtraRadius::Full.role())
-            .background(PaletteColor::TextMuted)
+            .background(PaletteColor::MutedForeground)
             .opacity(opacity);
           if still {
             dot.into()

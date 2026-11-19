@@ -67,7 +67,7 @@ pub(super) fn row(ctx: &mut Ctx, timeline: &Timeline, (key, line, at): (&str, &M
     Text::new(&value)
       .id(format!("{id}-value"))
       .variant(ExtraTypography::PropertyMono.role())
-      .color(PaletteColor::TextPrimary)
+      .color(PaletteColor::Foreground)
       .nowrap()
   });
   let cancel = cancel(ctx, timeline, &id, line);
@@ -78,7 +78,7 @@ pub(super) fn row(ctx: &mut Ctx, timeline: &Timeline, (key, line, at): (&str, &M
     .padding(Padding::new().left(ConversationSpacing::ApprovalRow.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t(lead))
         .id(format!("{id}-text"))
@@ -116,7 +116,7 @@ pub(super) fn back_row(ctx: &mut Ctx, timeline: &Timeline, key: &str, back: &Bac
     .padding(Padding::new().left(ConversationSpacing::ApprovalRow.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::RotateCcw, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::RotateCcw, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t_args("conversation.model.event.backToProfile", [("step", &*step)]))
         .id(format!("{id}-text"))
@@ -127,7 +127,7 @@ pub(super) fn back_row(ctx: &mut Ctx, timeline: &Timeline, key: &str, back: &Bac
       Text::new(&choice_words(ctx, &back.profile))
         .id(format!("{id}-value"))
         .variant(ExtraTypography::PropertyMono.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap(),
     )
     .child(

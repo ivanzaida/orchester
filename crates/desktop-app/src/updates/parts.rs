@@ -18,7 +18,7 @@ use lurq::{
 
 use super::{UpdateAction, UpdateDispatch};
 use crate::{
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -84,10 +84,10 @@ pub(super) fn link(id: &str, words: &str, press: Press) -> Element {
       Text::new(words)
         .id(format!("{id}-text"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::MutedForeground))
     .into()
 }
 
@@ -100,12 +100,12 @@ pub(super) fn leading_link(id: &str, (glyph, words): (Icon, &str), press: Press)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("a11y_name", words.to_owned())
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .into()
@@ -123,17 +123,17 @@ pub(super) fn notes(ctx: &mut Ctx, (version, text): (&str, &str), parts: &Parts)
     Text::new(&ctx.t("settings.general.updates.noNotes"))
       .id("settings-update-notes-empty")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextSecondary)
+      .color(ExtraColor::TextSecondary.role())
       .into()
   } else {
     MarkdownView::new("settings-update-notes-text", text.to_owned(), parts.on_link.clone())
-      .style(TypographyStyle::Description, PaletteColor::TextSecondary)
+      .style(TypographyStyle::Description, ExtraColor::TextSecondary.role())
       .render(ctx)
   };
   Column::new()
     .id("settings-update-notes")
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .rounded(RadiusSize::Md)
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Snug.role())
@@ -141,7 +141,7 @@ pub(super) fn notes(ctx: &mut Ctx, (version, text): (&str, &str), parts: &Parts)
       Text::new(&title)
         .id("settings-update-notes-title")
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
     .child(body)
     .into()

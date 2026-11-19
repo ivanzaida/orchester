@@ -7,7 +7,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TestsText {
@@ -42,11 +45,11 @@ impl TestsText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Name => mono(style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
-      Self::FlakyName => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
-      Self::Detail => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::Message => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary)),
-      Self::Heading => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
+      Self::Name => mono(style(12.5, FontWeight::Medium, 1.3, 0.0, palette.foreground)),
+      Self::FlakyName => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
+      Self::Detail => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground)),
+      Self::Message => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, text_secondary(palette))),
+      Self::Heading => style(12.0, FontWeight::SemiBold, 1.3, 0.0, text_secondary(palette)),
     }
   }
 }

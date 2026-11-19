@@ -39,7 +39,7 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
     top-level area file of its own: `summary.json`, `conversation.json` and `changes.json`, not
     `task.summary.*`. New task and Edit task are `task_form.json`.
 - Design values: only in `crates/desktop-app/src/theme/` (`palette.rs`, `typography.rs`, `metrics.rs`,
-  `form.rs`, `shadow.rs`); call sites use lurq roles and the `ExtraColor`, `ExtraTypography`,
+  `shadow.rs`, `markdown.rs`); call sites use lurq roles and the `ExtraColor`, `ExtraTypography`,
   `IconSize`, `ExtraSpacing` and `ExtraRadius` roles there. Approval commands use `CardsText::Command` (06b `G8YJb`: mono 12, 1.5, primary).
   Shared roles belong to the UI kit; a value
   only one area uses goes in that area's own `theme/<area>.rs` (`startup.rs`, `shell.rs`), registered

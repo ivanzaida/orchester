@@ -14,7 +14,7 @@ use orchester_workspace::{instructions::form::Picked, skills::editor::ScopeOptio
 
 use super::{PageProps, words};
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     menu::{self},
@@ -63,11 +63,11 @@ impl Component for ScopePicker {
       .height(Dimension::Px(ControlHeight::Row.value()))
       .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
       .rounded(RadiusSize::Md)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border_inside(
         BorderSize::Sm,
         if self.open.get() {
-          PaletteColor::BorderFocus
+          PaletteColor::Ring
         } else {
           PaletteColor::Border
         },
@@ -87,7 +87,7 @@ impl Component for ScopePicker {
           Icon::ChevronDown
         },
         IconSize::Md,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ));
     let trigger = if locked {
       trigger.focusable(false).opacity(crate::theme::DISABLED_OPACITY)
@@ -219,7 +219,7 @@ impl ScopePicker {
       .child(icon(
         if chosen { Icon::Check } else { glyph },
         IconSize::Md,
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       ))
       .child(
         Text::new(&label)

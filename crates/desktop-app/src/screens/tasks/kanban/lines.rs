@@ -48,12 +48,12 @@ pub fn failure(ctx: &mut Ctx, state: &BoardState, failed: &Failed) -> Element {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::DangerMuted)
+    .background(PaletteColor::DestructiveMuted)
     .child(
       Text::new(&text)
         .id("tasks-board-failed-text")
         .variant(ExtraTypography::Lead.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0),
     )
     .child(
@@ -80,13 +80,13 @@ pub fn canceled(ctx: &Ctx, (state, closer): (&BoardState, &Closer), task: &Subje
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .child(
       Text::new(&ctx.t_args("tasks.board.canceled", [("task", &*task.key)]))
         .id("tasks-board-canceled-text")
         .variant(ExtraTypography::Lead.role())
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
     .child(Spacer::new().flex(1.0))
     .child(
@@ -144,8 +144,8 @@ pub fn hint(ctx: &Ctx, drag: &Drag) -> Element {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .box_shadow(ShadowStyle::Md)
     .child(
       Text::new(&words)
@@ -157,7 +157,7 @@ pub fn hint(ctx: &Ctx, drag: &Drag) -> Element {
     .child(
       Text::new(&ctx.t("tasks.board.hint.cancels"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

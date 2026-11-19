@@ -170,7 +170,7 @@ pub(super) fn rows_box(rows: Vec<Element>) -> Column {
   Column::new()
     .id("task-not-ready-rows")
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .clip()

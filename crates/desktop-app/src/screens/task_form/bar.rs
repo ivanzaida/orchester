@@ -23,7 +23,7 @@ use super::{
 };
 use crate::{
   navigation::link::Open,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, TaskFormSpacing},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -103,9 +103,9 @@ fn reason_line(ctx: &mut Ctx, view: &View, on: &Handlers) -> Vec<Element> {
     TypographyStyle::Description,
   )
   .color(match reason.kind {
-    Kind::Problem => PaletteColor::TextSecondary,
+    Kind::Problem => ExtraColor::TextSecondary.role(),
     Kind::NotReady | Kind::CannotTell => PaletteColor::Warning,
-    _ => PaletteColor::TextMuted,
+    _ => PaletteColor::MutedForeground,
   })
   .render(ctx);
   vec![
@@ -314,8 +314,8 @@ fn discard_question(ctx: &Ctx, view: &View, on: &Handlers) -> Element {
   frame()
     .id("task-form-bar")
     .describe("state", "confirm-discard")
-    .background(PaletteColor::SurfaceRaised)
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .child(question)
     .child(
       Row::new()

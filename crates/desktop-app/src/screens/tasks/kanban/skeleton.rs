@@ -22,7 +22,7 @@ use super::{
 };
 use crate::{
   routes::TaskListTab,
-  theme::{ControlHeight, ExtraSpacing, IconSize, SKELETON_LAST_CARD},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize, SKELETON_LAST_CARD},
   ui::{
     icon::{Icon, icon},
     skeleton::{bone, round_bone},
@@ -163,7 +163,7 @@ fn head_row(head: &Head, id: &str) -> Row {
       Text::new(label)
         .id(format!("{id}-name"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     ),
     None => row.child(round_bone(STATUS)).child(bone(NAME.0, NAME.1)),
@@ -185,7 +185,7 @@ fn still_glyph(id: String, glyph: Icon) -> Row {
     .flex_shrink(0.0)
     .justify(Justify::Center)
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Md, PaletteColor::MutedForeground))
 }
 
 /// A card's bones in the card's frame, padding and height.
@@ -203,7 +203,7 @@ fn card_bone(runs: bool, seed: usize) -> Column {
     )
     .spacing(ExtraSpacing::Pair.role())
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(
       line()
@@ -236,11 +236,11 @@ fn new_task(ctx: &Ctx) -> Row {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::Plus, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Plus, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("tasks.newTask"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
 }

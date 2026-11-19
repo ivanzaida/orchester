@@ -41,7 +41,7 @@ pub fn enforcement_row(
           .variant(ExtraTypography::NoteStrong.role())
           .color(PaletteColor::Success),
       ),
-    Held::Elsewhere => Row::new().child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted)),
+    Held::Elsewhere => Row::new().child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground)),
   };
   let row = Column::new()
     .id(id.to_owned())

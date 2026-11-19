@@ -6,14 +6,14 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, ScrollVertical, TextInput},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
 };
 
-use crate::theme::ExtraSpacing;
+use crate::theme::{ExtraColor, ExtraSpacing, TextRole};
 #[derive(Clone)]
 pub struct CodeEditor {
   id: Arc<str>,
@@ -69,9 +69,9 @@ impl Component for Editor {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let p = ctx.props::<CodeEditor>().clone();
     let theme = ctx.theme();
-    let style = FormTextRole {
+    let style = TextRole {
       typography: crate::theme::skills::source(),
-      color: PaletteColor::TextPrimary,
+      color: PaletteColor::Foreground,
     }
     .resolve(&theme.typography(), &theme.palette());
     let mut input = TextInput::styled(p.value, style)
@@ -92,7 +92,7 @@ impl Component for Editor {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0))
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .rounded(RadiusSize::Md)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .clip()

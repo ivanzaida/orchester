@@ -77,7 +77,7 @@ fn change_line(ctx: &Ctx, line: &ChangeLine) -> Element {
     LineKind::Context => (
       ExtraColor::CodeBackground.role(),
       None,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "context",
     ),
     LineKind::Added => (
@@ -89,7 +89,7 @@ fn change_line(ctx: &Ctx, line: &ChangeLine) -> Element {
     LineKind::Removed => (
       ExtraColor::DiffRemoved.role(),
       Some("conversation.change.markRemoved"),
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       "removed",
     ),
   };

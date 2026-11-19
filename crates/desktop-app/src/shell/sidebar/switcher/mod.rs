@@ -255,9 +255,13 @@ impl Switcher {
     .spacing(ExtraSpacing::Inline.role())
     .rounded(ExtraRadius::Tile.role())
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(glyph_tile(tile, PaletteColor::SurfaceRaised))
+    .child(glyph_tile(tile, PaletteColor::Card))
     .child(text)
-    .child(icon(Icon::ChevronsUpDown, IconSize::Base, PaletteColor::TextMuted));
+    .child(icon(
+      Icon::ChevronsUpDown,
+      IconSize::Base,
+      PaletteColor::MutedForeground,
+    ));
     let button = if self.open.get() {
       button.background(ExtraColor::Hover.role())
     } else {
@@ -378,7 +382,7 @@ fn truncated(text: Text) -> Text {
 
 /// The tile's content while no project's name is known.
 fn folders_glyph() -> Element {
-  icon(Icon::Folders, IconSize::Base, PaletteColor::TextSecondary).into()
+  icon(Icon::Folders, IconSize::Base, ExtraColor::TextSecondary.role()).into()
 }
 
 /// The square before a project's name (`Glyph` `yJEuT`, `oXpyV`).

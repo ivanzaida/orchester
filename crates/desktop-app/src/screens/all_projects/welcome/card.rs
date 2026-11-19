@@ -10,7 +10,7 @@ use lurq::{
 };
 
 use crate::{
-  theme::{ExtraRadius, ExtraSpacing, IconSize, StartupText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, StartupText},
   ui::icon::{Icon, icon},
 };
 
@@ -48,9 +48,9 @@ pub(super) fn card(way: Way) -> Element {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(glyph, IconSize::Xl, PaletteColor::TextSecondary));
+    .child(icon(glyph, IconSize::Xl, ExtraColor::TextSecondary.role()));
   let text = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
@@ -69,7 +69,7 @@ pub(super) fn card(way: Way) -> Element {
     .id(format!("{id}-meta"))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(meta_glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(meta_glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(Text::new(&meta).variant(StartupText::CardMeta.role()).nowrap());
   let actions = Row::new()
     .id(format!("{id}-actions"))
@@ -83,7 +83,7 @@ pub(super) fn card(way: Way) -> Element {
     .height(Dimension::Px(HEIGHT))
     .padding(SpacingSize::Xl)
     .spacing(SpacingSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(tile)

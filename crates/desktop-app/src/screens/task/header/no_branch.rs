@@ -97,7 +97,7 @@ pub fn status_line(
       Text::new(&why(ctx, task))
         .id("task-no-branch-why")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     );

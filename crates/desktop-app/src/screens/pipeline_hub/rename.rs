@@ -9,7 +9,7 @@ use lurq::{
   app::{
     ctx::{Ctx, FutureAction},
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text, TextInput},
   core::{ElementRef, Signal},
@@ -18,7 +18,7 @@ use lurq::{
 use orchester_workspace::messages::Message;
 
 use crate::{
-  theme::{ExtraSpacing, HubText},
+  theme::{ExtraSpacing, HubText, TextRole},
   ui::{field::field_error, message::message_text},
 };
 
@@ -81,9 +81,9 @@ pub(super) fn field(ctx: &mut Ctx, editing: &Editing, rename: &FutureAction<Stri
     .filter(|_| !pending && editing.asked.get())
     .map(|error| message_text(ctx, &error));
   let theme = ctx.theme();
-  let typed = FormTextRole {
+  let typed = TextRole {
     typography: HubText::PanelTitle.role(),
-    color: PaletteColor::TextPrimary,
+    color: PaletteColor::Foreground,
   }
   .resolve(&theme.typography(), &theme.palette());
   let (save, give_up, leave) = (editing.clone(), editing.clone(), editing.clone());
@@ -93,7 +93,7 @@ pub(super) fn field(ctx: &mut Ctx, editing: &Editing, rename: &FutureAction<Stri
     .describe("a11y_name", ctx.t("pipeline_hub.rename.label"))
     .describe("state", if refusal.is_some() { "invalid" } else { "valid" })
     .width(Dimension::Pct(100.0))
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .ref_element(editing.input.clone())
     .single_line()
     .on_blur(move || leave.end())
@@ -112,9 +112,9 @@ pub(super) fn field(ctx: &mut Ctx, editing: &Editing, rename: &FutureAction<Stri
       _ => {}
     });
   let ring = if refusal.is_some() {
-    PaletteColor::Danger
+    PaletteColor::Destructive
   } else {
-    PaletteColor::BorderFocus
+    PaletteColor::Ring
   };
   let boxed = Row::new()
     .id("pipeline-hub-rename-box")

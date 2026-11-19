@@ -27,7 +27,7 @@ use super::section::{age, link, mono_time, muted, show_all};
 use crate::{
   navigation::{Navigation, waiting::Destination},
   routes::{ProjectPage, Route, TaskList, TaskListTab},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -92,7 +92,7 @@ pub(super) fn digest_head(id: &str, title: &str, meta: Option<&str>) -> Row {
     .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .child(icon(Icon::Hand, IconSize::Base, PaletteColor::Warning))
     .child(
       Text::new(title)
@@ -137,7 +137,7 @@ fn wait_line(ctx: &mut Ctx, project: ProjectId, (index, item): (usize, &NeedItem
       Text::new(&message_text(ctx, &item.title))
         .id(format!("{id}-what"))
         .variant(OverviewText::Line.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)

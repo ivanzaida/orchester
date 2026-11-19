@@ -44,9 +44,9 @@ impl CalloutTone {
   fn colors(self) -> (PaletteColor, PaletteColor) {
     match self {
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),
-      Self::Neutral => (ExtraColor::Hover.role(), PaletteColor::TextMuted),
+      Self::Neutral => (ExtraColor::Hover.role(), PaletteColor::MutedForeground),
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
-      Self::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger),
+      Self::Danger => (PaletteColor::DestructiveMuted, PaletteColor::Destructive),
       Self::Success => (PaletteColor::SuccessMuted, PaletteColor::Success),
     }
   }
@@ -149,7 +149,7 @@ impl From<Callout> for Element {
         Text::new(note)
           .id(format!("{}-note", callout.id))
           .variant(ExtraTypography::Lead.role())
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .width(Dimension::Pct(100.0))
       }))
       .with_children(callout.details)

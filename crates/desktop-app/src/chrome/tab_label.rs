@@ -43,13 +43,13 @@ pub fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab, id: String) -> O
     Attention::Waiting(count) => (Icon::Hand, PaletteColor::Warning, count_words(ctx, count), "needs-you"),
     Attention::RunnerOffline => (
       Icon::CircleAlert,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       ctx.t("shell.tabs.runnerOffline").to_string(),
       "runner-offline",
     ),
     Attention::TasksUnread => (
       Icon::CircleAlert,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       ctx.t("shell.tabs.tasksUnread").to_string(),
       "tasks-unread",
     ),
@@ -185,6 +185,6 @@ pub fn close_button(ctx: &mut Ctx, navigation: Navigation, id: TabId, element: S
     })
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .rounded(RadiusSize::Sm)
-    .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground))
     .into()
 }

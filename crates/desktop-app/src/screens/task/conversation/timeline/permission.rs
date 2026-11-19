@@ -40,17 +40,17 @@ pub(super) fn row(ctx: &mut Ctx, timeline: &Timeline, (key, line, at): (&str, &P
     ),
     PermissionEventKind::Stopped { .. } => (
       Icon::ShieldCheck,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "conversation.permissions.event.stopped",
     ),
     PermissionEventKind::Revoked { .. } => (
       Icon::X,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "conversation.permissions.event.revoked",
     ),
     PermissionEventKind::Refused => (
       Icon::Lock,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "conversation.permissions.event.refused",
     ),
   };

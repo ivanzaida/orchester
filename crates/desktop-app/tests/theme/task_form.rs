@@ -14,21 +14,21 @@ fn task_form_roles_follow_the_composer() {
       24.0,
       FontWeight::SemiBold,
       1.3,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       TaskFormText::Outcome,
       14.0,
       FontWeight::Normal,
       1.6,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       TaskFormText::Criterion,
       13.0,
       FontWeight::Normal,
       1.3,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     // The criteria head's count and hint (`KrVl9`, `ZndIB`), a pipeline's steps in its menu (`H1NsU`).
     (
@@ -36,14 +36,14 @@ fn task_form_roles_follow_the_composer() {
       12.0,
       FontWeight::Normal,
       1.3,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       TaskFormText::OptionMeta,
       11.5,
       FontWeight::Normal,
       1.3,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     // A branch named in a Base branch menu (`f9wHj` in `fSsas`, `Nr7fn` in `eyrnI`), in Geist Mono.
     (
@@ -51,7 +51,7 @@ fn task_form_roles_follow_the_composer() {
       12.5,
       FontWeight::Medium,
       1.3,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     // The words of a note under the head, one 16 line in its 32 (`vpy3p` in `CvMGI`).
     (
@@ -59,7 +59,7 @@ fn task_form_roles_follow_the_composer() {
       12.0,
       FontWeight::Normal,
       1.3,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
   ] {
     let style = theme.typography_style(role.role());

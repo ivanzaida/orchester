@@ -225,7 +225,7 @@ impl ChangeCard {
     if let Some(error) = self.decide.state().get().error.or_else(|| unread.clone()) {
       notes.push(tinted_note(
         format!("{id}-error"),
-        (Icon::CircleAlert, lurq::app::theme::PaletteColor::Danger),
+        (Icon::CircleAlert, lurq::app::theme::PaletteColor::Destructive),
         &message_text(ctx, &error),
       ));
     }

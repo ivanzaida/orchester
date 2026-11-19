@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
   screens::team_hub::{actions::Busy, rows},
-  theme::{HubText, IconSize},
+  theme::{ExtraColor, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::{Focus, Press, inert},
@@ -48,7 +48,7 @@ pub(in crate::screens) fn counted<F>(ctx: &Ctx, parts: &[Part<F>], missing: usiz
   (
     ctx.t_args("team_hub.readiness.missing", [("count", missing.to_string())]),
     if blocked {
-      PaletteColor::Danger
+      PaletteColor::Destructive
     } else {
       PaletteColor::Warning
     },
@@ -79,18 +79,18 @@ fn part_row<F: Offer>(ctx: &Ctx, part: &Part<F>, (press, busy): (&dyn Fn(&F) -> 
       PaletteColor::Success,
       words,
       None,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     State::Missing { words, fix, blocking } => (
       if *blocking { Icon::CircleX } else { Icon::CircleAlert },
       if *blocking {
-        PaletteColor::Danger
+        PaletteColor::Destructive
       } else {
         PaletteColor::Warning
       },
       words,
       fix.as_ref(),
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
   };
   let value = Row::new()

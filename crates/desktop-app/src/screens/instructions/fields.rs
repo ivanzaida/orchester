@@ -8,7 +8,7 @@ use std::sync::{
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, InputEditError, InputToken, InputTokens, Row, ScrollVertical},
   core::Signal,
@@ -25,7 +25,7 @@ use super::{state::Tab, work::Author};
 use crate::{
   mcp::is_synthetic_input,
   screens::hub::parts::{head, note},
-  theme::instructions,
+  theme::{ExtraColor, TextRole, instructions},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -179,9 +179,9 @@ impl Fields {
     (locked, unavailable, saved): (bool, &[Variable], bool),
   ) -> Element {
     let theme = ctx.theme();
-    let text_style = FormTextRole {
+    let text_style = TextRole {
       typography: instructions::prompt_text(),
-      color: PaletteColor::TextSecondary,
+      color: ExtraColor::TextSecondary.role(),
     }
     .resolve(&theme.typography(), &theme.palette());
     let raw = self.text.get();
@@ -209,7 +209,7 @@ impl Fields {
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(PROMPT_MIN_HEIGHT))
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .rounded(RadiusSize::Md)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .child(

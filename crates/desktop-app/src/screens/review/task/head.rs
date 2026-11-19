@@ -184,7 +184,7 @@ pub(super) fn status_line(ctx: &Ctx, standing: Standing, meta: &str) -> Element 
       Text::new(meta)
         .id("review-status-meta")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()
@@ -209,19 +209,19 @@ fn conflicting(ctx: &Ctx, conflicts: &ReviewConflicts) -> Element {
     .describe("status", "conflicts")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::GitCompareArrows, IconSize::Md, PaletteColor::Danger))
+    .child(icon(Icon::GitCompareArrows, IconSize::Md, PaletteColor::Destructive))
     .child(
       Text::new(&words)
         .id("review-status-text")
         .variant(ExtraTypography::Strong.role())
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .nowrap(),
     )
     .child(
       Text::new(&meta)
         .id("review-status-meta")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

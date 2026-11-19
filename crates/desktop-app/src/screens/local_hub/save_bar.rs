@@ -77,6 +77,6 @@ pub(in crate::screens) fn makes(ctx: &Ctx, published: Option<VersionNumber>) -> 
     .map_or_else(String::new, |next| next.to_string());
   (
     ctx.t_args("local_hub.edit.makes", [("version", next)]).to_string(),
-    PaletteColor::TextMuted,
+    PaletteColor::MutedForeground,
   )
 }

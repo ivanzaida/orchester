@@ -23,7 +23,7 @@ use super::{
   icon::{Icon, icon},
   notice::{Notice, NoticeTone},
 };
-use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 /// An empty state's glyph tile (`q4tTW`) and the widest its explanation runs (`bKD3G`).
 const GLYPH_TILE: f32 = 36.0;
@@ -155,7 +155,7 @@ impl EmptyState {
     let color = if self.warning {
       PaletteColor::Warning
     } else {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     };
     sized_tile(&self.id, (self.glyph, color), tile_size)
   }
@@ -221,7 +221,7 @@ impl EmptyState {
         line(
           Text::new(note)
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextMuted),
+            .color(PaletteColor::MutedForeground),
         )
       }));
     if self.centered {
@@ -266,7 +266,7 @@ impl From<EmptyState> for Element {
         } else {
           ExtraSpacing::Roomy.role()
         })
-        .background(PaletteColor::SurfacePanel)
+        .background(PaletteColor::Canvas)
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .rounded(RadiusSize::Lg)
     };
@@ -282,7 +282,7 @@ impl From<EmptyState> for Element {
 
 /// An empty state's glyph tile (`q4tTW`), for a state laid out on its own (`X0l2I6` in Project memory).
 pub fn glyph_tile(id: &str, glyph: Icon) -> Row {
-  sized_tile(id, (glyph, PaletteColor::TextSecondary), GLYPH_TILE)
+  sized_tile(id, (glyph, ExtraColor::TextSecondary.role()), GLYPH_TILE)
 }
 
 /// A tile whose 16 `warning` glyph says the state is a trouble, not an empty list (`Tile` `S3nJRi` in A25 `Zhcif`).
@@ -301,7 +301,7 @@ fn tile(id: &str, glyph: impl Into<Element>, size: f32) -> Row {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(glyph)
     .id(format!("{id}-glyph"))
@@ -317,12 +317,12 @@ pub fn loading(id: &str, what: &str) -> Row {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .describe("state", "loading")
-    .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::TextMuted).id(format!("{id}-icon")))
+    .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::MutedForeground).id(format!("{id}-icon")))
     .child(
       Text::new(what)
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
 }
 

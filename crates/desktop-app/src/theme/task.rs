@@ -8,7 +8,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::{fonts::ICONS, typography::style};
+use super::{fonts::ICONS, palette::text_secondary, typography::style};
 
 /// A part's row in the card of a run that is not ready here is this high (`F0SmT` in `B6ee9`); a long reason makes it
 /// taller.
@@ -55,14 +55,14 @@ impl TaskText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::SectionTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Brief => style(13.0, FontWeight::Normal, 1.6, 0.0, palette.text_secondary),
+      Self::SectionTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Brief => style(13.0, FontWeight::Normal, 1.6, 0.0, text_secondary(palette)),
       Self::EmptyGlyph => TextStyle {
         font_family: Arc::from(ICONS),
-        ..style(32.0, FontWeight::Normal, 1.0, 0.0, palette.text_muted)
+        ..style(32.0, FontWeight::Normal, 1.0, 0.0, palette.muted_foreground)
       },
-      Self::EmptyTitle => style(20.0, FontWeight::SemiBold, 1.25, 0.0, palette.text_primary),
-      Self::EmptyText => style(13.0, FontWeight::Normal, 1.6, 0.0, palette.text_secondary),
+      Self::EmptyTitle => style(20.0, FontWeight::SemiBold, 1.25, 0.0, palette.foreground),
+      Self::EmptyText => style(13.0, FontWeight::Normal, 1.6, 0.0, text_secondary(palette)),
     }
   }
 }

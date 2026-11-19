@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
   navigation::link::Open,
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
 };
 
 /// The column of what a property is (`Label` `X7na6R`).
@@ -73,12 +73,12 @@ pub fn control(id: &str, label: &str, value: impl Into<Element>) -> Row {
 
 fn value_text(id: &str, value: &str, kind: PropertyValue) -> Text {
   let (style, color) = match kind {
-    PropertyValue::Plain => (ExtraTypography::Property.role(), PaletteColor::TextPrimary),
-    PropertyValue::Mono => (ExtraTypography::PropertyMono.role(), PaletteColor::TextPrimary),
-    PropertyValue::Muted => (ExtraTypography::Property.role(), PaletteColor::TextMuted),
+    PropertyValue::Plain => (ExtraTypography::Property.role(), PaletteColor::Foreground),
+    PropertyValue::Mono => (ExtraTypography::PropertyMono.role(), PaletteColor::Foreground),
+    PropertyValue::Muted => (ExtraTypography::Property.role(), PaletteColor::MutedForeground),
     PropertyValue::Warning => (ExtraTypography::Property.role(), PaletteColor::Warning),
-    PropertyValue::Danger => (ExtraTypography::Property.role(), PaletteColor::Danger),
-    PropertyValue::MonoDanger => (ExtraTypography::PropertyMono.role(), PaletteColor::Danger),
+    PropertyValue::Danger => (ExtraTypography::Property.role(), PaletteColor::Destructive),
+    PropertyValue::MonoDanger => (ExtraTypography::PropertyMono.role(), PaletteColor::Destructive),
   };
   Text::new(value)
     .id(format!("{id}-value"))
@@ -111,7 +111,7 @@ fn framed(id: &str, name: &str, label: Text, value: impl Into<Element>) -> Row {
 pub fn variable(id: &str, name: &str, value: &str, kind: PropertyValue) -> Row {
   let label = Text::new(name)
     .variant(ExtraTypography::MonoKey.role())
-    .color(PaletteColor::TextSecondary);
+    .color(ExtraColor::TextSecondary.role());
   framed(id, name, label, value_text(id, value, kind)).padding(Padding::vertical(ExtraSpacing::Snug.role()))
 }
 
@@ -148,7 +148,7 @@ pub fn note(id: &str, glyph: Icon, text: &str) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(text)
         .variant(ExtraTypography::Note.role())
@@ -180,9 +180,9 @@ fn link_frame(id: &str, glyph: Icon, label: &str, open: Option<Open>, used_by: b
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .background(if used_by {
-        PaletteColor::SurfaceRaised
+        PaletteColor::Card
       } else {
-        PaletteColor::SurfaceInput
+        ExtraColor::InputSurface.role()
       })
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
@@ -190,22 +190,22 @@ fn link_frame(id: &str, glyph: Icon, label: &str, open: Option<Open>, used_by: b
         glyph,
         if used_by { IconSize::Md } else { IconSize::Base },
         if used_by {
-          PaletteColor::TextSecondary
+          ExtraColor::TextSecondary.role()
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         },
       ))
       .child(
         Text::new(label)
           .variant(ExtraTypography::Property.role())
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .flex(1.0)
           .nowrap(),
       )
   };
   match open {
     Some(open) => {
-      let row = content(Row::new()).child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted));
+      let row = content(Row::new()).child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::MutedForeground));
       opening(open)
         .id(id.to_owned())
         .width(Dimension::Pct(100.0))

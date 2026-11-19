@@ -32,7 +32,7 @@ use super::{
 use crate::{
   navigation::waiting::Destination,
   team::lifecycle::Offered,
-  theme::{ExtraSpacing, IconSize, TasksSpacing, list_scrollbar},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TasksSpacing, list_scrollbar},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -242,34 +242,34 @@ pub(super) fn group_line(ctx: &mut Ctx, line: &GroupLine) -> Element {
         Icon::ChevronDown
       },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .child(icon(glyph, IconSize::Base, color).id(format!("{id}-icon")))
     .child(
       Text::new(&label)
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(
       Text::new(&line.count.to_string())
         .id(format!("{id}-count"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()
 }
 
 /// A group's icon and its tone: Active's by what happens next, All's by workflow status.
-const fn look(group: Group) -> (Icon, PaletteColor) {
+fn look(group: Group) -> (Icon, PaletteColor) {
   match group {
     Group::NeedsYou => (Icon::Hand, PaletteColor::Warning),
-    Group::Running => (Icon::LoaderCircle, PaletteColor::TextSecondary),
-    Group::Queued => (Icon::Clock3, PaletteColor::TextMuted),
-    Group::ReadyToStart => (Icon::Circle, PaletteColor::TextSecondary),
-    Group::Stopped => (Icon::CirclePause, PaletteColor::TextMuted),
+    Group::Running => (Icon::LoaderCircle, ExtraColor::TextSecondary.role()),
+    Group::Queued => (Icon::Clock3, PaletteColor::MutedForeground),
+    Group::ReadyToStart => (Icon::Circle, ExtraColor::TextSecondary.role()),
+    Group::Stopped => (Icon::CirclePause, PaletteColor::MutedForeground),
     Group::Finished => (Icon::CircleCheck, PaletteColor::Success),
     Group::Workflow(status) => workflow_look(status),
   }

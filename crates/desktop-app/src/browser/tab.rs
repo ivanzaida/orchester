@@ -117,18 +117,18 @@ impl Component for Tab {
     };
     let (glyph, text, style) = match (shown, hovered) {
       (true, _) => (
-        PaletteColor::TextSecondary,
-        PaletteColor::TextPrimary,
+        ExtraColor::TextSecondary.role(),
+        PaletteColor::Foreground,
         TypographyStyle::Label,
       ),
       (false, true) => (
-        PaletteColor::TextMuted,
-        PaletteColor::TextSecondary,
+        PaletteColor::MutedForeground,
+        ExtraColor::TextSecondary.role(),
         TypographyStyle::Description,
       ),
       (false, false) => (
-        PaletteColor::TextMuted,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
+        PaletteColor::MutedForeground,
         TypographyStyle::Description,
       ),
     };
@@ -208,7 +208,7 @@ const fn dot_color(indicator: Indicator) -> PaletteColor {
   match indicator {
     Indicator::Waits => PaletteColor::Warning,
     Indicator::Acting => PaletteColor::Info,
-    Indicator::New => PaletteColor::TextPrimary,
+    Indicator::New => PaletteColor::Foreground,
   }
 }
 
@@ -224,7 +224,7 @@ fn dot(indicator: Indicator, id: String) -> Row {
     .absolute(left, top, Dimension::Px(side), Dimension::Px(side))
     .rounded(ExtraRadius::Full.role())
     .background(dot_color(indicator))
-    .border_inside(BrowserBorder::Ring.role(), PaletteColor::SurfaceBase)
+    .border_inside(BrowserBorder::Ring.role(), PaletteColor::Background)
 }
 
 /// A dot on a line of words: the overflow button's strongest (`⌄ 13 •` in `fWhIr`).
@@ -261,6 +261,6 @@ fn close_button(
       event.stop_propagation();
       commands.send(BrowserCommand::CloseTab { tab: tab.clone() });
     })
-    .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground))
     .into()
 }

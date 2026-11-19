@@ -19,7 +19,7 @@ use orchester_workspace::{background, display, sharing::cloud::SignIn, workspace
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectsText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ProjectsText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -75,10 +75,10 @@ pub(super) fn line(ctx: &mut Ctx, Waiting(count): Waiting, sign_in: &SignIn) -> 
       .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
-      .child(icon(Icon::LogIn, IconSize::Lg, PaletteColor::TextSecondary))
+      .child(icon(Icon::LogIn, IconSize::Lg, ExtraColor::TextSecondary.role()))
       .child(
         Text::new(&words)
           .id("all-projects-waiting-text")

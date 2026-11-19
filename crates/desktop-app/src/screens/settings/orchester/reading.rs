@@ -15,7 +15,7 @@ use lurq::{
 };
 
 use crate::{
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, SettingsSpacing, SettingsText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, SettingsSpacing, SettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -36,7 +36,11 @@ pub(super) fn column(ctx: &mut Ctx) -> Element {
         SettingRow::new("orchester-reading-invite", "")
           .label_reading(82.0)
           .hint_reading(442.0)
-          .lead(row_tile(icon(Icon::Mail, IconSize::Md, PaletteColor::TextSecondary)))
+          .lead(row_tile(icon(
+            Icon::Mail,
+            IconSize::Md,
+            ExtraColor::TextSecondary.role(),
+          )))
           .render(ctx),
       ),
     ),
@@ -60,8 +64,8 @@ fn card(ctx: &Ctx) -> Row {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(ExtraRadius::Full.role())
     .child(bone(14.0, 8.0));
   let text = Column::new()

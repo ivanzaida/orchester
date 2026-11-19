@@ -77,7 +77,7 @@ impl ClosingPanel {
           .justify(Justify::End)
           .spacing(ExtraSpacing::Snug.role())
           .align_items(Alignment::Center)
-          .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
+          .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground))
           .child(
             Text::new(&ctx.t("lifecycle.close.cancelUnavailable"))
               .id("closing-cancel-reason")

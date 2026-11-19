@@ -48,8 +48,8 @@ pub(super) fn card(
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(ExtraRadius::Full.role())
     .child(Text::new(&initials(&account.display_name)).variant(SettingsText::CardInitials.role()));
   let email = ctx.t_args(
@@ -79,7 +79,7 @@ pub(super) fn card(
       Text::new(&email)
         .id("orchester-cloud-header-facts")
         .variant(lurq::app::theme::TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Pct(100.0)),
     );
   let asking = panel.asking.clone();

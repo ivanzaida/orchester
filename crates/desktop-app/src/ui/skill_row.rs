@@ -101,7 +101,7 @@ impl From<SkillRow> for Element {
           .child(
             Text::new(&row.description)
               .variant(ExtraTypography::Note.role())
-              .color(PaletteColor::TextMuted),
+              .color(PaletteColor::MutedForeground),
           ),
       )
       .with_children(cells.into_iter().zip(row.values).map(|((width, mark), label)| {
@@ -109,10 +109,10 @@ impl From<SkillRow> for Element {
           .width(Dimension::Px(width))
           .spacing(ExtraSpacing::Snug.role())
           .align_items(Alignment::Center)
-          .with_children(mark.map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextMuted)))
+          .with_children(mark.map(|glyph| icon(glyph, IconSize::Base, PaletteColor::MutedForeground)))
           .child(Text::new(&label).variant(TypographyStyle::Description))
       }))
-      .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground));
     opening(row.open).id(row.id).child(content).into()
   }
 }

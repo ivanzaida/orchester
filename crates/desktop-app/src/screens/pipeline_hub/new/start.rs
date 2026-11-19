@@ -19,7 +19,7 @@ use orchester_workspace::pipelines::levels::levels;
 use super::Choice;
 use crate::{
   screens::{pipeline_hub::model::Entry, team_hub::rows},
-  theme::{ExtraSpacing, ExtraTypography, HubText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, HubText},
   ui::{field::SelectField, pressable::Press, toggle::radio_mark},
 };
 
@@ -59,9 +59,9 @@ pub(super) fn group(ctx: &Ctx, start: &Start<'_>) -> Element {
         ("gates", start.starter_gates.to_string()),
       ],
     );
-    let mut lines = vec![(summary.to_string(), PaletteColor::TextSecondary)];
+    let mut lines = vec![(summary.to_string(), ExtraColor::TextSecondary.role())];
     if chosen == Choice::Starter {
-      lines.push((chain(ctx, start.starter), PaletteColor::TextMuted));
+      lines.push((chain(ctx, start.starter), PaletteColor::MutedForeground));
     }
     lines
   };
@@ -89,7 +89,7 @@ pub(super) fn group(ctx: &Ctx, start: &Start<'_>) -> Element {
       (
         vec![(
           ctx.t("pipeline_new.start.emptySub").to_string(),
-          PaletteColor::TextSecondary,
+          ExtraColor::TextSecondary.role(),
         )],
         None,
       ),
@@ -110,13 +110,13 @@ fn copy_lines(ctx: &Ctx, start: &Start<'_>, chosen: Choice) -> Vec<(String, Pale
   let Some(body) = source.and_then(|entry| entry.body.as_ref()) else {
     return vec![(
       ctx.t("pipeline_new.start.copySub").to_string(),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     )];
   };
   vec![
     (
       ctx.t("pipeline_new.start.copyChosen").to_string(),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       ctx
@@ -125,7 +125,7 @@ fn copy_lines(ctx: &Ctx, start: &Start<'_>, chosen: Choice) -> Vec<(String, Pale
           [("steps", body.steps().len().to_string()), ("chain", chain(ctx, body))],
         )
         .to_string(),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
   ]
 }

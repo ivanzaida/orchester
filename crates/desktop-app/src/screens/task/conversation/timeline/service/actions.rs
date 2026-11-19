@@ -196,7 +196,7 @@ fn said(id: &str, words: &str) -> Element {
   Text::new(words)
     .id(id.to_owned())
     .variant(ExtraTypography::Note.role())
-    .color(PaletteColor::Danger)
+    .color(PaletteColor::Destructive)
     .width(Dimension::Pct(100.0))
     .into()
 }

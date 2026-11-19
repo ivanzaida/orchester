@@ -118,7 +118,7 @@ impl Component for EarlierInfo {
       .describe("a11y_name", ctx.t("usage.providers.earlierInfo"))
       .on_mouse_enter(move || show.set(true))
       .on_mouse_leave(move || hide.set(false))
-      .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground));
     if !self.shown.get() {
       return anchor;
     }

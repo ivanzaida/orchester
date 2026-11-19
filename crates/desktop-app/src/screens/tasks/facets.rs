@@ -268,7 +268,7 @@ impl FilterControl {
             Text::new(&ctx.t_args("tasks.filter.noMatch", [("query", self.query.get().trim())]))
               .id("tasks-filter-no-match")
               .variant(TypographyStyle::Description)
-              .color(PaletteColor::TextMuted),
+              .color(PaletteColor::MutedForeground),
           ),
       );
     }

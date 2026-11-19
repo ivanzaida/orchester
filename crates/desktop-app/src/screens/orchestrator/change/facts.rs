@@ -121,7 +121,7 @@ fn part_element(part: Part, navigation: &Navigation) -> Element {
   match part {
     Part::Link(words, route) => opening(navigation.to(route))
       .padding_bottom(ExtraSpacing::Hair.role())
-      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted))
+      .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::MutedForeground))
       .child(Text::new(&words).variant(OrchestratorText::FactLink.role()).nowrap())
       .into(),
     Part::Value(words) => Text::new(&words)
@@ -487,8 +487,8 @@ fn line(line: &TextLine) -> Row {
       .flex_shrink(0.0)
   };
   let (background, sign, color, kind) = match line.change {
-    LineChange::Same => (None, " ", PaletteColor::TextMuted, "same"),
-    LineChange::Removed => (Some(ExtraColor::DiffRemoved), "−", PaletteColor::Danger, "removed"),
+    LineChange::Same => (None, " ", PaletteColor::MutedForeground, "same"),
+    LineChange::Removed => (Some(ExtraColor::DiffRemoved), "−", PaletteColor::Destructive, "removed"),
     LineChange::Added => (Some(ExtraColor::DiffAdded), "+", PaletteColor::Success, "added"),
   };
   let row = Row::new()

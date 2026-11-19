@@ -355,9 +355,9 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
       };
       SettingRow::new(format!("secret-use-{:?}", used.kind), used.name.clone())
         .item()
-        .lead(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+        .lead(icon(glyph, IconSize::Md, PaletteColor::MutedForeground))
         .control(value(&format!("secret-use-{:?}-kind", used.kind), &what))
-        .control(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::TextMuted))
+        .control(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::MutedForeground))
         .opens(navigation.to(Route::Project(project.open.project.id(), page)))
         .render(ctx)
     })

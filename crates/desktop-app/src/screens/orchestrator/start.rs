@@ -49,10 +49,10 @@ pub(super) fn start(ctx: &mut Ctx, view: &View, (composer, notice): (Column, Opt
     .size(Dimension::Px(TILE_SIZE), Dimension::Px(TILE_SIZE))
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
-    .child(icon(Icon::Waypoints, IconSize::Xl, PaletteColor::TextSecondary));
+    .child(icon(Icon::Waypoints, IconSize::Xl, ExtraColor::TextSecondary.role()));
   let start = Column::new()
     .id("orchestrator-start")
     .width(Dimension::Px(WIDTH))
@@ -137,7 +137,7 @@ fn suggestion(ctx: &mut Ctx, view: &View, glyph: Icon, key: &str) -> Element {
   .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
   .rounded(ExtraRadius::Tile.role())
   .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-  .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+  .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
   .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(text))
   .into()
 }

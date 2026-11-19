@@ -46,7 +46,7 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox) -> Element {
   let typed = search.typed.clone();
   let input = TextInput::styled(search.query.clone(), typed_style)
     .placeholder_style(placeholder_style)
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .id(format!("{id}-search"))
     .describe("a11y_name", words.clone())
     .placeholder(&words)
@@ -69,7 +69,7 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox) -> Element {
         query.set(String::new());
         typed();
       })
-      .child(icon(Icon::X, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::X, IconSize::Base, PaletteColor::MutedForeground))
   });
   Line::new()
     .id(format!("{id}-search-box"))
@@ -79,7 +79,7 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox) -> Element {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::Search, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Search, IconSize::Base, PaletteColor::MutedForeground))
     .child(input)
     .with_children(clear)
     .into()
@@ -210,7 +210,7 @@ fn item(
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(mark(ctx, item.mark))
     .child(words)
-    .with_children(chosen.then(|| icon(Icon::Check, IconSize::Base, PaletteColor::TextPrimary)));
+    .with_children(chosen.then(|| icon(Icon::Check, IconSize::Base, PaletteColor::Foreground)));
   if current {
     row.background(ExtraColor::Hover.role()).class("current").into()
   } else {
@@ -270,7 +270,7 @@ fn cut(text: Text, role: TypographyStyle, order: i32) -> Text {
 pub fn mark(ctx: &Ctx, mark: Mark) -> Element {
   match mark {
     Mark::Agent(maker) => maker.render(ctx, IconSize::Md),
-    Mark::Icon(glyph) => icon(glyph, IconSize::Md, PaletteColor::TextSecondary).into(),
+    Mark::Icon(glyph) => icon(glyph, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
   }
 }
 
@@ -311,7 +311,7 @@ pub(super) fn foot(
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
   };
   let new = action("new", Box::new(new))
-    .child(icon(Icon::Plus, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(Icon::Plus, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t("ui.agentPicker.newProfile"))
         .variant(AgentPickerText::Foot.role())

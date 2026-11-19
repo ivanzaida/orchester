@@ -391,7 +391,7 @@ fn tile(
   let frame = if asked {
     frame
       .background(ExtraColor::Hover.role())
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Ring))
   } else {
     frame
   };
@@ -496,7 +496,7 @@ fn tile_frame(id: &str, glyph: Icon, (title, covers): (&str, &str)) -> Button {
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .describe("a11y_name", title.to_owned())
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Column::new()
         .flex(1.0)

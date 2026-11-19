@@ -190,7 +190,7 @@ impl ModuleScreen {
     let facts = Text::new(&words::facts(ctx, details, page.progress, &page.forecast))
       .id("module-facts")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap();
     let mut status = vec![chip, facts.into()];
     status.extend(self.refused(ctx));
@@ -288,11 +288,11 @@ pub(super) fn back_only(ctx: &mut Ctx, project: ProjectId) -> Element {
     .id("module-back")
     .describe("a11y_name", words.clone())
     .spacing(ExtraSpacing::Snug.role())
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     );
   Row::new()

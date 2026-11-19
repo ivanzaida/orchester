@@ -21,7 +21,7 @@ use orchester_workspace::usage::{Dashboard, DashboardState};
 
 use super::words::{self, ChangeUnit};
 use crate::{
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     card::{CardSurface, card},
     icon::{Icon, icon},
@@ -205,11 +205,11 @@ fn figure(ctx: &Ctx, (id, label): (&str, &str), value: &str, change: ChangeLine,
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
-      .with_children(glyph.map(|glyph| icon(glyph, IconSize::Sm, PaletteColor::TextMuted)))
+      .with_children(glyph.map(|glyph| icon(glyph, IconSize::Sm, PaletteColor::MutedForeground)))
       .child(
         Text::new(&text)
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap()
           .flex_shrink(1.0),
       )

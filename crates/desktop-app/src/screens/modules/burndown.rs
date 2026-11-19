@@ -148,7 +148,7 @@ fn legend(ctx: &Ctx) -> Element {
     ))
     .child(entry(
       "module-legend-ideal",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "modules.burndown.ideal",
     ))
     .child(entry(

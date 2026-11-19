@@ -92,7 +92,7 @@ impl Form {
         input = input.invalid();
         Some(Sub {
           words,
-          color: PaletteColor::Danger,
+          color: PaletteColor::Destructive,
         })
       }
       None if look.creating => Some(Sub::quiet(ctx.t("local_new.mcp.nameSub"))),

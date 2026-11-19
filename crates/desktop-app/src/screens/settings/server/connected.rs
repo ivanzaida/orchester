@@ -72,7 +72,7 @@ fn client_row(ctx: &Ctx, index: usize, client: &SeenClient) -> Element {
     )
   } else {
     (
-      (PaletteColor::TextMuted, PaletteColor::TextMuted),
+      (PaletteColor::MutedForeground, PaletteColor::MutedForeground),
       ctx.t_args(
         "settings.automation.connected.lastSeen",
         [("time", display::clock_time(client.last_request))],
@@ -80,7 +80,7 @@ fn client_row(ctx: &Ctx, index: usize, client: &SeenClient) -> Element {
     )
   };
   let mark = AgentMark::of_client(&client.name).map_or_else(
-    || icon(Icon::Plug, IconSize::Md, PaletteColor::TextMuted).into(),
+    || icon(Icon::Plug, IconSize::Md, PaletteColor::MutedForeground).into(),
     |mark| mark.render(ctx, IconSize::Md),
   );
   // The row's height is the design's, not its words' line height: the 12 state text is 18 high in the theme.

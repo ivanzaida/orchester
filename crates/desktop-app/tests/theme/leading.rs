@@ -12,16 +12,16 @@ fn leading_roles_follow_the_design() {
   for (role, size, line, family, color) in [
     // A way not chosen and the mode on a row (`qkjPe`, `omouE`), what the chosen way means (`R0FlD`), a ceiling's
     // value (`xnfVf`), a field's unit (`lySl8`).
-    (LeadingText::Way, 11.5, 1.3, "Geist", PaletteColor::TextSecondary),
-    (LeadingText::Meaning, 11.5, 1.45, "Geist", PaletteColor::TextMuted),
+    (LeadingText::Way, 11.5, 1.3, "Geist", ExtraColor::TextSecondary.role()),
+    (LeadingText::Meaning, 11.5, 1.45, "Geist", PaletteColor::MutedForeground),
     (
       LeadingText::Ceiling,
       11.0,
       1.3,
       "Geist Mono",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
-    (LeadingText::Unit, 12.0, 1.3, "Geist", PaletteColor::TextMuted),
+    (LeadingText::Unit, 12.0, 1.3, "Geist", PaletteColor::MutedForeground),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(

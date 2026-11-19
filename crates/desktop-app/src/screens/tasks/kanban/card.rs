@@ -37,7 +37,7 @@ use super::{
   display::{Display, Property},
 };
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     agent_mark::AgentMark,
     icon::{Icon, icon},
@@ -385,12 +385,12 @@ fn blocked_flag(ctx: &Ctx, key: &str) -> Row {
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Fine.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Ban, IconSize::Xs, PaletteColor::TextSecondary))
+    .child(icon(Icon::Ban, IconSize::Xs, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t(Status::Blocked.key()))
         .id(format!("task-blocked-{key}-label"))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
 }
@@ -416,12 +416,12 @@ fn word_chip(id: String, (words, glyph): (&str, Option<Icon>), mono: bool) -> Ro
   };
   let label = format!("{id}-label");
   chip(id, Padding::horizontal(ExtraSpacing::Snug.role()))
-    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Xs, PaletteColor::TextMuted)))
+    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Xs, PaletteColor::MutedForeground)))
     .child(
       Text::new(words)
         .id(label)
         .variant(style)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
 }
@@ -438,11 +438,11 @@ fn check(key: &str, selected: bool) -> Row {
     .describe("state", if selected { "checked" } else { "unchecked" });
   if selected {
     side
-      .background(PaletteColor::Accent)
-      .child(icon(Icon::Check, IconSize::Xs, PaletteColor::TextInverse))
+      .background(PaletteColor::Primary)
+      .child(icon(Icon::Check, IconSize::Xs, PaletteColor::PrimaryForeground))
   } else {
     side
-      .background(PaletteColor::SurfaceInput)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(ExtraColor::InputSurface.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
   }
 }

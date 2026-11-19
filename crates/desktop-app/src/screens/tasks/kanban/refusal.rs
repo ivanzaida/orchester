@@ -102,9 +102,9 @@ pub fn layer(ctx: &mut Ctx, id: &str, refusal: &Refusal, shown: Shown) -> Elemen
 /// *Run not ended: stop it from the task* (`Refusal chip` `E2djZX`).
 fn chip(ctx: &mut Ctx, id: &str, refusal: &Refusal, hovered: bool) -> Element {
   let mark = if hovered {
-    PaletteColor::Danger
+    PaletteColor::Destructive
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   let words: Arc<str> = ctx.t(words_key(refusal));
   let chip = Row::new()
@@ -113,8 +113,8 @@ fn chip(ctx: &mut Ctx, id: &str, refusal: &Refusal, hovered: bool) -> Element {
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .box_shadow(ShadowStyle::Md)
     .describe("a11y_name", words.clone())
     .describe("tone", if hovered { "danger" } else { "muted" })
@@ -123,7 +123,7 @@ fn chip(ctx: &mut Ctx, id: &str, refusal: &Refusal, hovered: bool) -> Element {
       Text::new(&ctx.t(chip_key(refusal)))
         .id(format!("{id}-refused-text"))
         .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap(),
     );
   Tooltip::new(format!("{id}-refused"), words).wrap(ctx, chip)

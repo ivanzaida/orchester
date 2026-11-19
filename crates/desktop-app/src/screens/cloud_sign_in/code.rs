@@ -38,8 +38,8 @@ use crate::{
   screens::settings::orchester::{PersonOnly, Said, cloud_said},
   services::Services,
   theme::{
-    ControlHeight, DISABLED_OPACITY, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing, SignInSpacing,
-    SignInText,
+    ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing,
+    SignInSpacing, SignInText,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -352,11 +352,11 @@ fn accepted(ctx: &Ctx) -> Element {
       Row::new()
         .spacing(ExtraSpacing::Pair.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::CircleDot, IconSize::Md, PaletteColor::TextPrimary))
+        .child(icon(Icon::CircleDot, IconSize::Md, PaletteColor::Foreground))
         .child(
           Text::new(&ctx.t("sign_in.code.step"))
             .variant(ExtraTypography::NoteStrong.role())
-            .color(PaletteColor::TextPrimary),
+            .color(PaletteColor::Foreground),
         ),
     )
     .into()
@@ -440,11 +440,11 @@ fn digit_boxes(typed: &str, wrong: bool) -> Element {
 
 fn digit_box(place: usize, digit: Option<char>, next: bool, wrong: bool) -> Element {
   let stroke = if wrong {
-    Border::inside(BorderSize::Sm, PaletteColor::Danger)
+    Border::inside(BorderSize::Sm, PaletteColor::Destructive)
   } else if next {
-    Border::inside(BorderSize::Md, PaletteColor::BorderFocus)
+    Border::inside(BorderSize::Md, PaletteColor::Ring)
   } else if digit.is_some() {
-    Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    Border::inside(BorderSize::Sm, PaletteColor::Input)
   } else {
     Border::inside(BorderSize::Sm, PaletteColor::Border)
   };
@@ -453,7 +453,7 @@ fn digit_box(place: usize, digit: Option<char>, next: bool, wrong: bool) -> Elem
     Row::new()
       .width(Dimension::Px(CARET_WIDTH))
       .height(Dimension::Px(CARET_HEIGHT))
-      .background(PaletteColor::TextPrimary)
+      .background(PaletteColor::Foreground)
   });
   Row::new()
     .id(format!("sign-in-code-box-{place}"))
@@ -461,7 +461,7 @@ fn digit_box(place: usize, digit: Option<char>, next: bool, wrong: bool) -> Elem
     .height(Dimension::Px(BOX_HEIGHT))
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(stroke)
     .rounded(RadiusSize::Md)
     .with_children(shown)
@@ -565,11 +565,11 @@ fn link(ctx: &Ctx, (id, key, glyph): (&str, &str, Icon), press: impl Fn() + Send
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("a11y_name", label.to_string())
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&label)
         .variant(ExtraTypography::NoteStrong.role())
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     )
     .into()
 }

@@ -21,7 +21,7 @@ pub fn centered(glyph: Icon, title: &str, body: &str) -> Column {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .spacing(SpacingSize::Sm)
-    .child(icon(glyph, IconSize::Lg, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Lg, PaletteColor::MutedForeground))
     .child(Text::new(title).variant(TypographyStyle::Title))
     .child(Text::new(body).variant(TypographyStyle::Description))
 }

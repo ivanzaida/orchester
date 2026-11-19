@@ -149,7 +149,7 @@ impl Component for HeldCard {
         Text::new(&waiting(ctx, &props.held))
           .id(format!("{id}-waiting"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap()
           .text_overflow(TextOverflow::Elipsis)
           .flex_shrink(1.0)
@@ -166,7 +166,7 @@ impl Component for HeldCard {
       Text::new(&message_text(ctx, &error))
         .id(format!("{id}-error"))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .width(Dimension::Pct(100.0))
     });
     Column::new()

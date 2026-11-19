@@ -6,7 +6,7 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, RadiusSize, TypographyStyle},
+    theme::{RadiusSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
@@ -113,12 +113,12 @@ fn builder(ctx: &mut Ctx, open: &Open<'_>, id: ResourceId) -> Option<Element> {
       .align_items(Alignment::Center)
       .rounded(RadiusSize::Md)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextSecondary))
+      .child(icon(Icon::ArrowUpRight, IconSize::Sm, ExtraColor::TextSecondary.role()))
       .child(
         Text::new(&words)
           .id("pipeline-hub-step-open-profile-label")
           .variant(TypographyStyle::Button)
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap()
           .text_overflow(TextOverflow::Elipsis)
           .flex_shrink(1.0)

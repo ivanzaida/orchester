@@ -26,7 +26,7 @@ use super::section::{SIDE_LINE_HEIGHT, head, key, line, link, mono_time, muted, 
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -106,9 +106,13 @@ fn queue_line(ctx: &mut Ctx, project: ProjectId, (state, waiting): (Message, Opt
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::GitPullRequest, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(
+      Icon::GitPullRequest,
+      IconSize::Base,
+      ExtraColor::TextSecondary.role(),
+    ))
     .child(
       Text::new(&ctx.t("overview.landed.queue"))
         .variant(OverviewText::Line.role())
@@ -147,12 +151,12 @@ fn run_line(ctx: &mut Ctx, project: ProjectId, run: &LandedRun, earlier: bool) -
   let id = format!("overview-landed-{}", run.key);
   let (mark, words, when) = if earlier {
     (
-      PaletteColor::TextMuted,
-      PaletteColor::TextSecondary,
+      PaletteColor::MutedForeground,
+      ExtraColor::TextSecondary.role(),
       weekday(ctx, run.at),
     )
   } else {
-    (PaletteColor::Success, PaletteColor::TextPrimary, display::clock(run.at))
+    (PaletteColor::Success, PaletteColor::Foreground, display::clock(run.at))
   };
   let row = line(&id, SIDE_LINE_HEIGHT, ExtraSpacing::Loose.role())
     .child(icon(Icon::GitMerge, IconSize::Base, mark))
@@ -192,9 +196,13 @@ pub(super) fn reading(ctx: &mut Ctx, project: ProjectId, (state, bones): (Elemen
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::GitPullRequest, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(
+      Icon::GitPullRequest,
+      IconSize::Base,
+      ExtraColor::TextSecondary.role(),
+    ))
     .child(
       Text::new(&ctx.t("overview.landed.queue"))
         .variant(OverviewText::Line.role())

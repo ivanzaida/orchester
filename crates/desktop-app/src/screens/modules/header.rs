@@ -18,7 +18,7 @@ use super::words;
 use crate::{
   navigation::Navigation,
   routes::{ModuleListTab, ProjectPage, Route},
-  theme::{ExtraRadius, ExtraSpacing, IconSize, TaskSpacing},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, TaskSpacing},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     icon::{Icon, icon},
@@ -37,7 +37,7 @@ const DOT: f32 = 6.0;
 pub fn state_chip(ctx: &Ctx, id: &str, state: ModuleState) -> Element {
   let (tone, fill) = match state {
     ModuleState::Open => (PaletteColor::Success, PaletteColor::SuccessMuted),
-    ModuleState::Closed => (PaletteColor::TextSecondary, PaletteColor::AccentMuted),
+    ModuleState::Closed => (ExtraColor::TextSecondary.role(), PaletteColor::Highlight),
   };
   Row::new()
     .id(id.to_owned())
@@ -126,7 +126,7 @@ pub fn back_row(ctx: &mut Ctx, project: ProjectId, here: &str) -> Element {
   let arrow = opening(navigation.to(list))
     .id("module-back")
     .describe("a11y_name", ctx.t("modules.page.back"))
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted));
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground));
   Row::new()
     .id("module-back-row")
     .spacing(ExtraSpacing::Snug.role())

@@ -22,7 +22,7 @@ use super::{Act, View, card::base};
 use crate::{
   navigation::Navigation,
   routes::{Route, TaskTab, TaskView},
-  theme::{DeliveryText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DeliveryText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     detail_row::{DetailValue, detail_row},
@@ -198,7 +198,7 @@ fn decision(ctx: &Ctx, view: &View<'_>, (glyph, title, note): (Icon, &str, &str)
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Lg)
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Warning))
     .rounded(RadiusSize::Lg)
     .child(
@@ -216,7 +216,7 @@ fn decision(ctx: &Ctx, view: &View<'_>, (glyph, title, note): (Icon, &str, &str)
     .child(
       Text::new(note)
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .width(Dimension::Pct(100.0)),
     )
     .with_children(parts)
@@ -227,7 +227,7 @@ fn decision(ctx: &Ctx, view: &View<'_>, (glyph, title, note): (Icon, &str, &str)
 fn muted(text: &str) -> Element {
   Text::new(text)
     .variant(ExtraTypography::Note.role())
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
     .into()
 }

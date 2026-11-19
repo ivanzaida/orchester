@@ -90,7 +90,7 @@ pub(crate) fn sub_head(ctx: &Ctx, label: f32, count: f32) -> Row {
     )
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .child(skeleton::line(ctx, HubText::GroupTitle.role(), label))
     .child(skeleton::line(ctx, HubText::Hint.role(), count))
 }

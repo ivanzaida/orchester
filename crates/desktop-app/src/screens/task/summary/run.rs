@@ -58,7 +58,7 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
       Text::new(&pipeline)
         .id("task-run-meta")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     );
     section = section.child(head).child(rail(ctx, task, run));
@@ -84,13 +84,13 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
       ctx,
       task,
       (Icon::CornerDownLeft, &text, "stopped"),
-      (true, PaletteColor::TextMuted),
+      (true, PaletteColor::MutedForeground),
     ),
     (None, Some(text)) => event_line(
       ctx,
       task,
       (Icon::CircleX, &text, "stopped"),
-      (true, PaletteColor::Danger),
+      (true, PaletteColor::Destructive),
     ),
     (None, None) => waits_on::row(ctx, (&task.detail, &task.project.open), Place::Summary)
       .unwrap_or_else(|| last_event(ctx, task, run.is_some())),
@@ -154,7 +154,7 @@ fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
     ctx,
     task,
     (glyph, &text, said.tone.name()),
-    (here, PaletteColor::TextMuted),
+    (here, PaletteColor::MutedForeground),
   )
 }
 
@@ -178,7 +178,7 @@ pub(super) fn event_line(
       .child(
         Text::new(&ctx.t("summary.openConversation"))
           .variant(TypographyStyle::Label)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .nowrap(),
       )
   });

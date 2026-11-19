@@ -340,7 +340,7 @@ fn opened(ctx: &Ctx, created: &Created) -> Element {
       Text::new(&ctx.t_args(key, [("number", number)]))
         .id("task-pull-request-opened-text")
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

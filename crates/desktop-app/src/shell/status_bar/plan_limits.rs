@@ -97,9 +97,9 @@ impl Component for PlanLimitsItem {
       .iter()
       .any(|limits| limits.reading.state(now) == LimitState::Reached);
     let color = if reached {
-      PaletteColor::Danger
+      PaletteColor::Destructive
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     };
     let toggle = self.open.clone();
     let mut item = pressed(
@@ -172,15 +172,15 @@ fn parts(ctx: &Ctx, limits: &[AccountLimits], now: Timestamp) -> Vec<(String, Pa
       if !parts.is_empty() {
         parts.push((
           ctx.t("shell.status.planLimits.separator").to_string(),
-          PaletteColor::TextMuted,
+          PaletteColor::MutedForeground,
         ));
       }
       parts.push((
         words,
         if reached {
-          PaletteColor::Danger
+          PaletteColor::Destructive
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         },
       ));
     }

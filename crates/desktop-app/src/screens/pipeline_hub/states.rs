@@ -47,8 +47,8 @@ pub(super) fn failure(ctx: &Ctx, error: &Message, retry: Retry) -> Element {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::DangerMuted)
-    .child(icon(Icon::CircleAlert, IconSize::Xl, PaletteColor::Danger));
+    .background(PaletteColor::DestructiveMuted)
+    .child(icon(Icon::CircleAlert, IconSize::Xl, PaletteColor::Destructive));
   let line = |id: &str, key: &str, role: HubText| {
     Text::new(&ctx.t(key))
       .id(format!("{PREFIX}-{id}"))

@@ -78,13 +78,13 @@ pub(super) fn row(
   focused: bool,
 ) -> Element {
   let detail_color = if face.runs {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   } else {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   };
   let name = &face.name;
   let children: Vec<Element> = vec![
-    icon(face.icon, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(face.icon, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     label(face, letters, filtered),
     Text::new(&face.detail)
       .id(format!("{id}-slash-{name}-detail"))
@@ -158,7 +158,7 @@ fn label(face: &Face, letters: Range<usize>, filtered: bool) -> Element {
       if matched {
         text.variant(bold.role())
       } else {
-        text.variant(plain.role()).color(PaletteColor::TextSecondary)
+        text.variant(plain.role()).color(ExtraColor::TextSecondary.role())
       }
     })
   };
@@ -180,7 +180,7 @@ pub(super) fn nothing(ctx: &Ctx, typed: &str) -> Element {
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::SearchX, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::SearchX, IconSize::Md, PaletteColor::MutedForeground))
     .child(
       Column::new()
         .flex(1.0)

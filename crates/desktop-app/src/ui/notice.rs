@@ -29,7 +29,7 @@ use lurq::{
 };
 
 use super::icon::{Icon, icon};
-use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoticeTone {
@@ -57,14 +57,14 @@ impl NoticeTone {
   /// The fill, the stroke and the icon's color.
   pub(crate) const fn colors(self) -> (PaletteColor, PaletteColor, PaletteColor) {
     match self {
-      Self::Neutral => (
-        PaletteColor::SurfaceRaised,
-        PaletteColor::Border,
-        PaletteColor::TextMuted,
-      ),
+      Self::Neutral => (PaletteColor::Card, PaletteColor::Border, PaletteColor::MutedForeground),
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info, PaletteColor::Info),
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning, PaletteColor::Warning),
-      Self::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger, PaletteColor::Danger),
+      Self::Danger => (
+        PaletteColor::DestructiveMuted,
+        PaletteColor::Destructive,
+        PaletteColor::Destructive,
+      ),
       Self::Success => (PaletteColor::SuccessMuted, PaletteColor::Success, PaletteColor::Success),
     }
   }
@@ -308,7 +308,7 @@ fn inspector_notice(notice: Notice) -> Element {
     .with_children(notice.body.map(|body| {
       Text::new(&body)
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .width(Dimension::Pct(100.0))
     }))
     .with_children(notice.parts)
@@ -351,7 +351,7 @@ fn raised_notice(notice: Notice) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Md)
     .describe("tone", notice.tone.name())
@@ -386,7 +386,7 @@ pub fn handling_notice_action(
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
     .child(Text::new(label).variant(TypographyStyle::Label))
-    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextPrimary));
+    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::Foreground));
   handling_notice_content(id, glyph, text, Some(action.into()))
 }
 
@@ -397,10 +397,10 @@ fn handling_notice_content(id: &str, glyph: Icon, text: &str, action: Option<Ele
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
-    .child(icon(glyph, IconSize::Nav, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Nav, ExtraColor::TextSecondary.role()))
     .child(
       Column::new()
         .flex(1.0)

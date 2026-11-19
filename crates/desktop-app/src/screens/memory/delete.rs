@@ -80,8 +80,8 @@ impl Component for DeleteConfirm {
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Lg, HubSpacing::Row.role()))
       .spacing(ExtraSpacing::Loose.role())
-      .background(PaletteColor::DangerMuted)
-      .border_inside(BorderSize::Sm, PaletteColor::Danger)
+      .background(PaletteColor::DestructiveMuted)
+      .border_inside(BorderSize::Sm, PaletteColor::Destructive)
       .rounded(RadiusSize::Lg)
       .describe("weight", "loses")
       .child(

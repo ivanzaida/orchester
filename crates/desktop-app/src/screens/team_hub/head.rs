@@ -28,7 +28,7 @@ pub(in crate::screens) enum Reach {
 /// one while the team server cannot be reached); while it cannot be reached, the line says so in place of *Team*.
 pub(in crate::screens) fn status(ctx: &Ctx, admin: bool, reach: Reach) -> Vec<Element> {
   let (glyph, color, words) = match reach {
-    Reach::Answered => (Icon::Users, PaletteColor::TextMuted, "team_hub.team"),
+    Reach::Answered => (Icon::Users, PaletteColor::MutedForeground, "team_hub.team"),
     Reach::Unanswered => (Icon::CloudOff, PaletteColor::Warning, "team_hub.unreached"),
     Reach::Unreachable => (Icon::CloudOff, PaletteColor::Warning, "team_hub.cantReach.head"),
   };
@@ -43,7 +43,11 @@ pub(in crate::screens) fn status(ctx: &Ctx, admin: bool, reach: Reach) -> Vec<El
       Text::new(&ctx.t(words))
         .id("team-hub-team-label")
         .variant(HubText::Hint.role())
-        .color(if unreached { color } else { PaletteColor::TextMuted })
+        .color(if unreached {
+          color
+        } else {
+          PaletteColor::MutedForeground
+        })
         .nowrap(),
     )
     .with_children((!admin).then(|| member::role(ctx)));

@@ -13,7 +13,7 @@ use lurq::{
 use super::parts::tile;
 use crate::{
   navigation::link::Open,
-  theme::{ExtraSpacing, HubText, IconSize},
+  theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
     icon_button::IconButton,
@@ -28,7 +28,7 @@ pub(crate) fn crumb(ctx: &Ctx, id: &str, (list, back): (&str, Open), here: Optio
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(list).variant(HubText::Crumb.role()));
   let here = here.map(|here| {
     [
@@ -38,7 +38,7 @@ pub(crate) fn crumb(ctx: &Ctx, id: &str, (list, back): (&str, Open), here: Optio
       Text::new(here)
         .id(format!("{id}-here"))
         .variant(HubText::Crumb.role())
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     ]
   });
   Row::new()

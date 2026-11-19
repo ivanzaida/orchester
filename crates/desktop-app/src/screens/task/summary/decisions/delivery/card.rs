@@ -32,7 +32,7 @@ use crate::{
   navigation::Navigation,
   routes::{Route, TaskTab, TaskView},
   screens::task::queue_words as words,
-  theme::{DeliveryText, ExtraSpacing, ExtraTypography, IconSize, TaskText},
+  theme::{DeliveryText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -66,7 +66,7 @@ pub(super) fn state_card(ctx: &mut Ctx, task: &TaskContext, (run, queue): (&RunV
       Text::new(&line)
         .id("task-delivery-place")
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     }));
   let blocked = matches!(
@@ -76,7 +76,7 @@ pub(super) fn state_card(ctx: &mut Ctx, task: &TaskContext, (run, queue): (&RunV
   let glyph = if blocked {
     (Icon::CirclePause, PaletteColor::Warning)
   } else {
-    (Icon::GitMerge, PaletteColor::TextSecondary)
+    (Icon::GitMerge, ExtraColor::TextSecondary.role())
   };
   let phases = delivery.and_then(|delivery| {
     phases::phases(
@@ -90,7 +90,7 @@ pub(super) fn state_card(ctx: &mut Ctx, task: &TaskContext, (run, queue): (&RunV
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .describe(
@@ -113,7 +113,7 @@ pub(super) fn state_card(ctx: &mut Ctx, task: &TaskContext, (run, queue): (&RunV
               Text::new(&body)
                 .id("task-delivery-body")
                 .variant(ExtraTypography::Prose.role())
-                .color(PaletteColor::TextSecondary)
+                .color(ExtraColor::TextSecondary.role())
                 .width(Dimension::Pct(100.0)),
             ),
         ),
@@ -293,16 +293,16 @@ pub(super) fn review_head(ctx: &Ctx, (run, queue): (&RunView, &TaskDelivery), si
     .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .child(icon(Icon::GitBranch, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(Icon::GitBranch, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(run.run.branch().as_str())
         .variant(DeliveryText::Branch.role())
         .nowrap(),
     )
-    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::MutedForeground))
     .child(Text::new(base).variant(DeliveryText::Branch.role()).nowrap())
     .with_children(synced.map(|synced| {
       Row::new()
@@ -323,7 +323,7 @@ pub(super) fn review_head(ctx: &Ctx, (run, queue): (&RunView, &TaskDelivery), si
       Text::new(&meta)
         .id("task-review-meta")
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     );
   Column::new()

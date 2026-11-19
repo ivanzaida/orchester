@@ -107,9 +107,9 @@ impl Component for ModeControl {
       .rounded(RadiusSize::Sm)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(icon(Icon::Flag, IconSize::Xs, PaletteColor::TextSecondary))
+      .child(icon(Icon::Flag, IconSize::Xs, ExtraColor::TextSecondary.role()))
       .child(Text::new(&words).variant(LeadingText::Way.role()).nowrap())
-      .child(icon(Icon::ChevronDown, IconSize::Xs, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronDown, IconSize::Xs, PaletteColor::MutedForeground));
     let control = if open {
       control.background(ExtraColor::Hover.role())
     } else {
@@ -174,9 +174,9 @@ impl ModeControl {
 /// `current` one.
 fn item(id: &str, (glyph, name, means): (Icon, &str, &str), current: bool, press: Press) -> Element {
   let tone = if current {
-    PaletteColor::TextPrimary
+    PaletteColor::Foreground
   } else {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   };
   let words = Column::new()
     .flex(1.0)
@@ -206,7 +206,7 @@ fn item(id: &str, (glyph, name, means): (Icon, &str, &str), current: bool, press
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(icon(glyph, IconSize::Base, tone))
     .child(words)
-    .with_children(current.then(|| icon(Icon::Check, IconSize::Base, PaletteColor::TextSecondary)));
+    .with_children(current.then(|| icon(Icon::Check, IconSize::Base, ExtraColor::TextSecondary.role())));
   if current {
     row.background(ExtraColor::Hover.role()).into()
   } else {

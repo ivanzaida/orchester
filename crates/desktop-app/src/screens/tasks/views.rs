@@ -23,7 +23,7 @@ use super::cache::ViewCounts;
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::opening,
@@ -96,9 +96,9 @@ fn view(
     Counts::Reading | Counts::Unknown => ctx.t("tasks.views.unknownCount").to_string(),
   };
   let (style, color) = if current {
-    (ExtraTypography::Strong.role(), PaletteColor::TextPrimary)
+    (ExtraTypography::Strong.role(), PaletteColor::Foreground)
   } else {
-    (TypographyStyle::Body, PaletteColor::TextSecondary)
+    (TypographyStyle::Body, ExtraColor::TextSecondary.role())
   };
   let to = TaskList::new(tab).with_search(list.search().unwrap_or_default());
   let shown: Element = match counts {
@@ -106,7 +106,7 @@ fn view(
     Counts::Read(_) | Counts::Unknown => Text::new(&count)
       .id(format!("{id}-count"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap()
       .into(),
   };
@@ -133,7 +133,7 @@ fn view(
     .child(shown);
   if current {
     button
-      .border_bottom(Border::inside(BorderSize::Md, PaletteColor::Accent))
+      .border_bottom(Border::inside(BorderSize::Md, PaletteColor::Primary))
       .into()
   } else {
     button.into()

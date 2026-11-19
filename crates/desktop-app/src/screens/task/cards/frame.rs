@@ -21,7 +21,7 @@ pub(super) fn frame(id: String, waiting: bool) -> Column {
     .id(id)
     .describe("waiting", waiting.to_string())
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(
       BorderSize::Sm,
       if waiting {
@@ -92,7 +92,7 @@ impl Stands {
     Self {
       glyph: Icon::CirclePause,
       words,
-      color: PaletteColor::TextMuted,
+      color: PaletteColor::MutedForeground,
     }
   }
 

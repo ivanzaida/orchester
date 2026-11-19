@@ -94,7 +94,7 @@ impl From<Strip> for Element {
       StripTone::Info => row.background(PaletteColor::InfoMuted),
       StripTone::Success => row.background(PaletteColor::SuccessMuted),
       StripTone::Warning => row.background(PaletteColor::WarningMuted),
-      StripTone::Danger => row.background(PaletteColor::DangerMuted),
+      StripTone::Danger => row.background(PaletteColor::DestructiveMuted),
     };
     let tone = match strip.tone {
       StripTone::Plain => "plain",
@@ -123,7 +123,7 @@ impl From<Strip> for Element {
             None => Text::new(&strip.title)
               .id(format!("{id}-title"))
               .variant(HubText::TeamLine.role())
-              .color(PaletteColor::TextPrimary)
+              .color(PaletteColor::Foreground)
               .width(Dimension::Pct(100.0))
               .into(),
           })

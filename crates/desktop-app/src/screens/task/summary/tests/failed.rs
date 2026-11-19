@@ -75,7 +75,7 @@ pub fn section(ctx: &mut Ctx, record: &TestStepRecord, returned_to: Option<&str>
       Text::new(&detail)
         .id("task-tests-failed-detail")
         .variant(lurq::app::theme::TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     );
@@ -104,7 +104,7 @@ pub fn section(ctx: &mut Ctx, record: &TestStepRecord, returned_to: Option<&str>
     let words = Text::new(&counted(ctx, keys, more))
       .id("task-tests-failed-more")
       .variant(lurq::app::theme::TypographyStyle::Description)
-      .color(PaletteColor::TextMuted);
+      .color(PaletteColor::MutedForeground);
     rows.push(
       Row::new()
         .width(Dimension::Pct(100.0))
@@ -136,7 +136,7 @@ fn failed_row(id: &str, (name, location): (&str, Option<&str>), links: Vec<Eleme
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::CircleX, IconSize::Base, PaletteColor::Danger))
+    .child(icon(Icon::CircleX, IconSize::Base, PaletteColor::Destructive))
     .child(
       Text::new(name)
         .id(format!("{id}-name"))
@@ -157,7 +157,7 @@ fn failed_row(id: &str, (name, location): (&str, Option<&str>), links: Vec<Eleme
       .variant(TestsText::Message.role())
       .width(Dimension::Pct(100.0));
     if index == 0 {
-      line.color(PaletteColor::Danger)
+      line.color(PaletteColor::Destructive)
     } else {
       line
     }
@@ -212,7 +212,7 @@ pub fn flaky_section(ctx: &Ctx, record: &TestStepRecord) -> Option<Element> {
     ];
     (
       Icon::CircleX,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       &test.name,
       test.location.as_deref(),
       marks,

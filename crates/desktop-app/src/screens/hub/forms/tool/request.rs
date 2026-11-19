@@ -297,7 +297,7 @@ impl RequestFields {
         select = select.invalid();
         Sub {
           words,
-          color: PaletteColor::Danger,
+          color: PaletteColor::Destructive,
         }
       }
       None

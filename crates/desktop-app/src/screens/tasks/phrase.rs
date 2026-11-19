@@ -16,10 +16,13 @@ use orchester_workspace::tasks::{
   needs_you::WaitingKind,
 };
 
-use crate::ui::{
-  icon::Icon,
-  message::message_text,
-  status::{workflow_key, workflow_look},
+use crate::{
+  theme::ExtraColor,
+  ui::{
+    icon::Icon,
+    message::message_text,
+    status::{workflow_key, workflow_look},
+  },
 };
 
 /// What a row says about where its task stands.
@@ -190,7 +193,7 @@ fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
     glyph,
     glyph_color,
     words: ctx.t(workflow_key(status)),
-    color: PaletteColor::TextMuted,
+    color: PaletteColor::MutedForeground,
     closed: true,
   })
 }
@@ -207,18 +210,30 @@ fn step_args(step: &CurrentStep) -> [(&'static str, String); 2] {
 /// `text_muted` (queued `clock-3`, missing details `pencil-line`), a finished run in its outcome's tone, a run that
 /// cannot be read in `danger`.
 fn mark(row: &TaskRow) -> (Icon, PaletteColor, PaletteColor) {
-  let secondary = |glyph| (glyph, PaletteColor::TextSecondary, PaletteColor::TextSecondary);
-  let muted = |glyph| (glyph, PaletteColor::TextMuted, PaletteColor::TextMuted);
+  let secondary = |glyph| {
+    (
+      glyph,
+      ExtraColor::TextSecondary.role(),
+      ExtraColor::TextSecondary.role(),
+    )
+  };
+  let muted = |glyph| (glyph, PaletteColor::MutedForeground, PaletteColor::MutedForeground);
   let toned = |glyph, color: PaletteColor| (glyph, color.clone(), color);
   match &row.readiness {
-    ReadinessKind::Ready | ReadinessKind::Run(TaskPhase::Draft) => {
-      (Icon::Circle, PaletteColor::TextSecondary, PaletteColor::TextMuted)
-    }
+    ReadinessKind::Ready | ReadinessKind::Run(TaskPhase::Draft) => (
+      Icon::Circle,
+      ExtraColor::TextSecondary.role(),
+      PaletteColor::MutedForeground,
+    ),
     ReadinessKind::Missing => muted(Icon::PencilLine),
     ReadinessKind::Held(hold) => held(hold),
-    ReadinessKind::Blocked => (Icon::Ban, PaletteColor::TextSecondary, PaletteColor::TextMuted),
+    ReadinessKind::Blocked => (
+      Icon::Ban,
+      ExtraColor::TextSecondary.role(),
+      PaletteColor::MutedForeground,
+    ),
     ReadinessKind::NotShared => muted(Icon::Lock),
-    ReadinessKind::Unreadable => toned(Icon::CircleHelp, PaletteColor::Danger),
+    ReadinessKind::Unreadable => toned(Icon::CircleHelp, PaletteColor::Destructive),
     ReadinessKind::Run(phase) => match phase {
       TaskPhase::Draft | TaskPhase::Queued => muted(Icon::Clock3),
       TaskPhase::Running => secondary(Icon::LoaderCircle),
@@ -227,7 +242,7 @@ fn mark(row: &TaskRow) -> (Icon, PaletteColor, PaletteColor) {
       TaskPhase::StoppedAtLimit => toned(Icon::Gauge, PaletteColor::Warning),
       TaskPhase::Succeeded => toned(Icon::CircleCheck, PaletteColor::Success),
       TaskPhase::Merged => secondary(Icon::GitMerge),
-      TaskPhase::Failed => toned(Icon::CircleX, PaletteColor::Danger),
+      TaskPhase::Failed => toned(Icon::CircleX, PaletteColor::Destructive),
       TaskPhase::Cancelled => muted(Icon::CircleSlash),
     },
   }
@@ -241,8 +256,16 @@ fn held(hold: &GroupHold) -> (Icon, PaletteColor, PaletteColor) {
     | GroupHold::DailyBudget
     | GroupHold::PreviousTask
     | GroupHold::Concurrency
-    | GroupHold::Blocked { .. } => (Icon::Clock3, PaletteColor::TextMuted, PaletteColor::TextMuted),
-    GroupHold::Canceled => (Icon::CircleSlash, PaletteColor::TextMuted, PaletteColor::TextMuted),
+    | GroupHold::Blocked { .. } => (
+      Icon::Clock3,
+      PaletteColor::MutedForeground,
+      PaletteColor::MutedForeground,
+    ),
+    GroupHold::Canceled => (
+      Icon::CircleSlash,
+      PaletteColor::MutedForeground,
+      PaletteColor::MutedForeground,
+    ),
     GroupHold::SessionEnded
     | GroupHold::QueueHeld
     | GroupHold::Paused

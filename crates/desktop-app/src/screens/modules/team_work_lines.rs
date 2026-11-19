@@ -24,6 +24,7 @@ use crate::{
     pages::{TeamClaim, minutes},
     strip::{Strip, StripTone},
   },
+  theme::ExtraColor,
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -112,7 +113,7 @@ pub fn claim(ctx: &Ctx, view: &View<'_>) -> Element {
   let Some(claim) = &module.claim else {
     let strip = Strip::new(
       id,
-      (Icon::CircleDashed, PaletteColor::TextMuted),
+      (Icon::CircleDashed, PaletteColor::MutedForeground),
       ctx.t_args("modules.team.work.nobodyTitle", [("module", name.as_str())]),
       ctx.t_args("modules.team.work.nobodyDetail", [("tasks", tasks.as_str())]),
     );
@@ -218,7 +219,7 @@ pub fn branch(ctx: &Ctx, view: &View<'_>) -> Element {
   };
   let strip = Strip::new(
     "module-team-branch",
-    (Icon::GitBranch, PaletteColor::TextSecondary),
+    (Icon::GitBranch, ExtraColor::TextSecondary.role()),
     title,
     ctx.t_args(key, [("base", base_named(ctx, view).as_str())]),
   );

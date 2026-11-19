@@ -97,26 +97,29 @@ impl Component for Operations {
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .rounded(RadiusSize::Sm)
-      .background(PaletteColor::SurfaceRaised)
-      .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+      .background(PaletteColor::Card)
+      .border_inside(BorderSize::Sm, PaletteColor::Input)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(glyph(Icon::LoaderCircle, PaletteColor::TextSecondary))
+      .child(glyph(Icon::LoaderCircle, ExtraColor::TextSecondary.role()))
       .child(
         Text::new(&ctx.t_args("shell.operations.count", [("count", running.len().to_string())]))
           .variant(TypographyStyle::FieldLabel)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .nowrap(),
       )
-      .child(label(&ctx.t("shell.operations.separator"), PaletteColor::TextMuted))
+      .child(label(
+        &ctx.t("shell.operations.separator"),
+        PaletteColor::MutedForeground,
+      ))
       .child(cut(
         ctx,
         "status-activity-text",
         &ctx.t_args("shell.status.activity.running", [("title", title.to_string())]),
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       ))
       .child(glyph(
         if open { Icon::ChevronUp } else { Icon::ChevronDown },
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ));
     let row = Row::new()
       .flex_shrink(1.0)
@@ -159,7 +162,7 @@ fn panel(ctx: &mut Ctx, props: &OperationsProps, running: &[&Operation], open: &
     .child(
       Text::new(&ctx.t_args("shell.operations.running", [("count", running.len().to_string())]))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .child(Row::new().flex(1.0))
     .child(
@@ -188,7 +191,7 @@ fn panel(ctx: &mut Ctx, props: &OperationsProps, running: &[&Operation], open: &
     );
     list = list.child(row(
       &format!("operation-{index}"),
-      (Icon::LoaderCircle, PaletteColor::TextSecondary),
+      (Icon::LoaderCircle, ExtraColor::TextSecondary.role()),
       (&title, where_.as_deref()),
       time,
     ));
@@ -200,7 +203,7 @@ fn panel(ctx: &mut Ctx, props: &OperationsProps, running: &[&Operation], open: &
       .child(section(&ctx.t("shell.operations.recent")));
     for (index, event) in recent.iter().enumerate() {
       let where_ = place_words(ctx, event.project(), event.target(), project);
-      let time = label(&display::clock_time(event.at()), PaletteColor::TextMuted).into();
+      let time = label(&display::clock_time(event.at()), PaletteColor::MutedForeground).into();
       list = list.child(row(
         &format!("operation-recent-{index}"),
         outcome_icon(event.outcome()),
@@ -213,8 +216,8 @@ fn panel(ctx: &mut Ctx, props: &OperationsProps, running: &[&Operation], open: &
     .id("operations-popover")
     .width(Dimension::Px(POPOVER_WIDTH))
     .rounded(RadiusSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .box_shadow(ShadowStyle::Lg)
     .clip()
     .child(head)
@@ -279,7 +282,7 @@ fn row(
     .child(
       Text::new(title)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
     .with_children(where_.map(|where_| Text::new(where_).variant(TypographyStyle::Caption)));
   Row::new()
@@ -297,8 +300,8 @@ fn row(
 const fn outcome_icon(outcome: &Outcome) -> (Icon, PaletteColor) {
   match outcome {
     Outcome::Finished => (Icon::CircleCheck, PaletteColor::Success),
-    Outcome::Failed { .. } => (Icon::CircleX, PaletteColor::Danger),
-    Outcome::NotDone => (Icon::CircleAlert, PaletteColor::TextMuted),
+    Outcome::Failed { .. } => (Icon::CircleX, PaletteColor::Destructive),
+    Outcome::NotDone => (Icon::CircleAlert, PaletteColor::MutedForeground),
     Outcome::NeedsYou { .. } => (Icon::Hand, PaletteColor::Warning),
   }
 }

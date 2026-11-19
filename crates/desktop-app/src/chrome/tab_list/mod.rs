@@ -220,16 +220,16 @@ impl TabList {
           .id("tab-list-count")
           .variant(ExtraTypography::MonoNote.role())
           .color(if open || hovered {
-            PaletteColor::TextPrimary
+            PaletteColor::Foreground
           } else {
-            PaletteColor::TextSecondary
+            ExtraColor::TextSecondary.role()
           })
           .nowrap(),
       )
       .child(if open {
-        icon(Icon::ChevronUp, IconSize::Sm, PaletteColor::TextSecondary)
+        icon(Icon::ChevronUp, IconSize::Sm, ExtraColor::TextSecondary.role())
       } else {
-        icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted)
+        icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground)
       });
     let button = if open {
       button.background(ExtraColor::Pressed.role())
@@ -359,8 +359,8 @@ impl TabList {
       .padding(ExtraSpacing::Snug.role())
       .spacing(ExtraSpacing::Tight.role())
       .rounded(RadiusSize::Lg)
-      .background(PaletteColor::SurfaceRaised)
-      .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+      .background(PaletteColor::Card)
+      .border_inside(BorderSize::Sm, PaletteColor::Input)
       .box_shadow(ShadowStyle::Lg)
       .with_children(searched.then(|| self.search_field(ctx, count)));
     if empty {
@@ -405,7 +405,7 @@ fn no_match(ctx: &mut Ctx, query: &str) -> Element {
     .child(
       Text::new(&ctx.t_args("shell.tabs.noMatch", [("query", query.trim())]))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }

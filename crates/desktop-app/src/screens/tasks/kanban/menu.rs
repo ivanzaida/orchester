@@ -367,7 +367,7 @@ fn reasons(ctx: &Ctx, card: &CardModel, refused: &[(Arc<str>, moves::Refusal)]) 
     };
     Text::new(&words)
       .variant(ExtraTypography::Note.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .width(Dimension::Pct(100.0))
   });
   Column::new()

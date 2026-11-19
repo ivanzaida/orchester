@@ -118,7 +118,10 @@ fn bones(ctx: &mut Ctx, props: &Props) -> Element {
       ctx,
       PREFIX,
       (Save::Unchanged, None),
-      (ctx.t("local_hub.mcp.onlyHere").to_string(), PaletteColor::TextMuted),
+      (
+        ctx.t("local_hub.mcp.onlyHere").to_string(),
+        PaletteColor::MutedForeground,
+      ),
     ),
   };
   let what = Archivable::McpServer(props.server);

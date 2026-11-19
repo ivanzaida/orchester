@@ -23,7 +23,7 @@ use super::read::{Linked, Origin};
 use crate::{
   screens::settings::orchester::shown_address,
   services::Services,
-  theme::{ExtraRadius, ExtraSpacing, IconSize, StartupText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, StartupText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -55,10 +55,10 @@ impl Mark {
   fn element(self) -> Element {
     let (glyph, color) = match self {
       Self::Done => (Icon::CircleCheck, PaletteColor::Success),
-      Self::Working => (Icon::LoaderCircle, PaletteColor::TextPrimary),
+      Self::Working => (Icon::LoaderCircle, PaletteColor::Foreground),
       Self::Attention => (Icon::CircleAlert, PaletteColor::Warning),
-      Self::Failed => (Icon::CircleAlert, PaletteColor::Danger),
-      Self::Waiting => (Icon::CircleDashed, PaletteColor::TextMuted),
+      Self::Failed => (Icon::CircleAlert, PaletteColor::Destructive),
+      Self::Waiting => (Icon::CircleDashed, PaletteColor::MutedForeground),
     };
     icon(glyph, IconSize::Lg, color).into()
   }
@@ -101,7 +101,7 @@ pub(super) fn list(
   Column::new()
     .id(format!("{id}-parts"))
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .clip()
@@ -127,7 +127,7 @@ fn row(part: Part, last: bool) -> Row {
     .variant(StartupText::RowTitle.role())
     .width(Dimension::Pct(100.0));
   let title = if matches!(mark, Mark::Waiting) {
-    title.color(PaletteColor::TextMuted)
+    title.color(PaletteColor::MutedForeground)
   } else {
     title
   };
@@ -307,7 +307,7 @@ fn bar(id: &str, stored: usize, total: usize) -> Row {
     .width(Dimension::Pct(100.0))
     .max_width(Dimension::Px(TASKS_WIDTH))
     .height(Dimension::Px(BAR_HEIGHT))
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .rounded(ExtraRadius::Full.role())
     .clip()
     .child(
@@ -315,7 +315,7 @@ fn bar(id: &str, stored: usize, total: usize) -> Row {
         .id(format!("{id}-bar-done"))
         .width(Dimension::Pct(done))
         .height(Dimension::Px(BAR_HEIGHT))
-        .background(PaletteColor::Accent)
+        .background(PaletteColor::Primary)
         .rounded(ExtraRadius::Full.role()),
     )
 }

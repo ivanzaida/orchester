@@ -139,7 +139,7 @@ fn back(ctx: &mut Ctx, task: &Reading<'_>) -> Element {
   let arrow = opening(navigation.to(tasks))
     .id("task-back")
     .describe("a11y_name", ctx.t("task.crumbs.back"))
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted));
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground));
   Row::new()
     .id("task-back-row")
     .spacing(ExtraSpacing::Snug.role())
@@ -226,14 +226,14 @@ fn conversation(ctx: &Ctx) -> Column {
     .spacing(SpacingSize::Md)
     .rounded(RadiusSize::Lg)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .child(skeleton::line(ctx, TypographyStyle::Body, 116.0))
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Md)
         .align_items(Alignment::Center)
-        .child(icon(Icon::Paperclip, IconSize::Md, PaletteColor::TextMuted))
+        .child(icon(Icon::Paperclip, IconSize::Md, PaletteColor::MutedForeground))
         .child(bone(150.0, 22.0).rounded(ExtraRadius::Full.role()))
         .child(Spacer::new().flex(1.0))
         .child(skeleton::line(ctx, TypographyStyle::Description, 200.0))

@@ -17,7 +17,7 @@ use orchester_workspace::merge_queue::rechecks;
 use super::{Open, change};
 use crate::{
   screens::team_hub::rows,
-  theme::{HubText, IconSize, LOCKED_SWITCH_OPACITY},
+  theme::{ExtraColor, HubText, IconSize, LOCKED_SWITCH_OPACITY},
   ui::{
     icon::{Icon, icon},
     toggle::{Toggle, ToggleKind},
@@ -52,7 +52,7 @@ pub(super) fn group(ctx: &mut Ctx, open: &Open<'_>, deliver: &DeliverStep) -> El
       .align_items(Alignment::Center)
       .opacity(LOCKED_SWITCH_OPACITY)
       .describe("locked", "true")
-      .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground))
       .child(toggle.settled())
       .into()
   } else if nothing_to_run || open.locked {
@@ -74,7 +74,7 @@ pub(super) fn group(ctx: &mut Ctx, open: &Open<'_>, deliver: &DeliverStep) -> El
       Text::new(&words)
         .id(format!("{SWITCH}-hint"))
         .variant(HubText::Status.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
@@ -83,9 +83,9 @@ pub(super) fn group(ctx: &mut Ctx, open: &Open<'_>, deliver: &DeliverStep) -> El
     .id(format!("{ROW}-label"))
     .variant(HubText::Status.role())
     .color(if nothing_to_run {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     } else {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     });
   rows::section(
     "pipeline-hub-deliver-check",

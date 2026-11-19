@@ -13,7 +13,7 @@ use super::{list::Shown, model::Entry, words};
 use crate::{
   routes::{PipelinesView, ProjectPage, Route},
   screens::hub::agent_row::{AgentRow, agent_row, tag_chip},
-  theme::{HubText, IconSize},
+  theme::{ExtraColor, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
     tooltip::Truncated,
@@ -38,7 +38,7 @@ pub(super) fn row(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     group: Some(entry.group),
     kind: "pipeline".to_owned(),
     mark: mark.into(),
-    name: (&entry.name, PaletteColor::TextPrimary),
+    name: (&entry.name, PaletteColor::Foreground),
     line,
     tag: (shown.default == Some(entry.id) && entry.archived.is_none())
       .then(|| tag_chip(&format!("{id}-tag"), &ctx.t("pipeline_hub.row.default"))),
@@ -47,12 +47,12 @@ pub(super) fn row(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
 }
 
 /// The mark's color: `warning` for one that needs the person, `text_muted` for an archived one.
-const fn mark_color(entry: &Entry) -> PaletteColor {
+fn mark_color(entry: &Entry) -> PaletteColor {
   if entry.archived.is_some() {
-    return PaletteColor::TextMuted;
+    return PaletteColor::MutedForeground;
   }
   match entry.group {
     Group::NeedsYouHere => PaletteColor::Warning,
-    Group::Ready | Group::OffHere => PaletteColor::TextSecondary,
+    Group::Ready | Group::OffHere => ExtraColor::TextSecondary.role(),
   }
 }

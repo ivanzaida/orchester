@@ -43,8 +43,8 @@ pub fn padded_popover_panel(id: &str, width: f32, padding: Padding) -> Column {
     .padding(padding)
     .spacing(SpacingSize::Md)
     .rounded(RadiusSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .box_shadow(ShadowStyle::Lg)
 }
 

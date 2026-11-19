@@ -18,7 +18,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Button, Column, Row, Spacer, TextInput},
   core::Signal,
@@ -32,7 +32,10 @@ use super::{
 };
 use crate::{
   services::attachment_picker::AttachmentPicker,
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize, OrchestratorSpacing, OrchestratorText},
+  theme::{
+    ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize, OrchestratorSpacing, OrchestratorText,
+    TextRole,
+  },
   ui::{
     attachments::tray::{self, PutBack},
     composer::message_scrollbar,
@@ -121,9 +124,9 @@ pub(super) struct PlanParts {
 pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>) -> Column {
   let not_set_up = composer.set_up.is_some();
   let (fill, stroke) = match (not_set_up, composer.focused.get()) {
-    (true, _) => (PaletteColor::SurfacePanel, PaletteColor::Border),
-    (false, true) => (PaletteColor::SurfaceInput, PaletteColor::BorderFocus),
-    (false, false) => (PaletteColor::SurfaceInput, PaletteColor::BorderStrong),
+    (true, _) => (PaletteColor::Canvas, PaletteColor::Border),
+    (false, true) => (ExtraColor::InputSurface.role(), PaletteColor::Ring),
+    (false, false) => (ExtraColor::InputSurface.role(), PaletteColor::Input),
   };
   let (top, between) = if composer.starts {
     (SpacingSize::Md, OrchestratorSpacing::StartComposer.role())
@@ -223,7 +226,7 @@ fn bar(
 fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip): (bool, Option<Press>)) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
-    FormTextRole {
+    TextRole {
       typography: OrchestratorText::Message.role(),
       color,
     }
@@ -239,15 +242,15 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip):
     focused: composer.focused.clone(),
   };
   let placeholder = if not_set_up {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   let (slash, mention) = (view.slash.clone(), view.mention.clone());
   let chips = view.draft.with(|text| MentionField::tokens(text));
-  let input = TextInput::styled(view.draft.clone(), resolve(PaletteColor::TextPrimary))
+  let input = TextInput::styled(view.draft.clone(), resolve(PaletteColor::Foreground))
     .placeholder_style(resolve(placeholder))
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .id("orchestrator-input")
     .describe("a11y_name", composer.placeholder.clone())
     .textarea()
@@ -347,7 +350,7 @@ fn attach(ctx: &mut Ctx, view: &View) -> Element {
     .justify(Justify::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::Paperclip, IconSize::Md, PaletteColor::TextMuted));
+    .child(icon(Icon::Paperclip, IconSize::Md, PaletteColor::MutedForeground));
   Tooltip::new("orchestrator-attach", ctx.t("attachments.attachHint")).wrap(ctx, square)
 }
 
@@ -379,7 +382,7 @@ fn send(ctx: &mut Ctx, view: &View, sending: &Sending) -> Element {
       let press = press.clone();
       let button = pressable(move || press())
         .describe("state", "enabled")
-        .hovered_style(Style::new().background(PaletteColor::AccentHover));
+        .hovered_style(Style::new().background(PaletteColor::PrimaryHover));
       (button, None)
     }
     Sending::Busy => (inert(Button::empty()).describe("state", "loading"), None),
@@ -399,7 +402,7 @@ fn send(ctx: &mut Ctx, view: &View, sending: &Sending) -> Element {
     .id("orchestrator-send")
     .describe("a11y_name", label)
     .flex_shrink(0.0)
-    .background(PaletteColor::Accent)
+    .background(PaletteColor::Primary)
     .rounded(RadiusSize::Md)
     .child(face)
     .into()

@@ -83,7 +83,7 @@ impl Pointing {
       return card;
     }
     card
-      .border(Border::outside(BorderSize::Md, PaletteColor::BorderFocus))
+      .border(Border::outside(BorderSize::Md, PaletteColor::Ring))
       .class("pointed")
   }
 }

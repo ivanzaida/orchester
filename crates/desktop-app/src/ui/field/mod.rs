@@ -50,12 +50,12 @@ pub fn field_error(id: &str, text: &str) -> Row {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("role", "field-error")
-    .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Danger).flex_shrink(0.0))
+    .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Destructive).flex_shrink(0.0))
     .child(
       Text::new(text)
         .id(format!("{id}-text"))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

@@ -229,7 +229,7 @@ impl Tooltip {
     };
     let words = Text::new(words)
       .variant(typography)
-      .color(PaletteColor::TextInverse)
+      .color(PaletteColor::PrimaryForeground)
       .max_width(Dimension::Px(self.wrap_at));
     let padding = match self.note {
       Some(_) => Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()),
@@ -240,14 +240,14 @@ impl Tooltip {
       .padding(padding)
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .background(PaletteColor::TextPrimary)
+      .background(PaletteColor::Foreground)
       .rounded(RadiusSize::Sm);
     panel = match &self.note {
       Some(note) => panel.child(
         Column::new().spacing(ExtraSpacing::Tight.role()).child(words).child(
           Text::new(note)
             .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextInverse)
+            .color(PaletteColor::PrimaryForeground)
             .width(Dimension::Px(self.wrap_at)),
         ),
       ),
@@ -257,7 +257,7 @@ impl Tooltip {
       panel = panel.child(
         Text::new(keys)
           .variant(ExtraTypography::MonoSmall.role())
-          .color(PaletteColor::TextInverse)
+          .color(PaletteColor::PrimaryForeground)
           .opacity(SHORTCUT_OPACITY)
           .nowrap(),
       );

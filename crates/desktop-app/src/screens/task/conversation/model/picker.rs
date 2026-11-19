@@ -61,8 +61,8 @@ pub(super) fn panel(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel
     .width(Dimension::Px(WIDTH))
     .padding(ExtraSpacing::Snug.role())
     .spacing(ExtraSpacing::Tight.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(RadiusSize::Lg)
     .box_shadow(ShadowStyle::Lg)
     .child(
@@ -138,7 +138,7 @@ fn model_row(
       .nowrap()
   });
   let end: Option<Element> = if picked {
-    Some(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary).into())
+    Some(icon(Icon::Check, IconSize::Md, PaletteColor::Foreground).into())
   } else {
     (offered.id == step.now.model).then(|| {
       Text::new(&ctx.t("conversation.model.now"))
@@ -198,11 +198,11 @@ fn effort(ctx: &mut Ctx, step: &StepModel, chosen: &ModelChoice, draft: &Draft) 
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(
       BorderSize::Sm,
       if shown {
-        PaletteColor::BorderFocus
+        PaletteColor::Ring
       } else {
         PaletteColor::Border
       },
@@ -216,7 +216,7 @@ fn effort(ctx: &mut Ctx, step: &StepModel, chosen: &ModelChoice, draft: &Draft) 
         .nowrap(),
     )
     .with_children(now)
-    .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
+    .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::MutedForeground));
   let row = Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs))
@@ -303,7 +303,7 @@ fn scope_row(ctx: &Ctx, props: &ChipProps, scope: ModelScope, draft: &Draft) -> 
             .child(
               Text::new(&name)
                 .variant(lurq::app::theme::TypographyStyle::Description)
-                .color(PaletteColor::TextPrimary)
+                .color(PaletteColor::Foreground)
                 .nowrap(),
             ),
         )
@@ -467,7 +467,7 @@ fn fixed(ctx: &mut Ctx, props: &ChipProps) -> Vec<Element> {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(
       Text::new(step.now.model.as_str())
@@ -475,7 +475,7 @@ fn fixed(ctx: &mut Ctx, props: &ChipProps) -> Vec<Element> {
         .nowrap(),
     )
     .child(Spacer::new().flex(1.0))
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground));
   let model = line(label(ctx.t("conversation.model.fixed.model")).into()).child(locked);
   let effort = line(label(ctx.t("conversation.model.effort")).into()).child(
     Text::new(&ctx.t("conversation.model.fixed.effortNone"))

@@ -62,7 +62,7 @@ pub fn base(ctx: &mut Ctx, task: &TaskContext, tasks: Option<&ProjectTasks>) -> 
         None => recorded_source(ctx, (source, run.base_branch().is_some()), &number, tasks),
       };
       let branch = cut(ctx, &format!("{ID}-branch"), &branch);
-      shown((glyph, PaletteColor::TextMuted), branch, &why)
+      shown((glyph, PaletteColor::MutedForeground), branch, &why)
     }
     Setup::None => match next {
       Some((choice, source)) => upcoming(ctx, (&choice, source)),
@@ -164,7 +164,11 @@ fn upcoming(ctx: &Ctx, (next, source): (&BaseChoice, RunBaseSource)) -> Element 
       Look::Secondary,
     );
     let why = ctx.t("summary.properties.base.nextTakesCheckedOut");
-    return shown((Icon::GitCommitHorizontal, PaletteColor::TextMuted), words.into(), &why);
+    return shown(
+      (Icon::GitCommitHorizontal, PaletteColor::MutedForeground),
+      words.into(),
+      &why,
+    );
   };
   let key = match source {
     RunBaseSource::Module { .. } => "summary.properties.base.nextModule",
@@ -176,5 +180,5 @@ fn upcoming(ctx: &Ctx, (next, source): (&BaseChoice, RunBaseSource)) -> Element 
     Look::Secondary,
   );
   let why = ctx.t("summary.properties.base.nextStarts");
-  shown((Icon::GitBranch, PaletteColor::TextMuted), words.into(), &why)
+  shown((Icon::GitBranch, PaletteColor::MutedForeground), words.into(), &why)
 }

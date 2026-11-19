@@ -35,7 +35,7 @@ use super::{
   quick_add::{QuickAdd, QuickAddProps},
 };
 use crate::{
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
     icon_button::IconButton,
@@ -176,8 +176,8 @@ fn body(
 /// A column the drag is over, in its tone: filled, in a stroke. Its cards keep their width.
 fn lit(frame: Column, lit: Option<Lit>) -> Column {
   let (fill, stroke, drop) = match lit {
-    Some(Lit::Refuses) => (PaletteColor::DangerMuted, PaletteColor::Danger, "refused"),
-    Some(Lit::Takes) => (PaletteColor::AccentMuted, PaletteColor::BorderStrong, "takes"),
+    Some(Lit::Refuses) => (PaletteColor::DestructiveMuted, PaletteColor::Destructive, "refused"),
+    Some(Lit::Takes) => (PaletteColor::Highlight, PaletteColor::Input, "takes"),
     None => return frame,
   };
   frame
@@ -324,14 +324,14 @@ pub(super) fn head(
       Text::new(&column.label)
         .id(format!("{id}-name"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(
       Text::new(&column.cards.len().to_string())
         .id(format!("{id}-count"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .with_children((column.needs_you > 0).then(|| needs_you(ctx, column.needs_you, &format!("{id}-needs-you"))))
@@ -425,18 +425,18 @@ fn empty(ctx: &Ctx, shared: &Shared<'_>, column: &ColumnModel) -> Column {
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(glyph, IconSize::Lg, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Lg, PaletteColor::MutedForeground))
     .child(
       Text::new(&title)
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .width(Dimension::Pct(100.0))
         .text_align(lurq::layout::text_style::TextAlign::Center),
     )
     .child(
       Text::new(&detail)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Pct(100.0))
         .text_align(lurq::layout::text_style::TextAlign::Center),
     )
@@ -471,7 +471,7 @@ pub fn strip(ctx: &mut Ctx, state: &BoardState, column: &ColumnModel, stroke: Pa
       Text::new(&column.label)
         .id(format!("{id}-name"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .transform(Transform2D::rotate_deg(90.0)),
     );
@@ -485,7 +485,7 @@ pub fn strip(ctx: &mut Ctx, state: &BoardState, column: &ColumnModel, stroke: Pa
     .align_items(Alignment::Center)
     .justify(Justify::Start)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, stroke))
     .describe("state", "folded")
     .ref_element(state.target_ref(Target {
@@ -498,7 +498,7 @@ pub fn strip(ctx: &mut Ctx, state: &BoardState, column: &ColumnModel, stroke: Pa
       Text::new(&column.cards.len().to_string())
         .id(format!("{id}-count"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .child(label)
     .into()

@@ -293,7 +293,7 @@ impl GroupRow {
     let text = Text::new(value)
       .id(format!("{}-value", self.id))
       .variant(GroupText::Value.role())
-      .color(PaletteColor::TextPrimary)
+      .color(PaletteColor::Foreground)
       .nowrap();
     self.words(text)
   }
@@ -323,7 +323,7 @@ impl GroupRow {
   pub fn opens_page(mut self, press: Press) -> Self {
     self
       .end
-      .push(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted).into());
+      .push(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground).into());
     self.press = Some(press);
     self
   }
@@ -345,7 +345,7 @@ impl GroupRow {
       })
       .min_width(Dimension::Px(0.0));
     let label = if muted {
-      label.color(PaletteColor::TextMuted)
+      label.color(PaletteColor::MutedForeground)
     } else {
       label
     };
@@ -371,7 +371,7 @@ fn hint(id: &str, (hint, tone): (&str, HintTone)) -> Text {
   match tone {
     HintTone::Muted => text,
     HintTone::Warning => text.color(PaletteColor::Warning),
-    HintTone::Danger => text.color(PaletteColor::Danger),
+    HintTone::Danger => text.color(PaletteColor::Destructive),
   }
 }
 
@@ -449,12 +449,12 @@ pub fn tag(id: &str, word: &str, changed: bool) -> Row {
       .child(Text::new(word).variant(GroupText::Tag.role()).nowrap())
   } else {
     row
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .child(
         Text::new(word)
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
   }
@@ -467,7 +467,7 @@ pub fn note(id: &str, words: &str) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))

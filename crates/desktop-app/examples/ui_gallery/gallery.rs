@@ -157,7 +157,7 @@ impl Component for Gallery {
       .height(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Section, SpacingSize::Xl))
       .spacing(SpacingSize::Md)
-      .background(PaletteColor::SurfacePanel)
+      .background(PaletteColor::Canvas)
       .child(self.header(ctx))
       .child(tabs)
       .child(

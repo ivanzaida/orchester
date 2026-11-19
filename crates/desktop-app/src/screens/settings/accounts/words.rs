@@ -7,6 +7,8 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::account::{AccountCli, AccountIdentity, AccountState, AgentAccount, SignInMethod, same_sign_in};
 use orchester_workspace::accounts::own_folder;
 
+use crate::theme::ExtraColor;
+
 /// What a row and the page's head show for a state: the dot's color, the word and the word's color.
 pub(super) struct Look {
   pub icon_color: PaletteColor,
@@ -27,20 +29,20 @@ pub(super) fn look(shown: Shown) -> Look {
   let look = |icon_color, key, color| Look { icon_color, key, color };
   match shown {
     Shown::Checking => look(
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "accounts.status.checking",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     Shown::SigningIn => look(
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "accounts.status.signingIn",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     Shown::State(state) => match state {
       AccountState::SignedIn => look(
         PaletteColor::Success,
         "accounts.status.signedIn",
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       ),
       AccountState::NotSignedIn => look(
         PaletteColor::Warning,
@@ -49,20 +51,24 @@ pub(super) fn look(shown: Shown) -> Look {
       ),
       AccountState::Expired => look(PaletteColor::Warning, "accounts.status.expired", PaletteColor::Warning),
       AccountState::Unknown => look(
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
         "accounts.status.unknown",
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       ),
-      AccountState::CliMissing => look(PaletteColor::Danger, "accounts.status.cliMissing", PaletteColor::Danger),
+      AccountState::CliMissing => look(
+        PaletteColor::Destructive,
+        "accounts.status.cliMissing",
+        PaletteColor::Destructive,
+      ),
       AccountState::FolderMissing => look(
-        PaletteColor::Danger,
+        PaletteColor::Destructive,
         "accounts.status.folderMissing",
-        PaletteColor::Danger,
+        PaletteColor::Destructive,
       ),
       AccountState::NotChecked => look(
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
         "accounts.status.notChecked",
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ),
     },
   }

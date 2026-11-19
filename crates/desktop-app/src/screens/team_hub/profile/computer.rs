@@ -65,12 +65,12 @@ fn runs_on(
         .id("team-hub-runs-on-value")
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(icon(Icon::CircleX, IconSize::Base, PaletteColor::Danger))
+        .child(icon(Icon::CircleX, IconSize::Base, PaletteColor::Destructive))
         .child(
           Text::new(&ctx.t_args("team_hub.profile.noConnection", [("cli", cli)]))
             .id("team-hub-runs-on-none")
             .variant(HubText::Value.role())
-            .color(PaletteColor::Danger),
+            .color(PaletteColor::Destructive),
         )
         .into(),
     ),

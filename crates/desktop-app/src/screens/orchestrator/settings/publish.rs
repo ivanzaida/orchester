@@ -20,7 +20,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -130,15 +130,15 @@ fn status(ctx: &Ctx, stand: Stand, version: Option<u32>) -> Row {
     },
   );
   let (glyph, color, words) = match stand {
-    Stand::First => (Icon::CircleDashed, PaletteColor::TextMuted, published),
+    Stand::First => (Icon::CircleDashed, PaletteColor::MutedForeground, published),
     Stand::Unsaved => (
       Icon::CircleDot,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t_args("orchestrator.settings.publish.unsaved", [("published", &*published)]),
     ),
     Stand::Drafted => (
       Icon::Check,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t_args("orchestrator.settings.publish.drafted", [("published", &*published)]),
     ),
     Stand::Published => (Icon::CircleCheck, PaletteColor::Success, published),
@@ -152,7 +152,7 @@ fn status(ctx: &Ctx, stand: Stand, version: Option<u32>) -> Row {
     .child(
       Text::new(&words)
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
 }

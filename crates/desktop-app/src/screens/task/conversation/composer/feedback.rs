@@ -98,7 +98,7 @@ fn kept(ctx: &Ctx, reason: &Message) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Clock, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Clock, IconSize::Sm, PaletteColor::MutedForeground))
     .child(Text::new(&message_text(ctx, reason)).variant(ExtraTypography::Note.role()))
     .into()
 }

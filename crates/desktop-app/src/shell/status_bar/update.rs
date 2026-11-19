@@ -166,13 +166,13 @@ fn shown(ctx: &Ctx, facts: &UpdateFacts) -> Option<(&'static str, Icon, PaletteC
     UpdateFacts::Downloading { version, percent: done } => (
       "downloading",
       Icon::Download,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       percent("shell.status.update.downloading", version, *done),
     ),
     UpdateFacts::Paused { version, percent: done } => (
       "paused",
       Icon::Pause,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       percent("shell.status.update.paused", version, *done),
     ),
     UpdateFacts::Ready { version } => (
@@ -214,12 +214,12 @@ fn shown(ctx: &Ctx, facts: &UpdateFacts) -> Option<(&'static str, Icon, PaletteC
         "shell.status.update.failed",
         [("version", version.clone()), ("why", why.to_string())],
       );
-      ("failed", Icon::CircleX, PaletteColor::Danger, words.to_string())
+      ("failed", Icon::CircleX, PaletteColor::Destructive, words.to_string())
     }
     UpdateFacts::NotInstalled { version } => (
       "not-installed",
       Icon::CircleX,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       words("shell.status.update.notInstalled", version),
     ),
   })

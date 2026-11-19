@@ -17,7 +17,7 @@ fn switching_the_mode_recolors_the_palette_and_the_text() {
   let theme = app.theme();
   theme::apply(theme, Mode::Light);
   assert_eq!(
-    theme.palette_color(PaletteColor::SurfaceBase),
+    theme.palette_color(PaletteColor::Background),
     Color::from_hex("#E4E4E8")
   );
   assert_eq!(
@@ -31,7 +31,7 @@ fn switching_the_mode_recolors_the_palette_and_the_text() {
   assert_eq!(theme.scrollbar().thumb_color, Color::from_hex("#C7C7CE"));
   theme::apply(theme, Mode::Dark);
   assert_eq!(
-    theme.palette_color(PaletteColor::SurfaceBase),
+    theme.palette_color(PaletteColor::Background),
     Color::from_hex("#111113")
   );
 }
@@ -60,7 +60,7 @@ fn the_appearance_setting_switches_the_theme_and_is_kept() {
     (ThemeSetting::System, Mode::Light)
   );
   assert_eq!(
-    app.theme().palette_color(PaletteColor::TextPrimary),
+    app.theme().palette_color(PaletteColor::Foreground),
     Color::from_hex("#18181B")
   );
   let reopened = AppDb::open(&database).expect("the settings open again");
@@ -80,7 +80,7 @@ fn without_settings_the_theme_does_not_change() {
     (ThemeSetting::Dark, Mode::Dark)
   );
   assert_eq!(
-    app.theme().palette_color(PaletteColor::TextPrimary),
+    app.theme().palette_color(PaletteColor::Foreground),
     Color::from_hex("#EDEDF0")
   );
   let unknown_system = Appearance::new(ThemeSetting::System, Arc::default(), None);

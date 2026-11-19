@@ -165,7 +165,11 @@ fn file_group(
         .variant(ExtraTypography::Note.role())
         .nowrap(),
     )
-    .end(icon(file_glyph(file.path), IconSize::Base, PaletteColor::TextMuted))
+    .end(icon(
+      file_glyph(file.path),
+      IconSize::Base,
+      PaletteColor::MutedForeground,
+    ))
     .rows(rows)
     .into()
 }

@@ -121,7 +121,7 @@ fn cache_figure(ctx: &Ctx, dashboard: &Dashboard) -> Element {
     .child(
       Text::new(&caption)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()
@@ -297,7 +297,7 @@ fn bar(width: f32) -> Element {
   Row::new()
     .width(Dimension::Pct(width))
     .height(Dimension::Px(BAR_HEIGHT))
-    .background(PaletteColor::TextMuted)
+    .background(PaletteColor::MutedForeground)
     .rounded(UsageRadius::Bar.role())
     .into()
 }

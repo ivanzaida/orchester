@@ -141,7 +141,7 @@ struct Look {
 impl Look {
   fn of(kind: LineKind) -> Self {
     let (background, sign, sign_color, name) = match kind {
-      LineKind::Context => (None, None, PaletteColor::TextMuted, "context"),
+      LineKind::Context => (None, None, PaletteColor::MutedForeground, "context"),
       LineKind::Added => (
         Some(ExtraColor::DiffAdded.role()),
         Some("review_page.diff.added"),
@@ -151,7 +151,7 @@ impl Look {
       LineKind::Removed => (
         Some(ExtraColor::DiffRemoved.role()),
         Some("review_page.diff.removed"),
-        PaletteColor::Danger,
+        PaletteColor::Destructive,
         "removed",
       ),
     };
@@ -176,12 +176,12 @@ fn gutter(shown: &LineRow, (plus, chosen): (bool, bool)) -> Row {
   let old: Element = if plus {
     Row::new().id("review-line-add").child(add()).into()
   } else {
-    number(shown.old, PaletteColor::TextMuted).into()
+    number(shown.old, PaletteColor::MutedForeground).into()
   };
   let new_color = if chosen {
     PaletteColor::Info
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   Row::new()
     .width(Dimension::Px(GUTTER_WIDTH))
@@ -231,9 +231,9 @@ fn add() -> Row {
     .height(Dimension::Px(PLUS_SIZE))
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::Accent)
+    .background(PaletteColor::Primary)
     .rounded(RadiusSize::Sm)
-    .child(icon(Icon::Plus, IconSize::Sm, PaletteColor::TextInverse))
+    .child(icon(Icon::Plus, IconSize::Sm, PaletteColor::PrimaryForeground))
 }
 
 /// Names the token's kind for tools (`lurq_read_tree`) and tests.

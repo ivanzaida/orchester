@@ -344,7 +344,7 @@ fn note(id: &str, words: &str) -> Element {
   Text::new(words)
     .id(id.to_owned())
     .variant(ExtraTypography::Note.role())
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()

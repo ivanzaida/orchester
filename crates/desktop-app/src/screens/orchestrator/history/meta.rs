@@ -39,7 +39,7 @@ pub(super) fn line(id: ChatId, (words, color): (&str, PaletteColor), leading: bo
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Eye, IconSize::Xs, PaletteColor::TextMuted))
+    .child(icon(Icon::Eye, IconSize::Xs, PaletteColor::MutedForeground))
     .child(text.flex(1.0).min_width(Dimension::Px(0.0)))
     .into()
 }

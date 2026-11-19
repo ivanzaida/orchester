@@ -24,7 +24,7 @@ use orchester_workspace::tasks::review_threads::{agents::ReviewAgent, page::Revi
 
 use super::state::Held;
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, IconSize, ReviewText},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize, ReviewText},
   ui::{
     icon::{Icon, icon},
     menu::{MenuItem, menu_panel, separator},
@@ -158,14 +158,10 @@ fn trigger(ctx: &Ctx, (id, menu): (&str, &Menu), shown: &ReviewAgent) -> Element
     .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(
       BorderSize::Sm,
-      if open {
-        PaletteColor::BorderFocus
-      } else {
-        PaletteColor::Border
-      },
+      if open { PaletteColor::Ring } else { PaletteColor::Border },
     ))
     .rounded(RadiusSize::Md)
     .describe("a11y_name", ctx.t("review_page.agentField.name"))
@@ -174,7 +170,7 @@ fn trigger(ctx: &Ctx, (id, menu): (&str, &Menu), shown: &ReviewAgent) -> Element
       Text::new(&label)
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap()
@@ -183,7 +179,7 @@ fn trigger(ctx: &Ctx, (id, menu): (&str, &Menu), shown: &ReviewAgent) -> Element
     .child(icon(
       if open { Icon::ChevronUp } else { Icon::ChevronDown },
       IconSize::Md,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .into()
 }

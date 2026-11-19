@@ -19,7 +19,7 @@ use super::{
   row::ROW_HEIGHT,
 };
 use crate::{
-  theme::{ExtraSpacing, IconSize, TasksSpacing},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TasksSpacing},
   ui::{
     icon::{Icon, icon},
     skeleton::{Skeleton, bone, round_bone},
@@ -71,11 +71,11 @@ fn header(ctx: &Ctx) -> Row {
     )
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t(label_key(Group::Waiting)))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(bone(COUNT.0, COUNT.1))

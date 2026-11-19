@@ -105,10 +105,10 @@ fn hint(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
       "pipeline_hub.bar.restored",
       [("version", version.to_string()), ("rest", rest)],
     ),
-    (None, true) => return (rest, PaletteColor::TextMuted),
+    (None, true) => return (rest, PaletteColor::MutedForeground),
     (None, false) => ctx.t_args("pipeline_hub.line.unsaved", [("rest", rest)]),
   };
-  (said.to_string(), PaletteColor::TextMuted)
+  (said.to_string(), PaletteColor::MutedForeground)
 }
 
 /// What *Save* makes: the next version. A pipeline that holds no change and could not be published again says only
@@ -117,7 +117,7 @@ fn makes(ctx: &Ctx, line: &Line<'_>) -> (String, PaletteColor) {
   let blocked = line.unpublishable.is_some() || version_limit(line.entry.number).is_some();
   if let Some(number) = line.entry.number.filter(|_| !line.unsaved && blocked) {
     let said = ctx.t_args("pipeline_hub.bar.noChanges", [("version", number.to_string())]);
-    return (said.to_string(), PaletteColor::TextMuted);
+    return (said.to_string(), PaletteColor::MutedForeground);
   }
   save_bar::makes(ctx, line.entry.number)
 }

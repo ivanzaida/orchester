@@ -103,12 +103,16 @@ fn thinking(ctx: &mut Ctx, row: &TurnRow) -> Element {
     .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::LoaderCircle, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(
+      Icon::LoaderCircle,
+      IconSize::Base,
+      ExtraColor::TextSecondary.role(),
+    ))
     .child(
       Text::new(&working(ctx, row))
         .id("orchestrator-thinking-words")
         .variant(OrchestratorText::Line.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(Spacer::new().flex(1.0))
@@ -138,7 +142,7 @@ fn ask_again(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let label: Arc<str> = ctx.t("orchestrator.askAgain");
   let words = Text::new(&label)
     .variant(TypographyStyle::Button)
-    .color(PaletteColor::TextSecondary)
+    .color(ExtraColor::TextSecondary.role())
     .nowrap();
   let link = if row.can_ask {
     let (ask, said) = (row.env.ask_again.clone(), row.turn.text.clone());

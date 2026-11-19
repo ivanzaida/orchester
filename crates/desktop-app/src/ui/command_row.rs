@@ -176,9 +176,9 @@ impl Component for CommandRowView {
       })
     };
     let color = if props.faded {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     } else {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     };
     // Each word keeps the space after it, which lurq counts when it fills a line: the words may reach one space
     // into the gap before Copy, where that space shows as nothing, so a line breaks as if it took no room.
@@ -216,7 +216,7 @@ impl Component for CommandRowView {
       .with_children(match props.prompt {
         Prompt::None => None,
         Prompt::Chevron => Some(Element::from(
-          icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0),
+          icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::MutedForeground).flex_shrink(0.0),
         )),
         // The row's gap leaves out the space the words keep after them; the mark keeps it, so it stands a gap
         // before the command.

@@ -290,14 +290,18 @@ fn look(ctx: &Ctx, key: &ColumnKey, tasks: &ProjectTasks) -> (Arc<str>, Icon, Pa
         |module| Arc::from(module.name().as_str()),
       ),
       Icon::Target,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
-    ColumnKey::Module(None) => (ctx.t("tasks.filter.noModule"), Icon::Target, PaletteColor::TextMuted),
-    ColumnKey::Pipeline(Some(name)) => (name.clone(), Icon::Workflow, PaletteColor::TextMuted),
+    ColumnKey::Module(None) => (
+      ctx.t("tasks.filter.noModule"),
+      Icon::Target,
+      PaletteColor::MutedForeground,
+    ),
+    ColumnKey::Pipeline(Some(name)) => (name.clone(), Icon::Workflow, PaletteColor::MutedForeground),
     ColumnKey::Pipeline(None) => (
       ctx.t("tasks.filter.noPipeline"),
       Icon::Workflow,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
   }
 }

@@ -149,7 +149,7 @@ fn named(id: String, key: &str, title: &str) -> Element {
 }
 
 fn chevron() -> Cell {
-  Cell::Element(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted).into())
+  Cell::Element(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground).into())
 }
 
 fn pipeline(ctx: &Ctx, pipeline: Option<&Arc<str>>, version: Option<VersionNumber>) -> Cell {
@@ -319,7 +319,7 @@ fn footer(ctx: &Ctx, views: &Signal<Views>, shown: Views, count: usize) -> Eleme
       Text::new(&text)
         .id("usage-expensive-shown")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .child(Spacer::new().flex(1.0))

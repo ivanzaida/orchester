@@ -4,12 +4,7 @@
 //! chevron: a press opens its page. After them, a server the account joined in the browser, with *Connect*
 //! ([`super::browser_joined`]). Without servers the group is *No team servers yet* with *Connect a server* (`JY3WV`).
 
-use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
-  components::Row,
-  layout::Alignment,
-  node::Element,
-};
+use lurq::{app::ctx::Ctx, components::Row, layout::Alignment, node::Element};
 use orchester_store::JoinedWith;
 use orchester_workspace::{
   display,
@@ -23,7 +18,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -87,7 +82,11 @@ fn server_row(
     .child(state(ctx, &format!("{row_id}-state"), &server_look(entry)))
     .child(opens_mark());
   SettingRow::new(row_id, entry.address.authority())
-    .lead(row_tile(icon(Icon::Server, IconSize::Md, PaletteColor::TextSecondary)))
+    .lead(row_tile(icon(
+      Icon::Server,
+      IconSize::Md,
+      ExtraColor::TextSecondary.role(),
+    )))
     .hint(third_line(ctx, entry, linked, how))
     .control(end)
     .opens(navigation.to(Route::Orchester(OrchesterView::server(id))))

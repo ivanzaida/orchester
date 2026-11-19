@@ -41,7 +41,7 @@ use crate::{
   routes::{AccountsPanel, AccountsView, Route},
   screens::{connections::provider_form::ProviderForm, settings::frame},
   services::Services,
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
@@ -275,7 +275,7 @@ fn head(
     }
   });
   let more = more(ctx, work, account, uses);
-  let tile = head_tile(icon(Icon::Cloud, IconSize::Lg, PaletteColor::TextSecondary)).into();
+  let tile = head_tile(icon(Icon::Cloud, IconSize::Lg, ExtraColor::TextSecondary.role())).into();
   let actions: Vec<Element> = test.into_iter().chain([replace.into(), more]).collect();
   frame::head(
     "provider-head",
@@ -381,7 +381,7 @@ fn rename_head(ctx: &mut Ctx, work: &Work, account: &ApiAccount) -> Element {
   )
   .width(Dimension::Px(NAME_FIELD_WIDTH))
   .render(ctx);
-  let tile: Element = head_tile(icon(Icon::Cloud, IconSize::Lg, PaletteColor::TextSecondary)).into();
+  let tile: Element = head_tile(icon(Icon::Cloud, IconSize::Lg, ExtraColor::TextSecondary.role())).into();
   Column::new()
     .id("provider-head")
     .width(Dimension::Pct(100.0))
@@ -440,7 +440,7 @@ fn facts(ctx: &mut Ctx, account: &ApiAccount, rows: &Rows) -> Element {
   );
   let key_row = SettingRow::new("provider-key", t(ctx, "accounts.api.apiKey"));
   let key_row = if missing {
-    key_row.control(value("provider-key-value", &key).color(PaletteColor::Danger))
+    key_row.control(value("provider-key-value", &key).color(PaletteColor::Destructive))
   } else {
     key_row.control(value("provider-key-value", &key))
   };
@@ -531,7 +531,7 @@ fn edit_group(ctx: &mut Ctx, work: &Work, account: &ApiAccount) -> Element {
       lurq::components::Text::new(&t(ctx, "accounts.api.editNote"))
         .id("provider-edit-note")
         .variant(lurq::app::theme::TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

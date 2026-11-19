@@ -50,7 +50,7 @@ impl Runs {
     let sub = if missing {
       Some(Sub {
         words: ctx.t("team_new.errors.required"),
-        color: PaletteColor::Danger,
+        color: PaletteColor::Destructive,
       })
     } else {
       team.then(|| Sub::quiet(ctx.t("team_hub.runsOn.sub")))

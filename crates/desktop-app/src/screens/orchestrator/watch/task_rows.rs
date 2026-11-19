@@ -113,17 +113,17 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize, search: &PickerSearch) -> Elemen
     .flex_shrink(0.0)
     .child(panel::matched_label(&choice.label, shown.filter, true));
   let mut children: Vec<Element> = vec![
-    icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(choice.icon, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     key.into(),
     Text::new(&title(ctx, entry))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextPrimary)
+      .color(PaletteColor::Foreground)
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .nowrap()
       .text_overflow(TextOverflow::Elipsis)
       .into(),
-    panel::caption(&ctx.t(workflow_key(entry.status)), PaletteColor::TextMuted).into(),
+    panel::caption(&ctx.t(workflow_key(entry.status)), PaletteColor::MutedForeground).into(),
   ];
   children.extend(state(ctx, shown, entry));
   if focused {
@@ -174,7 +174,7 @@ fn title(ctx: &Ctx, entry: &TaskEntry) -> Arc<str> {
 /// *Watched here* or *Led in «…» ↗*. *Led in* is in `warning`, except through the whole project, which every more
 /// specific subscription takes from.
 fn state(ctx: &Ctx, shown: &Shown<'_>, entry: &TaskEntry) -> Option<Element> {
-  let muted = |words: Arc<str>| Some(panel::caption(&words, PaletteColor::TextMuted).into());
+  let muted = |words: Arc<str>| Some(panel::caption(&words, PaletteColor::MutedForeground).into());
   if entry.faded.is_some() {
     return muted(ctx.t("orchestrator.watch.tasks.nothingToWatch"));
   }
@@ -185,7 +185,7 @@ fn state(ctx: &Ctx, shown: &Shown<'_>, entry: &TaskEntry) -> Option<Element> {
     Leader::Here { via: Some(via) } => muted(comes_here(ctx, entry, *via)),
     Leader::Elsewhere { chat, title, via } => {
       let color = if *via == Some(WatchTarget::Project) {
-        PaletteColor::TextMuted
+        PaletteColor::MutedForeground
       } else {
         PaletteColor::Warning
       };

@@ -15,7 +15,7 @@ use orchester_core::{secret::SecretName, sharing::Missing};
 
 use super::rows::{self, Sub};
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::Press,
@@ -33,7 +33,7 @@ pub(super) fn input_box(id: &str, (glyph, color): (Icon, PaletteColor), text: Te
     .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(icon(glyph, IconSize::Base, color))
@@ -95,13 +95,13 @@ pub(super) fn secret_row(ctx: &Ctx, name: &SecretName, value: Value, ask: Option
     Value::Unreadable => (
       Sub {
         words: ctx.t("team_hub.mcp.secret.sub"),
-        color: PaletteColor::Danger,
+        color: PaletteColor::Destructive,
       },
       Row::new()
         .id(format!("{id}-value"))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(icon(Icon::CircleAlert, IconSize::Base, PaletteColor::Danger))
+        .child(icon(Icon::CircleAlert, IconSize::Base, PaletteColor::Destructive))
         .child(
           Text::new(&ctx.t("team_hub.mcp.secret.unreadable"))
             .id(format!("{id}-words"))
@@ -113,7 +113,7 @@ pub(super) fn secret_row(ctx: &Ctx, name: &SecretName, value: Value, ask: Option
   let label = Text::new(&name.to_string())
     .id(format!("{id}-label"))
     .variant(ExtraTypography::PropertyMono.role())
-    .color(PaletteColor::TextSecondary);
+    .color(ExtraColor::TextSecondary.role());
   rows::keyed(&id, label, Some(sub), shown)
 }
 
@@ -121,11 +121,11 @@ pub(super) fn secret_row(ctx: &Ctx, name: &SecretName, value: Value, ask: Option
 fn missing_value(ctx: &Ctx, id: &str, ask: Option<Press>) -> Element {
   let field = input_box(
     &format!("{id}-field"),
-    (Icon::KeyRound, PaletteColor::TextMuted),
+    (Icon::KeyRound, PaletteColor::MutedForeground),
     Text::new(&ctx.t("team_hub.mcp.secret.noValue"))
       .id(format!("{id}-words"))
       .variant(HubText::Value.role())
-      .color(PaletteColor::TextMuted),
+      .color(PaletteColor::MutedForeground),
   );
   let Some(ask) = ask else {
     return Row::new()
@@ -163,12 +163,12 @@ impl Tone {
     }
   }
 
-  const fn look(self) -> (PaletteColor, Icon, PaletteColor) {
+  fn look(self) -> (PaletteColor, Icon, PaletteColor) {
     match self {
       Self::Ready => (PaletteColor::SuccessMuted, Icon::CircleCheck, PaletteColor::Success),
       Self::Warning => (PaletteColor::WarningMuted, Icon::CircleAlert, PaletteColor::Warning),
-      Self::Danger => (PaletteColor::DangerMuted, Icon::CircleX, PaletteColor::Danger),
-      Self::Off => (PaletteColor::AccentMuted, Icon::Power, PaletteColor::TextSecondary),
+      Self::Danger => (PaletteColor::DestructiveMuted, Icon::CircleX, PaletteColor::Destructive),
+      Self::Off => (PaletteColor::Highlight, Icon::Power, ExtraColor::TextSecondary.role()),
     }
   }
 }
@@ -190,7 +190,7 @@ pub(super) fn note(id: &str, tone: Tone, words: &str) -> Row {
       Text::new(words)
         .id(format!("{id}-text"))
         .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

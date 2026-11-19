@@ -63,7 +63,7 @@ fn forked(ctx: &mut Ctx, id: &str, words: &str, (project, from): (ProjectId, Cha
     Row::new()
       .flex(1.0)
       .height(Dimension::Px(RULE_HEIGHT))
-      .background(PaletteColor::BorderStrong)
+      .background(PaletteColor::Input)
   };
   let label = ctx.t("orchestrator.fork.openOriginal");
   let original = Navigation::of(ctx).to(Route::Project(
@@ -86,12 +86,12 @@ fn forked(ctx: &mut Ctx, id: &str, words: &str, (project, from): (ProjectId, Cha
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .child(rule())
-    .child(icon(Icon::GitFork, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(Icon::GitFork, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(words)
         .id(format!("{id}-words"))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(open)

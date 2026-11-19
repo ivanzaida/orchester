@@ -147,7 +147,7 @@ impl Component for ModuleSummary {
 pub(super) fn description(ctx: &Ctx, module: &Module) -> Element {
   let words = module.details().description();
   let text = if words.is_empty() {
-    Text::new(&ctx.t("modules.summary.noDescription")).color(PaletteColor::TextMuted)
+    Text::new(&ctx.t("modules.summary.noDescription")).color(PaletteColor::MutedForeground)
   } else {
     Text::new(words)
   };
@@ -190,9 +190,9 @@ pub(super) fn burndown_line(
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::ChartLine, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::ChartLine, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&remaining)
         .id("module-burndown-remaining")
@@ -203,7 +203,7 @@ pub(super) fn burndown_line(
       Text::new(&words::forecast_line(ctx, forecast))
         .id("module-burndown-forecast-line")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .nowrap(),
     )

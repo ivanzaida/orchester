@@ -41,9 +41,9 @@ impl DatePickerText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Month => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Day => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::DayMarked => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::Month => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Day => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::DayMarked => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
     }
   }
 }

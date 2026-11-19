@@ -51,7 +51,7 @@ pub(super) fn render(ctx: &Ctx, report: Option<&DecisionTestReport>, reviewer: O
           0,
           Text::new(&format!("{:.2}", figures.threshold.value()))
             .variant(ProjectSettingsText::MonoValue.role())
-            .color(PaletteColor::TextPrimary),
+            .color(PaletteColor::Foreground),
         ))
         .child(cell(1, Text::new(&approved).variant(ConnectionsText::TestCell.role())))
         .child(cell(
@@ -65,12 +65,12 @@ pub(super) fn render(ctx: &Ctx, report: Option<&DecisionTestReport>, reviewer: O
             .color(if selected {
               ExtraColor::AccentText.role()
             } else {
-              PaletteColor::TextMuted
+              PaletteColor::MutedForeground
             }),
         ));
       if selected {
         row
-          .background(PaletteColor::AccentMuted)
+          .background(PaletteColor::Highlight)
           .describe("reviewer-threshold", "true")
       } else {
         row
@@ -115,7 +115,7 @@ fn header(ctx: &Ctx) -> Row {
     "decision_connection.testComes",
     "decision_connection.testEarlier",
   ];
-  line().background(PaletteColor::SurfacePanel).with_children(
+  line().background(PaletteColor::Canvas).with_children(
     headings
       .into_iter()
       .enumerate()

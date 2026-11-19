@@ -205,7 +205,7 @@ pub fn plan_line(ctx: &mut Ctx, view: &View, project: &ShownProject) -> Option<E
       ctx.t_args("task_form.plan.lineGates", [("gates", gates)]),
       PaletteColor::Warning,
     ),
-    None => (ctx.t("task_form.plan.lineNoGates"), PaletteColor::TextMuted),
+    None => (ctx.t("task_form.plan.lineNoGates"), PaletteColor::MutedForeground),
   };
   let route = Route::Project(project.open.project.id(), pipeline_link::page(choice.id));
   let view_pipeline = Focus::Link
@@ -223,7 +223,7 @@ pub fn plan_line(ctx: &mut Ctx, view: &View, project: &ShownProject) -> Option<E
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Route, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Route, IconSize::Base, PaletteColor::MutedForeground))
       .child(Row::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(steps))
       .child(
         Text::new(&gate)

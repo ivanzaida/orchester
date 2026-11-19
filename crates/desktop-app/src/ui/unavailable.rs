@@ -22,7 +22,7 @@ pub fn reason_line(id: &str, reason: &str) -> Row {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
     .describe("role", "unavailable-reason")
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground).flex_shrink(0.0))
     .child(
       Text::new(reason)
         .id(format!("{id}-text"))
@@ -41,7 +41,7 @@ pub fn reason_at_end(id: &str, reason: &str) -> Row {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
     .describe("role", "unavailable-reason")
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground).flex_shrink(0.0))
     .child(
       Text::new(reason)
         .id(format!("{id}-text"))

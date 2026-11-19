@@ -123,7 +123,7 @@ impl Component for WaitsFor {
         Text::new(&ctx.t("pipeline_hub.step.waitsFor.nothing"))
           .id(format!("{ID}-nothing"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted),
+          .color(PaletteColor::MutedForeground),
       );
     }
     value = value.with_children(chips).child(self.add(ctx, &props));
@@ -174,7 +174,7 @@ impl WaitsFor {
         .describe("a11y_name", label)
         .describe("state", "unavailable"),
     }
-    .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground));
     // A × that a failure route refuses says why where the pointer rests on it, as the hub's other refused controls do.
     let cross: Element = match refusal {
       Some(why) => Tooltip::new(format!("{id}-remove"), why.clone()).wrap(ctx, cross.describe("reason", why)),
@@ -191,7 +191,7 @@ impl WaitsFor {
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .rounded(ExtraRadius::Full.role())
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .describe("step", choice.key.to_string())
       .child(
@@ -203,7 +203,7 @@ impl WaitsFor {
         Text::new(&card.name)
           .id(format!("{id}-name"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .nowrap(),
       )
       .child(cross)
@@ -265,7 +265,7 @@ impl WaitsFor {
         Text::new(&card.name)
           .id(format!("{id}-name"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap()

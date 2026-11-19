@@ -79,7 +79,10 @@ pub(super) fn bar(ctx: &mut Ctx, (creating, cancel): (Creating, Press), opens: &
     ),
   };
   if !hint.names_steps() {
-    return bar_saying(vec![create, cancelling], Some((hint.text(), PaletteColor::TextMuted)));
+    return bar_saying(
+      vec![create, cancelling],
+      Some((hint.text(), PaletteColor::MutedForeground)),
+    );
   }
   bar_ending(
     "team-hub-actions",

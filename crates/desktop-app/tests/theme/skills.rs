@@ -30,21 +30,21 @@ fn skills_found_roles_follow_the_live_design() {
       12.5,
       1.3,
       FontWeight::SemiBold,
-      palette.text_primary,
+      palette.foreground,
     ),
     (
       theme::skills::found_count(),
       12.0,
       1.3,
       FontWeight::Normal,
-      palette.text_muted,
+      palette.muted_foreground,
     ),
     (
       theme::skills::found_note(),
       11.5,
       1.45,
       FontWeight::Normal,
-      palette.text_muted,
+      palette.muted_foreground,
     ),
   ] {
     let style = theme.typography_style(role);

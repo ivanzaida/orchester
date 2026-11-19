@@ -175,9 +175,7 @@ impl From<TableRow> for Element {
       content
     };
     let content = if row.selected {
-      content
-        .background(PaletteColor::AccentMuted)
-        .describe("selected", "true")
+      content.background(PaletteColor::Highlight).describe("selected", "true")
     } else {
       content
     };
@@ -197,7 +195,7 @@ impl From<TableRow> for Element {
           Row::new().width(Dimension::Px(OPEN_COLUMN)).with_children(
             row
               .selected
-              .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+              .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)),
           )
         }))
         .into();
@@ -207,7 +205,7 @@ impl From<TableRow> for Element {
       .id(row.id)
       .width(Dimension::Pct(100.0))
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(content.child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)))
+      .child(content.child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)))
       .into()
   }
 }

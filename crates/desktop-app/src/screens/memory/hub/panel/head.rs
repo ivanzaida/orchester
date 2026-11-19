@@ -157,7 +157,7 @@ pub(super) fn notice(ctx: &Ctx, memory: &ProjectMemory, record: &Memory) -> Opti
     }
     MemoryStatus::Deprecated => (
       Icon::Archive,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("memory.hub.deprecatedTitle"),
       ctx.t("memory.hub.deprecatedBody"),
     ),
@@ -177,7 +177,7 @@ fn boxed_notice((glyph, mark): (Icon, PaletteColor), title: &str, body: &str) ->
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(

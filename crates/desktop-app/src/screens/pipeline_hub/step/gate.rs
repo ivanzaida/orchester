@@ -159,7 +159,7 @@ fn base_moves_row(ctx: &mut Ctx, open: &Open<'_>, step: &Step) -> Row {
   let info = Row::new()
     .id("pipeline-hub-step-base-moves-info")
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground));
   let key_line = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())

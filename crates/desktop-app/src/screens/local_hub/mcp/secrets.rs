@@ -27,7 +27,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
   screens::team_hub::rows::{self, Sub},
-  theme::{HubText, IconSize},
+  theme::{ExtraColor, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     dialog::{Dialog, Tone},
@@ -239,14 +239,14 @@ fn row(ctx: &Ctx, asking: &Asking, secret: &Taken, mark: Mark) -> lurq::componen
   let id = format!("local-hub-secret-{}", secret.name);
   let typed = asking.pending.has(secret.id);
   let (sub, color) = match (mark, typed, secret.has_value) {
-    (Mark::Refused, ..) => ("local_hub.secret.refused", PaletteColor::Danger),
+    (Mark::Refused, ..) => ("local_hub.secret.refused", PaletteColor::Destructive),
     (_, true, _) => ("local_hub.secret.typed", PaletteColor::Warning),
-    (_, false, true) => ("local_hub.secret.never", PaletteColor::TextMuted),
+    (_, false, true) => ("local_hub.secret.never", PaletteColor::MutedForeground),
     (_, false, false) => ("local_hub.secret.missing", PaletteColor::Warning),
   };
   let held = typed || secret.has_value;
   let stroke = if mark == Mark::Refused {
-    PaletteColor::Danger
+    PaletteColor::Destructive
   } else {
     PaletteColor::Border
   };
@@ -258,10 +258,10 @@ fn row(ctx: &Ctx, asking: &Asking, secret: &Taken, mark: Mark) -> lurq::componen
     .padding(lurq::node::padding::Padding::symmetric(SpacingSize::Md, 0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Sm)
-    .child(icon(Icon::KeyRound, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::KeyRound, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t(if held {
         "local_hub.secret.dots"
@@ -270,9 +270,9 @@ fn row(ctx: &Ctx, asking: &Asking, secret: &Taken, mark: Mark) -> lurq::componen
       }))
       .variant(HubText::PanelMono.role())
       .color(if held {
-        PaletteColor::TextPrimary
+        PaletteColor::Foreground
       } else {
-        PaletteColor::TextMuted
+        PaletteColor::MutedForeground
       }),
     );
   let ask = {
@@ -300,7 +300,7 @@ fn row(ctx: &Ctx, asking: &Asking, secret: &Taken, mark: Mark) -> lurq::componen
     Text::new(secret.name.as_str())
       .id(format!("{id}-label"))
       .variant(HubText::PanelMono.role())
-      .color(PaletteColor::TextSecondary),
+      .color(ExtraColor::TextSecondary.role()),
     Some(Sub {
       words: ctx.t(sub),
       color,

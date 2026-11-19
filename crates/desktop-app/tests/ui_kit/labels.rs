@@ -60,7 +60,7 @@ fn every_status_has_an_icon_and_a_word_and_failures_read_at_a_glance() {
     assert!(words.insert(word.to_string()), "{status:?}'s word is its own");
   }
   for status in [Status::Failed, Status::Unreadable] {
-    assert_eq!(status.color(), PaletteColor::Danger, "{status:?}");
+    assert_eq!(status.color(), PaletteColor::Destructive, "{status:?}");
   }
   assert_ne!(
     Status::Paused.icon(),

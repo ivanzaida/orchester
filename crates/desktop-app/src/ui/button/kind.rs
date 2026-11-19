@@ -41,23 +41,23 @@ impl ButtonKind {
   pub(super) fn content(self) -> PaletteColor {
     match self {
       Self::Primary => ExtraColor::OnAccent.role(),
-      Self::Secondary | Self::Select => PaletteColor::TextPrimary,
-      Self::Ghost => PaletteColor::TextSecondary,
-      Self::Danger | Self::DangerGhost => PaletteColor::Danger,
+      Self::Secondary | Self::Select => PaletteColor::Foreground,
+      Self::Ghost => ExtraColor::TextSecondary.role(),
+      Self::Danger | Self::DangerGhost => PaletteColor::Destructive,
     }
   }
 
   pub(super) fn dressed(self, button: Button) -> Button {
     match self {
-      Self::Primary => button.background(PaletteColor::Accent),
+      Self::Primary => button.background(PaletteColor::Primary),
       Self::Secondary => button
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)),
+        .background(PaletteColor::Card)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Input)),
       Self::Ghost | Self::DangerGhost => button,
       Self::Select => button
-        .background(PaletteColor::SurfaceInput)
+        .background(ExtraColor::InputSurface.role())
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border)),
-      Self::Danger => button.background(PaletteColor::DangerMuted),
+      Self::Danger => button.background(PaletteColor::DestructiveMuted),
     }
   }
 
@@ -67,17 +67,17 @@ impl ButtonKind {
     let fill = |color: PaletteColor| Style::new().background(color);
     match self {
       Self::Primary => button
-        .hovered_style(fill(PaletteColor::AccentHover))
-        .active_style(fill(PaletteColor::AccentHover)),
+        .hovered_style(fill(PaletteColor::PrimaryHover))
+        .active_style(fill(PaletteColor::PrimaryHover)),
       Self::Secondary | Self::Select => button
         .hovered_style(fill(PaletteColor::Border))
-        .active_style(fill(PaletteColor::BorderStrong)),
+        .active_style(fill(PaletteColor::Input)),
       Self::Ghost | Self::DangerGhost => button
         .hovered_style(fill(ExtraColor::Hover.role()))
         .active_style(fill(ExtraColor::Pressed.role())),
       Self::Danger => button
-        .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Danger)))
-        .active_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Danger))),
+        .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Destructive)))
+        .active_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))),
     }
   }
 }

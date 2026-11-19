@@ -52,10 +52,10 @@ pub(super) fn row(ctx: &Ctx, id: &str, request: &PendingToolApproval, answer_mys
     ))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .child(icon(Icon::Bot, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::Bot, IconSize::Md, PaletteColor::MutedForeground))
     .child(
       Column::new()
         .flex(1.0)

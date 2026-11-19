@@ -47,7 +47,7 @@ pub fn pinned(ctx: &mut Ctx, project: &ProjectFacts, dispatch: &Dispatch) -> Vec
   );
   let row = item("status-recovery")
     .padding(Padding::horizontal(SpacingSize::Sm).right(SpacingSize::Xs))
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Md)
     .flex_shrink(1.0)
     .shrink_order(give_way::ACTIVITY)

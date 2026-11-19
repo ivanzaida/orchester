@@ -45,10 +45,10 @@ impl OverviewText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Name => style(20.0, FontWeight::SemiBold, NATURAL_LINE, -0.2, palette.text_primary),
-      Self::Section => style(13.0, FontWeight::SemiBold, NATURAL_LINE, 0.0, palette.text_primary),
-      Self::Head => style(12.5, FontWeight::Medium, NATURAL_LINE, 0.0, palette.text_primary),
-      Self::Line => style(12.5, FontWeight::Normal, NATURAL_LINE, 0.0, palette.text_primary),
+      Self::Name => style(20.0, FontWeight::SemiBold, NATURAL_LINE, -0.2, palette.foreground),
+      Self::Section => style(13.0, FontWeight::SemiBold, NATURAL_LINE, 0.0, palette.foreground),
+      Self::Head => style(12.5, FontWeight::Medium, NATURAL_LINE, 0.0, palette.foreground),
+      Self::Line => style(12.5, FontWeight::Normal, NATURAL_LINE, 0.0, palette.foreground),
     }
   }
 }

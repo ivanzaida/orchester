@@ -75,11 +75,11 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, id: &str, (crash, at): (&
     ctx.t_args("service_cards.actions.editService", [("service", service.to_owned())]),
   );
   let actions = super::actions(ctx, timeline, (id, service), (labels, LogPlace::Second));
-  frame(id, PaletteColor::Danger)
+  frame(id, PaletteColor::Destructive)
     .describe("service", service.to_owned())
     .child(head(
       id,
-      (Icon::CircleX, PaletteColor::Danger),
+      (Icon::CircleX, PaletteColor::Destructive),
       &title,
       (&meta, Meta::AfterTitle),
     ))

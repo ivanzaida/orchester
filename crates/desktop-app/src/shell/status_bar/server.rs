@@ -243,10 +243,10 @@ pub fn item(ctx: &Ctx, facts: &ServerFacts, dispatch: &Dispatch) -> Option<Eleme
   };
   let (icon, color) = match state {
     ServerState::Connected => return None,
-    ServerState::Connecting => (Icon::LoaderCircle, PaletteColor::TextMuted),
+    ServerState::Connecting => (Icon::LoaderCircle, PaletteColor::MutedForeground),
     ServerState::Offline => (Icon::WifiOff, PaletteColor::Warning),
     ServerState::SignedOut => (Icon::LogOut, PaletteColor::Warning),
-    ServerState::CertificateChanged => (Icon::ShieldAlert, PaletteColor::Danger),
+    ServerState::CertificateChanged => (Icon::ShieldAlert, PaletteColor::Destructive),
   };
   let words = words(ctx, facts)?;
   let route = Route::Orchester(id.map_or_else(OrchesterView::default, OrchesterView::server));

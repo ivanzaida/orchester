@@ -88,7 +88,7 @@ fn top(ctx: &Ctx, view: &ApprovalView, answering: &Answering<'_>, question: &str
   let close = pressable(move || fold.set(true))
     .id(format!("{id}-fold"))
     .describe("a11y_name", ctx.t("cards.fold"))
-    .child(icon(Icon::X, IconSize::Lg, PaletteColor::TextMuted));
+    .child(icon(Icon::X, IconSize::Lg, PaletteColor::MutedForeground));
   let context = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -169,12 +169,16 @@ fn meta(ctx: &mut Ctx, place: &Place, answering: &Answering<'_>, question: &str)
   })
   .id(format!("{id}-copy"))
   .describe("a11y_name", ctx.t("common.copy"))
-  .child(icon(Icon::Copy, IconSize::Base, PaletteColor::TextMuted));
+  .child(icon(Icon::Copy, IconSize::Base, PaletteColor::MutedForeground));
   let reply = Place::composer(ctx).map(|composer| {
     pressable(move || composer.take_up())
       .id(format!("{id}-reply"))
       .describe("a11y_name", ctx.t("cards.reply"))
-      .child(icon(Icon::MessageSquareReply, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(
+        Icon::MessageSquareReply,
+        IconSize::Base,
+        PaletteColor::MutedForeground,
+      ))
   });
   let step = request::step(place, answering.shown).unwrap_or_default();
   let time = display::clock(request.requested_at);

@@ -147,22 +147,25 @@ impl Toggle {
     };
     let off = |shape: Row| {
       shape
-        .background(PaletteColor::SurfaceInput)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .background(ExtraColor::InputSurface.role())
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     };
     match (self.kind, self.on) {
       (ToggleKind::Checkbox, on) => check_mark(on),
       (ToggleKind::Radio, false) => off(square(MARK_SIZE)).rounded(round),
-      (ToggleKind::Radio, true) => square(MARK_SIZE).rounded(round).background(PaletteColor::Accent).child(
-        square(RADIO_CENTER)
-          .rounded(round)
-          .background(ExtraColor::OnAccent.role()),
-      ),
+      (ToggleKind::Radio, true) => square(MARK_SIZE)
+        .rounded(round)
+        .background(PaletteColor::Primary)
+        .child(
+          square(RADIO_CENTER)
+            .rounded(round)
+            .background(ExtraColor::OnAccent.role()),
+        ),
       (ToggleKind::Switch, on) => {
         let (track, knob, side) = if on {
-          (PaletteColor::Accent, ExtraColor::OnAccent.role(), Justify::End)
+          (PaletteColor::Primary, ExtraColor::OnAccent.role(), Justify::End)
         } else {
-          (PaletteColor::BorderStrong, PaletteColor::TextSecondary, Justify::Start)
+          (PaletteColor::Input, ExtraColor::TextSecondary.role(), Justify::Start)
         };
         Row::new()
           .width(Dimension::Px(TRACK_WIDTH))
@@ -195,12 +198,12 @@ pub fn check_mark(on: bool) -> Row {
     .rounded(RadiusSize::Sm);
   if on {
     mark
-      .background(PaletteColor::Accent)
+      .background(PaletteColor::Primary)
       .child(icon(Icon::Check, IconSize::Sm, ExtraColor::OnAccent.role()))
   } else {
     mark
-      .background(PaletteColor::SurfaceInput)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(ExtraColor::InputSurface.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
   }
 }
 
@@ -219,7 +222,7 @@ impl From<Toggle> for Element {
         Some(style) => label.variant(style),
         None => label
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary),
+          .color(PaletteColor::Foreground),
       };
       if toggle.wrap_label {
         label.flex(1.0).min_width(Dimension::Px(0.0))

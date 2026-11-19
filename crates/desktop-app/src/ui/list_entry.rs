@@ -13,7 +13,7 @@ use super::{
   icon::{Icon, icon},
   icon_button::IconButton,
 };
-use crate::theme::{ExtraSpacing, IconSize};
+use crate::theme::{ExtraColor, ExtraSpacing, IconSize};
 
 const ROW_HEIGHT: f32 = 32.0;
 
@@ -21,7 +21,7 @@ pub fn list_surface(id: &str) -> Column {
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .rounded(RadiusSize::Md)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
 }
@@ -46,11 +46,11 @@ pub fn removable(
     .padding(Padding::new().left(ExtraSpacing::Loose.role()).right(SpacingSize::Xs))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Folder, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Folder, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(text)
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap()

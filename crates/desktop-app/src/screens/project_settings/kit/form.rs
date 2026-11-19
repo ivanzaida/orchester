@@ -19,7 +19,7 @@ use lurq::{
 
 use super::{Group, Tone};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsSpacing, ProjectSettingsText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsSpacing, ProjectSettingsText},
   ui::{
     form_section::Label,
     icon::{Icon, icon},
@@ -112,7 +112,7 @@ impl FormField {
   pub(crate) fn render(self, ctx: &mut Ctx, control: impl Into<Element>) -> Element {
     let id = self.id;
     let info = self.info.map(|info| {
-      let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
+      let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground).id(format!("{id}-info"));
       Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
     });
     let words = Column::new()
@@ -214,7 +214,7 @@ pub(crate) fn notice_line(
 ) -> Element {
   let (fill, _, mark) = tone.colors();
   let info = info.map(|info| {
-    let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
+    let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground).id(format!("{id}-info"));
     Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
   });
   Row::new()
@@ -230,7 +230,7 @@ pub(crate) fn notice_line(
       Text::new(words)
         .id(format!("{id}-text"))
         .variant(ProjectSettingsText::Hint.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

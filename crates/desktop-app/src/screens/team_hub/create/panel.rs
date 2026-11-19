@@ -55,7 +55,7 @@ use crate::{
     team_hub::{bar, model::Kind, panel as shared, rows},
   },
   services::Services,
-  theme::{HubSpacing, HubText, IconSize},
+  theme::{ExtraColor, HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -328,8 +328,8 @@ impl NewPanel {
       )))
     };
     let hint = match off {
-      Some(why) => (ctx.t(why).to_string(), PaletteColor::Danger),
-      None => (ctx.t(mode.bar_hint(kind)).to_string(), PaletteColor::TextMuted),
+      Some(why) => (ctx.t(why).to_string(), PaletteColor::Destructive),
+      None => (ctx.t(mode.bar_hint(kind)).to_string(), PaletteColor::MutedForeground),
     };
     bar::bar_saying(vec![create.into(), cancel.into()], Some(hint))
   }
@@ -436,12 +436,12 @@ fn computer(words: &str) -> Row {
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id("team-new-computer-text")
         .variant(HubText::Value.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

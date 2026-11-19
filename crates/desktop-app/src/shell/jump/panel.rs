@@ -12,7 +12,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextInput, TextOverflow},
   core::{ElementRef, Signal},
@@ -25,7 +25,7 @@ use crate::{
   navigation::{Navigation, link::Open, press::OpenIn, shortcuts::Keys},
   project::{ProjectState, Projects},
   screens::hub,
-  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ShellText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ShellText, TextRole},
   ui::{
     icon::{Icon, icon},
     kbd::key_cap,
@@ -98,8 +98,8 @@ pub(super) fn palette(ctx: &mut Ctx, navigation: &Navigation, state: &State) -> 
     .id("jump-to")
     .width(Dimension::Px(WIDTH))
     .rounded(RadiusSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .box_shadow(ShadowStyle::Lg)
     .on_key_down(keys)
     .child(field(ctx, state))
@@ -147,17 +147,17 @@ fn move_keys(at: &Signal<usize>, count: usize, chosen: Option<Open>) -> impl Fn(
 fn field(ctx: &mut Ctx, state: &State) -> Row {
   let theme = ctx.theme();
   let style = |color| {
-    FormTextRole {
+    TextRole {
       typography: TypographyStyle::Body,
       color,
     }
     .resolve(&theme.typography(), &theme.palette())
   };
   let placeholder = ctx.t("shell.jump.placeholder");
-  let input = TextInput::styled(state.query.clone(), style(PaletteColor::TextPrimary))
-    .placeholder_style(style(PaletteColor::TextMuted))
+  let input = TextInput::styled(state.query.clone(), style(PaletteColor::Foreground))
+    .placeholder_style(style(PaletteColor::MutedForeground))
     .placeholder(&placeholder)
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .id("jump-to-field")
     .describe("a11y_name", placeholder.clone())
     .ref_element(state.input.clone())
@@ -178,7 +178,7 @@ fn field(ctx: &mut Ctx, state: &State) -> Row {
         at.set(0);
       }
     })
-    .child(icon(Icon::Search, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::Search, IconSize::Md, PaletteColor::MutedForeground))
     .child(input)
 }
 
@@ -195,7 +195,7 @@ fn heading(ctx: &Ctx, group: Group) -> Element {
     .child(
       Text::new(&ctx.t(group.title_key()))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()
@@ -209,7 +209,7 @@ fn result(ctx: &Ctx, found: &Found, current: bool, open: Open) -> Element {
     Text::new(hint)
       .id(format!("{id}-hint"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap()
       .max_width(Dimension::Pct(100.0))
       .text_overflow(TextOverflow::Elipsis)
@@ -269,7 +269,7 @@ fn nothing(ctx: &Ctx, query: &str) -> Element {
     .child(
       Text::new(&ctx.t_args("shell.jump.none", [("query", query.trim())]))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }

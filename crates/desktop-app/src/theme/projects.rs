@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// Text of the first start, All projects and Add project.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,25 +112,25 @@ impl ProjectsText {
   fn style(self, palette: &ThemePalette) -> TextStyle {
     let sans = |size, weight, line_height, color| style(size, weight, line_height, 0.0, color);
     match self {
-      Self::Eyebrow => mono(style(11.0, FontWeight::Normal, 1.3, 0.6, palette.text_muted)),
-      Self::Heading => sans(13.0, FontWeight::SemiBold, 1.3, palette.text_primary),
-      Self::Title => style(20.0, FontWeight::SemiBold, 1.3, -0.2, palette.text_primary),
-      Self::Sub => sans(12.5, FontWeight::Normal, 1.4, palette.text_secondary),
-      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
-      Self::Initial => sans(12.0, FontWeight::SemiBold, 1.2, palette.text_secondary),
-      Self::Folder => mono(sans(11.5, FontWeight::Normal, 1.3, palette.text_muted)),
-      Self::Value => sans(12.0, FontWeight::Normal, 1.35, palette.text_secondary),
-      Self::Hint => sans(11.5, FontWeight::Normal, 1.45, palette.text_secondary),
-      Self::ErrorLine => sans(12.5, FontWeight::Normal, 1.45, palette.text_primary),
-      Self::Offer => sans(12.5, FontWeight::Normal, 1.45, palette.text_secondary),
-      Self::Path => mono(sans(11.5, FontWeight::Normal, 1.3, palette.text_primary)),
-      Self::Step => sans(13.0, FontWeight::Medium, 1.35, palette.text_primary),
-      Self::StepLocked => sans(13.0, FontWeight::Normal, 1.35, palette.text_muted),
-      Self::SectionTitle => sans(12.5, FontWeight::SemiBold, 1.3, palette.text_primary),
-      Self::CreateTitle => sans(12.5, FontWeight::Medium, 1.3, palette.text_primary),
-      Self::ChoiceLabel => sans(10.5, FontWeight::SemiBold, 1.3, palette.text_muted),
-      Self::GitOutput => mono(sans(11.5, FontWeight::Normal, 1.5, palette.text_secondary)),
-      Self::SearchedFolders => mono(sans(11.5, FontWeight::Normal, 1.3, palette.text_muted)),
+      Self::Eyebrow => mono(style(11.0, FontWeight::Normal, 1.3, 0.6, palette.muted_foreground)),
+      Self::Heading => sans(13.0, FontWeight::SemiBold, 1.3, palette.foreground),
+      Self::Title => style(20.0, FontWeight::SemiBold, 1.3, -0.2, palette.foreground),
+      Self::Sub => sans(12.5, FontWeight::Normal, 1.4, text_secondary(palette)),
+      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.muted_foreground),
+      Self::Initial => sans(12.0, FontWeight::SemiBold, 1.2, text_secondary(palette)),
+      Self::Folder => mono(sans(11.5, FontWeight::Normal, 1.3, palette.muted_foreground)),
+      Self::Value => sans(12.0, FontWeight::Normal, 1.35, text_secondary(palette)),
+      Self::Hint => sans(11.5, FontWeight::Normal, 1.45, text_secondary(palette)),
+      Self::ErrorLine => sans(12.5, FontWeight::Normal, 1.45, palette.foreground),
+      Self::Offer => sans(12.5, FontWeight::Normal, 1.45, text_secondary(palette)),
+      Self::Path => mono(sans(11.5, FontWeight::Normal, 1.3, palette.foreground)),
+      Self::Step => sans(13.0, FontWeight::Medium, 1.35, palette.foreground),
+      Self::StepLocked => sans(13.0, FontWeight::Normal, 1.35, palette.muted_foreground),
+      Self::SectionTitle => sans(12.5, FontWeight::SemiBold, 1.3, palette.foreground),
+      Self::CreateTitle => sans(12.5, FontWeight::Medium, 1.3, palette.foreground),
+      Self::ChoiceLabel => sans(10.5, FontWeight::SemiBold, 1.3, palette.muted_foreground),
+      Self::GitOutput => mono(sans(11.5, FontWeight::Normal, 1.5, text_secondary(palette))),
+      Self::SearchedFolders => mono(sans(11.5, FontWeight::Normal, 1.3, palette.muted_foreground)),
     }
   }
 }

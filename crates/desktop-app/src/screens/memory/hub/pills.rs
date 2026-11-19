@@ -40,7 +40,7 @@ impl From<Pill> for Element {
     let label = if pill.current {
       Text::new(&pill.label)
         .variant(TypographyStyle::Button)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
     } else {
       Text::new(&pill.label).variant(HubText::Status.role())
     }
@@ -53,7 +53,7 @@ impl From<Pill> for Element {
           .color(if waits {
             PaletteColor::Warning
           } else {
-            PaletteColor::TextMuted
+            PaletteColor::MutedForeground
           })
           .into(),
       ),
@@ -71,7 +71,7 @@ impl From<Pill> for Element {
       .with_children(count);
     let row = if pill.current {
       row
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .border_inside(BorderSize::Sm, PaletteColor::Border)
     } else {
       row

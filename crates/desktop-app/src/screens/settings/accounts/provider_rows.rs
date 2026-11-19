@@ -20,7 +20,7 @@ use super::words::{t, ta};
 use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     icon::{Icon, icon},
     setting_rows::{SettingRow, opens_mark, row_tile, status},
@@ -45,7 +45,11 @@ impl Rows {
       .child(self.state(ctx, &format!("{id}-state"), account))
       .child(opens_mark());
     SettingRow::new(id, account.name().as_str().to_owned())
-      .lead(row_tile(icon(Icon::Cloud, IconSize::Md, PaletteColor::TextSecondary)))
+      .lead(row_tile(icon(
+        Icon::Cloud,
+        IconSize::Md,
+        ExtraColor::TextSecondary.role(),
+      )))
       .hint(line)
       .control(end)
       .opens(self.navigation.to(Route::Accounts(AccountsView::of_provider(
@@ -79,18 +83,21 @@ impl Rows {
   /// The colors of the dot and the words, and the key of the words: the provider's key is missing here, what its
   /// last test found, or that its key is set.
   fn look(&self, account: &ApiAccount) -> ((PaletteColor, PaletteColor), &'static str) {
-    let quiet = PaletteColor::TextSecondary;
+    let quiet = ExtraColor::TextSecondary.role();
     let missing = self
       .missing
       .as_ref()
       .is_some_and(|missing| missing.contains(&account.id()));
     if missing {
-      return ((PaletteColor::Danger, PaletteColor::Danger), "accounts.api.keyMissing");
+      return (
+        (PaletteColor::Destructive, PaletteColor::Destructive),
+        "accounts.api.keyMissing",
+      );
     }
     match account.last_check().map(|check| &check.result) {
       Some(CheckResult::Api { .. }) => ((PaletteColor::Success, quiet), "accounts.api.state.connected"),
       Some(CheckResult::KeyRejected) => (
-        (PaletteColor::Danger, PaletteColor::Danger),
+        (PaletteColor::Destructive, PaletteColor::Destructive),
         "accounts.api.state.keyRejected",
       ),
       Some(CheckResult::BillingProblem { .. }) => (
@@ -98,7 +105,7 @@ impl Rows {
         "accounts.api.state.billing",
       ),
       Some(CheckResult::EndpointUnreachable) => (
-        (PaletteColor::Danger, PaletteColor::Danger),
+        (PaletteColor::Destructive, PaletteColor::Destructive),
         "accounts.api.state.unreachable",
       ),
       _ => ((PaletteColor::Success, quiet), "accounts.api.keySet"),

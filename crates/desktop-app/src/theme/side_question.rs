@@ -8,7 +8,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SideText {
@@ -74,17 +77,17 @@ impl SideText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Quiet => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Scope => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::Body => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.text_primary),
-      Self::Meta => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Who => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::SourceMono => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
-      Self::Source => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::Detail => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Open => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Failed => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.danger),
+      Self::Title => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Quiet => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Scope => style(12.0, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
+      Self::Body => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.foreground),
+      Self::Meta => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Who => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::SourceMono => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
+      Self::Source => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::Detail => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Open => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Failed => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.destructive),
     }
   }
 }

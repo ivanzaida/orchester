@@ -38,9 +38,9 @@ impl SignInText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Digit => style(20.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::Code => mono(style(13.0, FontWeight::Normal, 1.3, 2.0, palette.text_primary)),
+      Self::Title => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Digit => style(20.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::Code => mono(style(13.0, FontWeight::Normal, 1.3, 2.0, palette.foreground)),
     }
   }
 }

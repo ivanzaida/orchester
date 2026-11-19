@@ -37,7 +37,7 @@ pub fn row(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let arrow = opening(navigation.to(tasks))
     .id("task-back")
     .describe("a11y_name", ctx.t("task.crumbs.back"))
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted));
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground));
   Row::new()
     .id("task-back-row")
     .spacing(ExtraSpacing::Snug.role())

@@ -105,7 +105,7 @@ impl Component for DeleteCard {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Trash2, IconSize::Md, PaletteColor::Danger))
+      .child(icon(Icon::Trash2, IconSize::Md, PaletteColor::Destructive))
       .child(
         Text::new(&ctx.t_args("task_close.delete.title", [("task", key)]))
           .id(format!("{id}-title"))

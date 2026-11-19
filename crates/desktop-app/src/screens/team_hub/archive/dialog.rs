@@ -141,8 +141,8 @@ fn frame(props: &DialogProps) -> Column {
     }))
     .padding(Padding::all(DialogSpacing::Side.role()))
     .spacing(DialogSpacing::Parts.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(ExtraRadius::Tile.role())
     .box_shadow(ShadowStyle::Lg)
 }
@@ -185,7 +185,7 @@ pub(super) fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, noth
   let list = Column::new()
     .id(format!("{id}-list"))
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .clip();

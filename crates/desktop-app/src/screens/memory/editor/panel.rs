@@ -120,7 +120,7 @@ impl RecordEditor {
     bar_ending(
       &format!("{id}-actions"),
       vec![primary.into(), cancel.into()],
-      Some((note.to_string(), lurq::app::theme::PaletteColor::TextMuted)),
+      Some((note.to_string(), lurq::app::theme::PaletteColor::MutedForeground)),
       end,
     )
   }

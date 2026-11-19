@@ -22,7 +22,7 @@ use orchester_workspace::{
 
 use super::actions::open_folder;
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::{Press, pressed},
@@ -140,7 +140,7 @@ fn fact(id: &str, key: &str, value: &str, warning: bool) -> Element {
     .child(
       Text::new(key)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .child(
@@ -150,7 +150,7 @@ fn fact(id: &str, key: &str, value: &str, warning: bool) -> Element {
         .color(if warning {
           PaletteColor::Warning
         } else {
-          PaletteColor::TextSecondary
+          ExtraColor::TextSecondary.role()
         })
         .min_width(Dimension::Px(0.0))
         .flex_shrink(shrink)
@@ -170,9 +170,9 @@ pub(super) fn link(id: &str, (arrow, words): (Icon, &str), press: Press) -> Elem
     .child(
       Text::new(words)
         .variant(TypographyStyle::Button)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap(),
     )
-    .child(icon(arrow, IconSize::Base, PaletteColor::TextPrimary))
+    .child(icon(arrow, IconSize::Base, PaletteColor::Foreground))
     .into()
 }

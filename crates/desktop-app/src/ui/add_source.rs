@@ -38,7 +38,7 @@ use super::{
 };
 use crate::{
   services::path_picker::{PathKind, PathPicker},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
 };
 
 /// How the control is laid out.
@@ -351,16 +351,16 @@ fn hint(ctx: &Ctx, id: &str, checked: Option<&Result<Candidate, Refusal>>, layou
   let (glyph, mark, words, color, state) = match checked {
     None => (
       Icon::Info,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("ui.addSource.hint"),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "idle",
     ),
     Some(Ok(candidate)) => (
       Icon::CircleCheck,
       PaletteColor::Success,
       message_text(ctx, &candidate.message()),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "readable",
     ),
     Some(Err(refusal)) if refusal.is_error() => (
@@ -369,16 +369,16 @@ fn hint(ctx: &Ctx, id: &str, checked: Option<&Result<Candidate, Refusal>>, layou
       } else {
         Icon::CircleAlert
       },
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       message_text(ctx, &refusal.message()),
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       "refused",
     ),
     Some(Err(refusal)) => (
       Icon::Info,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       message_text(ctx, &refusal.message()),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "not_needed",
     ),
   };

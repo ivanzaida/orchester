@@ -129,7 +129,7 @@ fn header(ctx: &mut Ctx, state: &Panels, props: &Props, composition: &Compositio
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(arrow)
     .child(Row::new().flex(1.0).child(crumbs))
-    .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
+    .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground))
     .child(Text::new(&ctx.t("instructions.readOnly")).variant(TypographyStyle::Caption))
     .child(preview::copy_button(ctx, state, props, composition))
     .into()
@@ -186,7 +186,7 @@ fn note(ctx: &Ctx, mark: Icon, key: &str) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(icon(mark, IconSize::Xs, PaletteColor::TextMuted))
+    .child(icon(mark, IconSize::Xs, PaletteColor::MutedForeground))
     .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Caption).flex(1.0))
     .into()
 }
@@ -215,8 +215,8 @@ fn block(
     .rounded(ExtraRadius::Tile.role());
   let block = if selected {
     block
-      .background(PaletteColor::SurfaceRaised)
-      .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+      .background(PaletteColor::Card)
+      .border_inside(BorderSize::Sm, PaletteColor::Input)
   } else {
     block
   };
@@ -229,9 +229,9 @@ fn block(
           Text::new(&title)
             .variant(instructions::overline())
             .color(if selected {
-              PaletteColor::TextPrimary
+              PaletteColor::Foreground
             } else {
-              PaletteColor::TextMuted
+              PaletteColor::MutedForeground
             })
             .flex(1.0),
         )
@@ -268,7 +268,7 @@ fn footer(ctx: &Ctx, props: &Props, resolved: &Resolved<'_>, composition: &Compo
     .align_items(Alignment::Center)
     .padding(Padding::horizontal(ExtraSpacing::Tabs.role()))
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(
       Text::new(&summary)
@@ -278,7 +278,7 @@ fn footer(ctx: &Ctx, props: &Props, resolved: &Resolved<'_>, composition: &Compo
     .with_children(variables.iter().next().and_then(|v| resolved.value(*v)).map(|value| {
       Text::new(&value)
         .variant(instructions::variable_value())
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
     }))
     .child(
       Text::new(&ctx.t("instructions.resolvedVariable"))
@@ -290,7 +290,7 @@ fn footer(ctx: &Ctx, props: &Props, resolved: &Resolved<'_>, composition: &Compo
         .height(Dimension::Px(KEYCAP_HEIGHT))
         .align_items(Alignment::Center)
         .padding(Padding::horizontal(ExtraSpacing::Pair.role()))
-        .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+        .border_inside(BorderSize::Sm, PaletteColor::Input)
         .rounded(lurq::app::theme::RadiusSize::Sm)
         .child(Text::new(&ctx.t("instructions.esc")).variant(instructions::viewer_keycap())),
     )

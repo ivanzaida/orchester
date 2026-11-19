@@ -4,7 +4,7 @@ use lurq::{
   layout::text_style::FontWeight,
   node::dimension::Dimension,
 };
-use orchester_app::theme::{self, Mode, SecretsSpacing, SecretsText};
+use orchester_app::theme::{self, ExtraColor, Mode, SecretsSpacing, SecretsText};
 
 #[test]
 fn secrets_theme_roles_resolve_the_wide_dark_frames() {
@@ -18,7 +18,7 @@ fn secrets_theme_roles_resolve_the_wide_dark_frames() {
       1.4,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       SecretsText::Name,
@@ -26,7 +26,7 @@ fn secrets_theme_roles_resolve_the_wide_dark_frames() {
       1.4,
       FontWeight::Medium,
       "Geist Mono",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       SecretsText::Mask,
@@ -34,7 +34,7 @@ fn secrets_theme_roles_resolve_the_wide_dark_frames() {
       1.3,
       FontWeight::Normal,
       "Geist Mono",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       SecretsText::InspectorTitle,
@@ -42,7 +42,7 @@ fn secrets_theme_roles_resolve_the_wide_dark_frames() {
       1.3,
       FontWeight::SemiBold,
       "Geist",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       SecretsText::ColumnHeading,
@@ -50,7 +50,7 @@ fn secrets_theme_roles_resolve_the_wide_dark_frames() {
       1.3,
       FontWeight::Medium,
       "Geist",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       SecretsText::ConfirmTitle,
@@ -58,7 +58,7 @@ fn secrets_theme_roles_resolve_the_wide_dark_frames() {
       1.4,
       FontWeight::Medium,
       "Geist",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
   ];
   for (role, size, height, weight, family, color) in expected {

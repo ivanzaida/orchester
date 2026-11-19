@@ -117,7 +117,7 @@ pub(super) fn row(
     ApproveMode::Manual => row.hint(manual_hint(ctx, &settings.autopilot_profiles)),
     ApproveMode::Autopilot => row.hint(ctx.t("project_settings.approveModeAutopilotHint")),
     ApproveMode::DangerousAutoApprove => row
-      .fill(PaletteColor::DangerMuted)
+      .fill(PaletteColor::DestructiveMuted)
       .toned(ctx.t("project_settings.approveModeDangerousHint"), Tone::Secondary),
   }
   .render(ctx)

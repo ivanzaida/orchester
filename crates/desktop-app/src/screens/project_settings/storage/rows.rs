@@ -244,7 +244,7 @@ impl Component for Folder {
     let mut content = Column::new().width(Dimension::Pct(100.0)).child(table);
     if let Some(failed) = &props.failed {
       content = content
-        .background(PaletteColor::DangerMuted)
+        .background(PaletteColor::DestructiveMuted)
         .child(error(ctx, &format!("storage-remove-error-{id}"), failed))
         .child(
           Text::new(&id)
@@ -356,7 +356,7 @@ fn identity(ctx: &mut Ctx, row: &KeptRow, id: &str) -> Element {
         Icon::GitBranch
       },
       IconSize::Md,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .child(
       Column::new()

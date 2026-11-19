@@ -127,7 +127,7 @@ fn files_note(ctx: &Ctx, files: &Files) -> Option<Element> {
       .padding(Padding::horizontal(SpacingSize::Sm))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::FileCode, IconSize::Md, PaletteColor::TextMuted))
+      .child(icon(Icon::FileCode, IconSize::Md, PaletteColor::MutedForeground))
       .child(
         Text::new(&words)
           .variant(TypographyStyle::Caption)
@@ -168,7 +168,7 @@ fn heading<T>(ctx: &Ctx, name: &str, section: &Section<T>) -> Element {
     .child(
       Text::new(&ctx.t(&format!("composer.mention.section.{name}")))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .child(Spacer::new().flex(1.0))
@@ -212,9 +212,9 @@ fn row(props: &MenuProps, (name, index, focused): (&str, usize, bool), face: Vec
 /// A task's `square-check`, key, title and workflow status, and *Enter* while it has the focus.
 fn task_row(ctx: &Ctx, task: &TaskChoice, focused: bool) -> Vec<Element> {
   vec![
-    icon(Icon::SquareCheck, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(Icon::SquareCheck, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     key(&task.key.to_string(), TASK_KEY_WIDTH),
-    title(&task.title, PaletteColor::TextPrimary),
+    title(&task.title, PaletteColor::Foreground),
     Text::new(&ctx.t(workflow_key(task.status)))
       .variant(TypographyStyle::Caption)
       .nowrap()
@@ -245,9 +245,9 @@ fn run_row(ctx: &mut Ctx, props: &MenuProps, run: &RunChoice, focused: bool) -> 
   let id = format!("{}-mention-run-{}-state", props.id, run.number.get());
   let state = StatusChip::new(id, Status::of_phase(run.phase)).render(ctx);
   vec![
-    icon(Icon::Play, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(Icon::Play, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     key(&shown, RUN_KEY_WIDTH),
-    title(&words, PaletteColor::TextMuted),
+    title(&words, PaletteColor::MutedForeground),
     state,
   ]
   .into_iter()
@@ -266,7 +266,7 @@ fn file_row(ctx: &Ctx, file: &FileChoice, focused: bool) -> Vec<Element> {
       .into()
   });
   vec![
-    icon(Icon::FileCode, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(Icon::FileCode, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     path(file),
   ]
   .into_iter()
@@ -304,7 +304,7 @@ fn path(file: &FileChoice) -> Element {
     } else if range.end <= name_at {
       text
         .variant(ExtraTypography::PropertyMono.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
     } else {
       text.variant(ExtraTypography::PropertyMono.role())
     }
@@ -324,7 +324,7 @@ fn key(words: &str, width: f32) -> Element {
     .child(
       Text::new(words)
         .variant(ExtraTypography::PropertyMono.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .into()
@@ -359,7 +359,7 @@ pub(super) fn nothing((title, hint): (&str, &str)) -> Element {
     )
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .child(icon(Icon::SearchX, IconSize::Lg, PaletteColor::TextMuted))
+    .child(icon(Icon::SearchX, IconSize::Lg, PaletteColor::MutedForeground))
     .child(
       Column::new()
         .flex(1.0)
@@ -374,7 +374,7 @@ pub(super) fn nothing((title, hint): (&str, &str)) -> Element {
           Text::new(hint)
             .id("mention-nothing-hint")
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .width(Dimension::Pct(100.0)),
         ),
     )

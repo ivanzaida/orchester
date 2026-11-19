@@ -42,7 +42,7 @@ impl PromptSourceRow {
       .child(
         Text::new(&self.number.to_string())
           .variant(TypographyStyle::Mono)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .width(Dimension::Px(NUMBER_WIDTH)),
       )
       .child(
@@ -56,7 +56,7 @@ impl PromptSourceRow {
       .child(
         Text::new(&self.version)
           .variant(instructions::variable_value())
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
       .into()
@@ -73,7 +73,7 @@ pub fn excluded_source(id: &str, title: &str, reason: &str) -> Element {
     .spacing(ExtraSpacing::Loose.role())
     .rounded(ExtraRadius::Tile.role())
     .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .child(icon(Icon::EyeOff, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::EyeOff, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Column::new()
         .flex(1.0)

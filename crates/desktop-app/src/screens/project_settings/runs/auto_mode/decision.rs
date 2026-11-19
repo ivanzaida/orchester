@@ -299,7 +299,7 @@ fn destination_status(
   }
   (
     destination_text(ctx, connection, row.last_test.as_ref(), editing),
-    PaletteColor::TextMuted,
+    PaletteColor::MutedForeground,
     if connection.is_on_this_computer() {
       Icon::ShieldCheck
     } else {

@@ -104,7 +104,7 @@ pub(in crate::screens::team_hub) fn hint(
   } else {
     ctx.t_args("team_hub.edit.makesUnchanged", [("version", next)])
   };
-  (words.to_string(), PaletteColor::TextMuted)
+  (words.to_string(), PaletteColor::MutedForeground)
 }
 
 /// A31: the team server cannot be reached while the fields hold changes, which stay.

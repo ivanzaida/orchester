@@ -104,7 +104,7 @@ impl From<DraftBar> for Element {
           .left(HubSpacing::Row.role()),
       )
       .spacing(ExtraSpacing::Loose.role())
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Lg)
       .describe("standing", format!("{:?}", bar.standing).to_lowercase())

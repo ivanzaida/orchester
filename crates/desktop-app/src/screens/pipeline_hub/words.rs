@@ -20,9 +20,12 @@ use super::{
   undecided::{Said, undecided_words},
   version_view::Viewed,
 };
-use crate::screens::{
-  local_hub::words::{archived_at, missing, undecided},
-  team_hub::words::date,
+use crate::{
+  screens::{
+    local_hub::words::{archived_at, missing, undecided},
+    team_hub::words::date,
+  },
+  theme::ExtraColor,
 };
 
 /// The line under a pipeline's name: when it was archived, what keeps it from running (in `warning`), or the steps and
@@ -53,7 +56,7 @@ fn state(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
   if let Some(at) = entry.archived {
     return Said {
       text: archived_at(ctx, now, at),
-      color: PaletteColor::TextMuted,
+      color: PaletteColor::MutedForeground,
     };
   }
   if let Some(text) = needs(ctx, entry) {
@@ -64,7 +67,7 @@ fn state(ctx: &Ctx, now: Timestamp, entry: &Entry) -> Said {
   }
   Said {
     text: summary(ctx, entry),
-    color: PaletteColor::TextSecondary,
+    color: ExtraColor::TextSecondary.role(),
   }
 }
 

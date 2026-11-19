@@ -94,7 +94,7 @@ pub(super) fn pager(ctx: &mut Ctx, project: &ShownProject, pager: &Pager) -> Ele
       Text::new(&words(ctx, pager))
         .id("review-pager-words")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .child(previous.render(ctx, project, pager.previous()))
     .child(next.render(ctx, project, pager.next()))

@@ -113,12 +113,12 @@ impl Component for LeadChipView {
       .nowrap();
     let (label, fill, stroke) = if hovered {
       (
-        label.color(PaletteColor::TextPrimary),
+        label.color(PaletteColor::Foreground),
         ExtraColor::Hover.role(),
-        PaletteColor::BorderStrong,
+        PaletteColor::Input,
       )
     } else {
-      (label, PaletteColor::SurfaceRaised, PaletteColor::Border)
+      (label, PaletteColor::Card, PaletteColor::Border)
     };
     let base = match route(&props.lead) {
       Some(route) => Press::Open(Navigation::of(ctx).to(route)).button(),
@@ -134,7 +134,7 @@ impl Component for LeadChipView {
       let mode = Text::new(&ctx.t("orchestrator.leads.toTheEnd"))
         .id(format!("{}-mode", props.id))
         .variant(OrchestratorText::LeadsChip.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap();
       (Icon::Flag, Some(mode))
     } else {
@@ -156,7 +156,7 @@ impl Component for LeadChipView {
       .on_mouse_enter(enter)
       .on_mouse_leave(leave)
       .describe("to_the_end", props.lead.to_the_end.to_string())
-      .child(icon(glyph, IconSize::Xs, PaletteColor::TextSecondary))
+      .child(icon(glyph, IconSize::Xs, ExtraColor::TextSecondary.role()))
       .child(label)
       .with_children(mode)
       .child(stop)
@@ -225,7 +225,7 @@ fn tooltip(ctx: &mut Ctx, props: &ChipProps, pill: &ElementRef) -> Popup {
     .id(id.clone())
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
     .spacing(ExtraSpacing::Tight.role())
-    .background(PaletteColor::TextPrimary)
+    .background(PaletteColor::Foreground)
     .rounded(RadiusSize::Sm)
     .child(
       Text::new(&since(ctx, lead))

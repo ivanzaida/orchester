@@ -12,7 +12,7 @@ fn cards_denial_message_role_matches_06b() {
     assert_eq!(style.font_size, 13.0);
     assert_eq!(style.line_height, 1.5);
     assert_eq!(style.weight, FontWeight::Normal);
-    assert_eq!(style.color, theme.palette_color(PaletteColor::TextPrimary));
+    assert_eq!(style.color, theme.palette_color(PaletteColor::Foreground));
   }
 }
 
@@ -22,8 +22,8 @@ fn cards_model_approved_roles_match_06() {
     let app = themed(mode);
     let theme = app.theme();
     for (role, color) in [
-      (CardsText::AnsweredCommand, PaletteColor::TextPrimary),
-      (CardsText::RiskValue, PaletteColor::TextSecondary),
+      (CardsText::AnsweredCommand, PaletteColor::Foreground),
+      (CardsText::RiskValue, ExtraColor::TextSecondary.role()),
     ] {
       let style = theme.typography_style(role.role());
       assert_eq!(style.font_size, 12.0);

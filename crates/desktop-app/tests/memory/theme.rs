@@ -6,7 +6,7 @@ use lurq::{
   layout::text_style::FontWeight,
   node::dimension::Dimension,
 };
-use orchester_app::theme::{self, MemorySpacing, MemoryText, Mode};
+use orchester_app::theme::{self, ExtraColor, MemorySpacing, MemoryText, Mode};
 
 #[test]
 fn memory_theme_roles_resolve_the_design() {
@@ -19,63 +19,63 @@ fn memory_theme_roles_resolve_the_design() {
       10.5,
       FontWeight::Medium,
       "Geist",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       MemoryText::GroupCount,
       10.5,
       FontWeight::Normal,
       "Geist Mono",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       MemoryText::Flag,
       10.5,
       FontWeight::Medium,
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       MemoryText::ListLabel,
       11.5,
       FontWeight::Medium,
       "Geist",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       MemoryText::NoticeText,
       11.5,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       MemoryText::Scope,
       10.5,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       MemoryText::Lead,
       13.0,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       MemoryText::PanelTitle,
       14.0,
       FontWeight::SemiBold,
       "Geist",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       MemoryText::StateText,
       12.0,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
   ];
   for (role, size, weight, family, color) in expected {
@@ -100,7 +100,7 @@ fn memory_theme_record_text_resolves_the_design() {
     (style.font_size, style.weight, &*style.font_family),
     (13.0, FontWeight::Normal, "Geist")
   );
-  assert_eq!(style.color, theme.palette_color(PaletteColor::TextPrimary));
+  assert_eq!(style.color, theme.palette_color(PaletteColor::Foreground));
 }
 
 /// A status chip's word in the Agents hub's panel (`H3ItbS` in Y1 `tsfxN`): 11/500, 1.2, so the chip is 19 high.

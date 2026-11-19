@@ -79,7 +79,7 @@ fn framed(
   let lights = cfg!(target_os = "macos")
     .then(|| ctx.mount_keyed::<traffic_lights::TrafficLights>("traffic-lights", traffic_lights::LightsProps(close)));
   let bar = ChromeTitleBar::new()
-    .background(PaletteColor::SurfaceBase)
+    .background(PaletteColor::Background)
     .border_bottom(None)
     .controls(controls);
   let outline = ctx.mount_keyed::<WindowOutline>("window-outline", ());
@@ -137,7 +137,7 @@ impl Component for WindowOutline {
     }
     outline
       .rounded(ExtraRadius::Window.role())
-      .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+      .border_inside(BorderSize::Sm, PaletteColor::Input)
   }
 }
 
@@ -156,7 +156,7 @@ fn controls(ctx: &mut Ctx, close: &Close) -> WindowControls {
   };
   let mut controls = WindowControls::new()
     .style(style)
-    .foreground(PaletteColor::TextSecondary)
+    .foreground(ExtraColor::TextSecondary.role())
     .hover_background(ExtraColor::Hover.role())
     .active_background(ExtraColor::Pressed.role());
   for (kind, id, name_key, glyph, size) in [

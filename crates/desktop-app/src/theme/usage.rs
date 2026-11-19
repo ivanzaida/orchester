@@ -19,6 +19,7 @@ use orchester_core::usage::SERIES;
 use super::{
   ExtraColor,
   fonts::ICONS,
+  palette::text_secondary,
   typography::{mono, style},
 };
 
@@ -100,22 +101,22 @@ impl UsageText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Axis => mono(style(10.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::AxisDay => style(10.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::AxisStrong => style(10.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
-      Self::Footnote => style(11.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
-      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
-      Self::ColumnOver => style(10.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
-      Self::TotalLabel => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Subtitle => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
-      Self::Description => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Figure => style(22.0, FontWeight::SemiBold, 1.3, -0.3, palette.text_primary),
-      Self::TotalFigure => mono(style(12.0, FontWeight::SemiBold, 1.4, 0.0, palette.text_primary)),
-      Self::SmallTitle => style(13.0, FontWeight::SemiBold, 1.3, -0.1, palette.text_primary),
-      Self::StateTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::Axis => mono(style(10.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground)),
+      Self::AxisDay => style(10.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::AxisStrong => style(10.0, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
+      Self::Footnote => style(11.0, FontWeight::Normal, 1.5, 0.0, palette.muted_foreground),
+      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.muted_foreground),
+      Self::ColumnOver => style(10.0, FontWeight::Medium, 1.3, 0.4, palette.muted_foreground),
+      Self::TotalLabel => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Subtitle => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
+      Self::Description => style(13.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Figure => style(22.0, FontWeight::SemiBold, 1.3, -0.3, palette.foreground),
+      Self::TotalFigure => mono(style(12.0, FontWeight::SemiBold, 1.4, 0.0, palette.foreground)),
+      Self::SmallTitle => style(13.0, FontWeight::SemiBold, 1.3, -0.1, palette.foreground),
+      Self::StateTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
       Self::StateGlyph => TextStyle {
         font_family: Arc::from(ICONS),
-        ..style(20.0, FontWeight::Normal, 1.0, 0.0, palette.text_muted)
+        ..style(20.0, FontWeight::Normal, 1.0, 0.0, palette.muted_foreground)
       },
     }
   }
@@ -271,14 +272,14 @@ impl ChartStyle {
         color(ExtraColor::ChartNone.role()),
       ],
       grid: color(PaletteColor::Border),
-      baseline: color(PaletteColor::BorderStrong),
-      axis: color(PaletteColor::TextMuted),
-      strong: color(PaletteColor::TextSecondary),
-      threshold: color(PaletteColor::TextMuted),
-      single: color(PaletteColor::TextMuted),
+      baseline: color(PaletteColor::Input),
+      axis: color(PaletteColor::MutedForeground),
+      strong: color(ExtraColor::TextSecondary.role()),
+      threshold: color(PaletteColor::MutedForeground),
+      single: color(PaletteColor::MutedForeground),
       hatch: color(ExtraColor::ChartHatch.role()),
       band: color(ExtraColor::Hover.role()),
-      ring: color(PaletteColor::SurfacePanel),
+      ring: color(PaletteColor::Canvas),
       font: font(UsageText::Axis),
       day_font: font(UsageText::AxisDay),
       strong_font: font(UsageText::AxisStrong),

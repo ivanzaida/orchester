@@ -56,11 +56,11 @@ impl RunsOnPickerText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Name => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
-      Self::Caption => style(11.5, FontWeight::Normal, 1.2, 0.0, palette.text_muted),
-      Self::Use => mono(style(10.5, FontWeight::Normal, 1.2, 0.0, palette.text_muted)),
-      Self::Segment => style(11.5, FontWeight::Normal, 1.2, 0.0, palette.text_muted),
-      Self::SegmentChosen => style(11.5, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
+      Self::Name => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.foreground),
+      Self::Caption => style(11.5, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground),
+      Self::Use => mono(style(10.5, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground)),
+      Self::Segment => style(11.5, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground),
+      Self::SegmentChosen => style(11.5, FontWeight::Medium, 1.2, 0.0, palette.foreground),
     }
   }
 }

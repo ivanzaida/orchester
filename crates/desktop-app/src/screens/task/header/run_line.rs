@@ -136,7 +136,7 @@ fn row(ctx: &mut Ctx, task: &TaskContext, chip: Element, line: Option<&str>, mod
       Text::new(line)
         .id("task-run-line")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     }))
     .with_children(mode)

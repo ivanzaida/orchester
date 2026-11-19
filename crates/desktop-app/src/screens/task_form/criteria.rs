@@ -11,7 +11,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::{TextInputEvent, keyboard_event::KeyboardEvent},
-    theme::{BorderSize, FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Stack, Text, TextInput},
   core::{ElementRef, Signal},
@@ -21,7 +21,7 @@ use lurq::{
 
 use super::state::View;
 use crate::{
-  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormText},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormText, TextRole},
   ui::{
     icon::{Icon, icon},
     icon_button::IconButton,
@@ -111,7 +111,7 @@ fn head(ctx: &Ctx, count: usize) -> Row {
     .child(
       Text::new(&ctx.t("task_form.fields.criteria.label"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .with_children((count > 0).then(|| muted(&count.to_string()).id("task-form-criteria-count")))
@@ -144,11 +144,11 @@ fn add_row(ctx: &Ctx, criteria: &Signal<Vec<Criterion>>, first: bool) -> Element
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(
       frame
-        .child(icon(Icon::Plus, IconSize::Base, PaletteColor::TextMuted))
+        .child(icon(Icon::Plus, IconSize::Base, PaletteColor::MutedForeground))
         .child(
           Text::new(&label)
             .variant(TaskFormText::Criterion.role())
-            .color(PaletteColor::TextMuted),
+            .color(PaletteColor::MutedForeground),
         ),
     )
     .into()
@@ -208,20 +208,20 @@ fn criterion_input(
 ) -> TextInput {
   let theme = ctx.theme();
   let text = |color| {
-    FormTextRole {
+    TextRole {
       typography: TaskFormText::Criterion.role(),
       color,
     }
     .resolve(&theme.typography(), &theme.palette())
   };
   let color = if locked {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   } else {
-    PaletteColor::TextPrimary
+    PaletteColor::Foreground
   };
   let (gained, lost) = (row.focused.clone(), row.focused.clone());
   let input = TextInput::styled(row.text.clone(), text(color))
-    .placeholder_style(text(PaletteColor::TextMuted))
+    .placeholder_style(text(PaletteColor::MutedForeground))
     .placeholder(&ctx.t("task_form.fields.criteria.placeholder"))
     .id(format!("task-form-criterion-{number}-input"))
     .describe(
@@ -231,7 +231,7 @@ fn criterion_input(
     .multiline()
     .rows(1, MAX_LINES)
     .flex(1.0)
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .ref_element(row.input.clone())
     .on_focus(move || gained.set(true))
     .on_blur(move || lost.set(false));

@@ -28,7 +28,7 @@ use orchester_workspace::{
 use super::{Added, Picked, Said, adding};
 use crate::{
   screens::settings::orchester::shown_address,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText},
   ui::{
     chip::{BadgeTone, badge},
     code_box::CodeBox,
@@ -168,7 +168,7 @@ fn fact_rows(ctx: &mut Ctx, [project, server, hint, role]: [&str; 4]) -> Element
         Text::new(value)
           .id(format!("{id}-value"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
       .render(ctx);
@@ -210,14 +210,14 @@ fn checkout_row(
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Start)
     .background(if chosen {
-      PaletteColor::SurfaceRaised
+      PaletteColor::Card
     } else {
-      PaletteColor::SurfaceBase
+      PaletteColor::Background
     })
     .border(Border::inside(
       BorderSize::Sm,
       if chosen {
-        PaletteColor::BorderStrong
+        PaletteColor::Input
       } else {
         PaletteColor::Border
       },
@@ -249,7 +249,7 @@ fn lines(ctx: &Ctx, (landing, checkout): (&Landing, &Checkout), (id, added): (&s
     .child(
       Text::new(&shorten_path(&checkout.repo_root, PATH))
         .variant(OrchesterText::Address.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     // One folder is added at a time.
@@ -296,7 +296,7 @@ fn compare(ctx: &Ctx, landing: &Landing, checkout: &Checkout) -> (Icon, PaletteC
     );
     return (
       Icon::Link,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t_args("sharing.landing.linkedElsewhere", [("address", address)]),
     );
   }
@@ -322,12 +322,12 @@ fn compare(ctx: &Ctx, landing: &Landing, checkout: &Checkout) -> (Icon, PaletteC
     ),
     RemoteMatch::NoOrigin => (
       Icon::CircleDashed,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("sharing.landing.noOrigin"),
     ),
     RemoteMatch::NoHint => (
       Icon::CircleDashed,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("sharing.landing.nothingToCompare"),
     ),
   }
@@ -371,7 +371,7 @@ fn no_checkout(ctx: &mut Ctx, landing: &Landing) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Inset.role())
     .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
     .child(
@@ -379,7 +379,7 @@ fn no_checkout(ctx: &mut Ctx, landing: &Landing) -> Element {
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Start)
-        .child(icon(Icon::FolderSearch, IconSize::Md, PaletteColor::TextSecondary))
+        .child(icon(Icon::FolderSearch, IconSize::Md, ExtraColor::TextSecondary.role()))
         .child(
           Column::new()
             .flex(1.0)

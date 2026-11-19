@@ -76,9 +76,9 @@ pub fn row(
       Icon::Target,
       IconSize::Md,
       if open {
-        PaletteColor::TextSecondary
+        ExtraColor::TextSecondary.role()
       } else {
-        PaletteColor::TextMuted
+        PaletteColor::MutedForeground
       },
     ))
     .child(name(ctx, &id, summary))
@@ -192,12 +192,12 @@ fn holder_cell(ctx: &Ctx, id: &str, holder: Holder<'_>) -> Element {
     Some(person) => (
       Icon::UserRoundCheck,
       words::person(ctx, person),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     None => (
       Icon::CircleDashed,
       ctx.t("modules.team.notClaimed"),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
   };
   Row::new()

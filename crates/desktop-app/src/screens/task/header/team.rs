@@ -149,7 +149,7 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
         Text::new(&about)
           .id("task-run-line")
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
       .into(),
@@ -169,12 +169,12 @@ fn stopped_chip(words: &str) -> Element {
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
     .describe("status", "stopped")
-    .child(icon(Icon::CircleStop, IconSize::Base, PaletteColor::Danger).id("task-status-icon"))
+    .child(icon(Icon::CircleStop, IconSize::Base, PaletteColor::Destructive).id("task-status-icon"))
     .child(
       Text::new(words)
         .id("task-status-label")
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .nowrap(),
     )
     .into()

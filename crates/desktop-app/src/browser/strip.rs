@@ -241,7 +241,7 @@ impl Strip {
         .background_gradient(Gradient::linear(
           angle,
           [
-            GradientStop::new(PaletteColor::SurfaceBase),
+            GradientStop::new(PaletteColor::Background),
             GradientStop::new(BrowserColor::FadeClear.role()),
           ],
         ))
@@ -283,7 +283,7 @@ fn new_tab(ctx: &mut Ctx, showing: &Showing) -> Element {
   .flex_shrink(0.0)
   .justify(Justify::Center)
   .rounded(RadiusSize::Md)
-  .child(icon(Icon::Plus, IconSize::Md, PaletteColor::TextMuted));
+  .child(icon(Icon::Plus, IconSize::Md, PaletteColor::MutedForeground));
   if unavailable {
     button.opacity(DISABLED_OPACITY).into()
   } else {

@@ -50,7 +50,7 @@ fn sent_at(ctx: &Ctx, view: &ThreadView) -> Arc<str> {
 pub(super) fn tag(ctx: &Ctx, view: &ThreadView) -> (Arc<str>, TagLook) {
   let success = TagLook::new(PaletteColor::SuccessMuted, PaletteColor::Success);
   let warning = TagLook::new(PaletteColor::WarningMuted, PaletteColor::Warning);
-  let quiet = TagLook::new(PaletteColor::SurfacePanel, PaletteColor::TextMuted);
+  let quiet = TagLook::new(PaletteColor::Canvas, PaletteColor::MutedForeground);
   match &view.state {
     ThreadState::Answering if words_arrived(view) => {
       (ctx.t("review_page.tag.answering"), success.glyph(Icon::LoaderCircle))

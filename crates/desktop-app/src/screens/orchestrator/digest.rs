@@ -32,7 +32,7 @@ use super::{
   run_end, wait,
 };
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -121,7 +121,7 @@ fn head(ctx: &Ctx, props: &DigestProps, open: &Signal<bool>) -> Element {
     .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .child(icon(Icon::Hand, IconSize::Base, PaletteColor::Warning))
     .child(
       Text::new(&title)
@@ -132,14 +132,14 @@ fn head(ctx: &Ctx, props: &DigestProps, open: &Signal<bool>) -> Element {
     .with_children(since.map(|since| {
       Text::new(&since)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     }))
     .child(Spacer::new().flex(1.0))
     .child(icon(
       if open.get() { Icon::ChevronUp } else { Icon::ChevronDown },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .into()
 }
@@ -176,7 +176,7 @@ fn item(ctx: &mut Ctx, props: &DigestProps, waited: &Waited) -> Element {
     .child(
       Text::new(&what)
         .variant(OrchestratorText::Line.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .flex_shrink(0.0),
     )

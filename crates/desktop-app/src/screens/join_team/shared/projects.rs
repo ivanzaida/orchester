@@ -185,7 +185,7 @@ impl SharedProjects {
     Column::new()
       .id(format!("{PAGE}-list"))
       .width(Dimension::Pct(100.0))
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .clip()
@@ -323,7 +323,7 @@ fn server_row(ctx: &Ctx, address: &str) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(StartupSpacing::Row.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Server, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::Server, IconSize::Md, PaletteColor::MutedForeground))
     .child(
       Text::new(address)
         .id("join-team-projects-address")

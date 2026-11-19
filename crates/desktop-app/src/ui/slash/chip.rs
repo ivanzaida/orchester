@@ -24,7 +24,7 @@ use orchester_workspace::skills::offered::OfferedSkill;
 
 use super::{SlashField, argument};
 use crate::{
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, SlashText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, SlashText},
   ui::{
     icon::{Icon, icon},
     tooltip::Tooltip,
@@ -133,8 +133,8 @@ pub fn sent_chip(id: &str, glyph: Icon, words: &str) -> Element {
 
 /// The pill of a sent chip named `id`: its 11 `glyph` and its `words`, in a `border_strong` stroke.
 fn sent_pill(id: &str, glyph: Icon, words: &str) -> Row {
-  pill_frame(id, PaletteColor::BorderStrong)
-    .child(icon(glyph, IconSize::Xs, PaletteColor::TextSecondary))
+  pill_frame(id, PaletteColor::Input)
+    .child(icon(glyph, IconSize::Xs, ExtraColor::TextSecondary.role()))
     .child(chip_words(&format!("{id}-name"), words))
 }
 
@@ -159,10 +159,10 @@ fn skill_chip(
       event.stop_propagation();
       held.set(None);
     })
-    .child(icon(Icon::X, IconSize::Xs, PaletteColor::TextMuted));
+    .child(icon(Icon::X, IconSize::Xs, PaletteColor::MutedForeground));
   let chip = pill(&chip_id, &chosen)
     .describe("reach", reach.key())
-    .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)))
+    .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Input)))
     .child(remove);
   let tip = tooltip(ctx, reach.key(), &chosen);
   Some(
@@ -178,7 +178,11 @@ fn pill(chip_id: &str, skill: &OfferedSkill) -> Row {
   pill_frame(chip_id, PaletteColor::Border)
     .describe("skill", skill.slug.clone())
     .describe("version", skill.version.get().to_string())
-    .child(icon(Icon::GraduationCap, IconSize::Xs, PaletteColor::TextSecondary))
+    .child(icon(
+      Icon::GraduationCap,
+      IconSize::Xs,
+      ExtraColor::TextSecondary.role(),
+    ))
     .child(chip_words(&format!("{chip_id}-name"), &skill.slug))
 }
 
@@ -191,7 +195,7 @@ pub(super) fn pill_frame(chip_id: &str, stroke: PaletteColor) -> Row {
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Tight.role()))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(ExtraRadius::Full.role())
 }

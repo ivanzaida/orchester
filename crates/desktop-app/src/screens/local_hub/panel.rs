@@ -285,7 +285,7 @@ pub(super) fn used_by(ctx: &Ctx, prefix: &str, entry: &Entry) -> Row {
     Text::new(&ctx.t("local_hub.given.none"))
       .id(format!("{id}-value"))
       .variant(HubText::Value.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .into()
   } else {
     rows::tags(&format!("{id}-value"), entry.used_by.iter().cloned()).into()

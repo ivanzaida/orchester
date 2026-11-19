@@ -155,7 +155,7 @@ fn step((name, line): (f32, f32)) -> Row {
   let rail_line = || {
     Column::new()
       .width(Dimension::Px(RAIL_LINE))
-      .background(PaletteColor::BorderStrong)
+      .background(PaletteColor::Input)
   };
   let rail = Column::new()
     .width(Dimension::Px(RAIL))

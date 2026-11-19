@@ -157,9 +157,9 @@ fn text(ctx: &Ctx, record: &Memory) -> Column {
     .id("memory-panel-text")
     .variant(MemoryText::Record.role())
     .color(if given {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     })
     .selectable(true)
     .flex(1.0)

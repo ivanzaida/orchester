@@ -36,7 +36,7 @@ pub fn crumb(ctx: &Ctx, nav: &AgentsNav) -> Element {
     .id("agent-crumb")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(&ctx.t("hub.tabs.profiles")).variant(HubText::Crumb.role()))
     .into()
 }

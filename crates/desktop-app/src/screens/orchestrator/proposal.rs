@@ -100,7 +100,7 @@ impl Component for StartProposal {
     let failed = state.error.as_ref().map(|error| {
       tinted_note(
         format!("{id}-error"),
-        (Icon::CircleAlert, PaletteColor::Danger),
+        (Icon::CircleAlert, PaletteColor::Destructive),
         &message_text(ctx, error),
       )
     });

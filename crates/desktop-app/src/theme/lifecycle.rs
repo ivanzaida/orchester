@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// The window's tabs while the closing panel is shown: in place, dimmed, and not reacting (`Tabs`
 /// `L7gRf`).
@@ -53,11 +56,11 @@ impl LifecycleText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::ChoiceTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::RowKey => mono(style(12.0, FontWeight::Normal, ROW_LINE, 0.0, palette.text_muted)),
-      Self::RowText => style(12.0, FontWeight::Normal, ROW_LINE, 0.0, palette.text_secondary),
-      Self::Cell => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::Link => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
+      Self::ChoiceTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::RowKey => mono(style(12.0, FontWeight::Normal, ROW_LINE, 0.0, palette.muted_foreground)),
+      Self::RowText => style(12.0, FontWeight::Normal, ROW_LINE, 0.0, text_secondary(palette)),
+      Self::Cell => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::Link => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.foreground),
     }
   }
 }

@@ -100,7 +100,7 @@ fn call(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry: &Entry, place
       )
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center)
-      .child(icon(glyph, IconSize::Xs, PaletteColor::TextMuted))
+      .child(icon(glyph, IconSize::Xs, PaletteColor::MutedForeground))
       .child(Text::new(words).variant(TypographyStyle::Caption).nowrap())
   });
   let details = open.then(|| {
@@ -135,7 +135,7 @@ fn line(
     } else {
       TypographyStyle::Description
     },
-    PaletteColor::TextSecondary,
+    ExtraColor::TextSecondary.role(),
   );
   let title: Element = match found::title(entry, (&shown.title, shown.opens.as_ref()), places, look.clone()) {
     Some(marked) => marked.id(format!("{id}-title")).into(),
@@ -155,16 +155,16 @@ fn line(
     .padding_horizontal(SpacingSize::Sm)
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(shown.glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(shown.glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(title)
     .with_children((!shown.meta.is_empty()).then(|| {
       Text::new(&shown.meta)
         .id(format!("{id}-meta"))
         .variant(TypographyStyle::Caption)
         .color(if shown.failed {
-          PaletteColor::Danger
+          PaletteColor::Destructive
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         })
         .nowrap()
     }))
@@ -273,10 +273,10 @@ pub(super) fn problem_row(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, en
     ))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ConversationRadius::ProblemRow.role())
-    .child(icon(shown_glyph(entry), IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(shown_glyph(entry), IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(text)
     .child(time(entry))
     .into()
@@ -354,7 +354,7 @@ fn code(id: &str, lines: &[Arc<str>], notes: Option<Vec<Arc<str>>>) -> Element {
     .child(
       Text::new(&text)
         .variant(ExtraTypography::MonoNote.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .selectable(true),
     )
     .into()

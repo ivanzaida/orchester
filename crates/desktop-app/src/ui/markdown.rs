@@ -15,14 +15,14 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::MouseEvent,
-    theme::{FormTextRole, PaletteColor, TypographyStyle},
+    theme::{PaletteColor, TypographyStyle},
   },
   components::{Column, Markdown, MarkdownLink, MarkdownProps},
   node::{Element, dimension::Dimension},
 };
 
 use crate::{
-  theme::{ChatLinkLooks, blank_line_between_blocks},
+  theme::{ChatLinkLooks, TextRole, blank_line_between_blocks},
   ui::chat::presentation::{LinkWords, presentation},
 };
 
@@ -69,7 +69,7 @@ impl MarkdownView {
       id: id.into(),
       text: text.into(),
       typography: TypographyStyle::Body,
-      color: PaletteColor::TextPrimary,
+      color: PaletteColor::Foreground,
       block_gap: BlockGap::Theme,
       on_link,
     }
@@ -108,7 +108,7 @@ impl Component for MarkdownHost {
     let view = ctx.props::<MarkdownView>().clone();
     let style = {
       let theme = ctx.theme();
-      FormTextRole {
+      TextRole {
         typography: view.typography,
         color: view.color,
       }

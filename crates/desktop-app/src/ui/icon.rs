@@ -397,8 +397,8 @@ pub fn marker(mark: Icon, side: f32) -> lurq::components::Row {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Md)
-    .child(icon(mark, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(mark, IconSize::Base, PaletteColor::MutedForeground))
 }

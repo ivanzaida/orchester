@@ -56,14 +56,14 @@ pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Elemen
 fn delivery(ctx: &Ctx, row: &TurnRow) -> Element {
   let id = "orchestrator-delivery";
   let time = row.turn.at.map(display::clock).unwrap_or_default();
-  let waiting = |key: &str| delivery_line(id, (Icon::Clock, PaletteColor::TextMuted), &ctx.t(key));
+  let waiting = |key: &str| delivery_line(id, (Icon::Clock, PaletteColor::MutedForeground), &ctx.t(key));
   match (row.turn.arrival, &row.turn.state, row.turn.at) {
     (Arrival::Waiting, Some(TurnState::Queued(Queued::AfterAnswer)), _) => waiting("orchestrator.delivery.queued"),
     (Arrival::Waiting, Some(TurnState::Queued(Queued::Next)), _) => waiting("orchestrator.delivery.queuedNext"),
     (Arrival::Waiting, Some(TurnState::Queued(Queued::NotTaken)), _) => waiting("orchestrator.delivery.notTaken"),
     (Arrival::Waiting, ..) => delivery_line(
       id,
-      (Icon::LoaderCircle, PaletteColor::TextMuted),
+      (Icon::LoaderCircle, PaletteColor::MutedForeground),
       &ctx.t("orchestrator.delivery.steering"),
     ),
     (Arrival::Joined, ..) => delivery_line(
@@ -73,7 +73,7 @@ fn delivery(ctx: &Ctx, row: &TurnRow) -> Element {
     ),
     (Arrival::Own, _, None) => delivery_line(
       id,
-      (Icon::LoaderCircle, PaletteColor::TextMuted),
+      (Icon::LoaderCircle, PaletteColor::MutedForeground),
       &ctx.t("orchestrator.delivery.sending"),
     ),
     (Arrival::Own, _, Some(_)) => {

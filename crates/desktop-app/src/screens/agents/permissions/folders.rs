@@ -22,7 +22,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, ProjectSettingsTab, Route},
   screens::agents::fields::Fields,
-  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::TagChip,
@@ -74,10 +74,10 @@ fn sources_link(ctx: &mut Ctx, sources: Route) -> Element {
     .child(
       Text::new(&label)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::MutedForeground))
     .into()
 }
 

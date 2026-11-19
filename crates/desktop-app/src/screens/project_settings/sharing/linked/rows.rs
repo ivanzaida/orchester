@@ -84,7 +84,7 @@ pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, (entry, server): (O
   let shown = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Server, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Server, IconSize::Base, PaletteColor::MutedForeground))
     .child(mono_value("sharing-address-value", &address));
   SettingRow::new("sharing-address", ctx.t("sharing.team.address"))
     .hint(hint)

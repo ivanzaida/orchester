@@ -26,7 +26,7 @@ use super::section::{LINE_HEIGHT, head, key, line, link, muted, section, show_al
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView},
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -113,18 +113,18 @@ pub(super) fn ready_to_start(ctx: &mut Ctx, project: ProjectId, tasks: &ProjectT
       let id = format!("overview-ready-{task_key}");
       let pipeline = PipelineLabel::of(task.details().pipeline, &tasks.pipelines).message();
       let row = line(&id, LINE_HEIGHT, SpacingSize::Md)
-        .child(icon(Icon::Circle, IconSize::Md, PaletteColor::TextMuted))
+        .child(icon(Icon::Circle, IconSize::Md, PaletteColor::MutedForeground))
         .child(key(&task_key))
         .child(title(
           &format!("{id}-title"),
           task.details().title.as_str(),
           ExtraTypography::Strong.role(),
-          PaletteColor::TextPrimary,
+          PaletteColor::Foreground,
         ))
         .child(
           Text::new(&ctx.t("overview.ready.ready"))
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap(),
         )
         .child(

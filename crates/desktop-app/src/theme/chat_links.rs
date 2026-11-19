@@ -13,7 +13,11 @@ use lurq::{
   node::border::BorderRadius,
 };
 
-use super::{IconSize, OrchestratorText, markdown::LINK_RADIUS, palette::ExtraColor};
+use super::{
+  IconSize, OrchestratorText,
+  markdown::LINK_RADIUS,
+  palette::{ExtraColor, text_secondary},
+};
 
 /// A space's advance in Geist, of its font size: the gaps after a link are spaces widened to the design's.
 const SPACE_EM: f32 = 0.25;
@@ -52,18 +56,18 @@ impl ChatLinkLooks {
     let mut link = theme.markdown().link.clone();
     link.text.underline = Some(
       TextUnderline::new()
-        .color(palette.text_muted)
+        .color(palette.muted_foreground)
         .thickness(UNDERLINE)
         .offset(underline_offset(text)),
     );
     let hovered = MarkdownLinkState::new()
-      .color(palette.accent_hover)
-      .underline_color(palette.accent_hover)
+      .color(palette.primary_hover)
+      .underline_color(palette.primary_hover)
       .background(palette.get(ExtraColor::Hover.role()))
-      .trailing_color(palette.text_secondary);
+      .trailing_color(text_secondary(&palette));
     let host = theme.typography_style(OrchestratorText::LinkHost.role());
     let mut icon = inline(&theme.typography_style(IconSize::Xs.role()));
-    icon.text.color = Some(palette.text_muted);
+    icon.text.color = Some(palette.muted_foreground.into());
     Self {
       link,
       hovered,
@@ -91,7 +95,7 @@ fn inline(style: &TextStyle) -> MarkdownInlineStyle {
   inline.text.font_size = Some(style.font_size);
   inline.text.weight = Some(style.weight);
   inline.text.font_features = Some(style.font_features.clone());
-  inline.text.color = Some(style.color);
+  inline.text.color = Some(style.color.into());
   inline
 }
 

@@ -11,7 +11,7 @@ use orchester_core::connection::{DecisionCheckResult, DecisionConnection};
 use orchester_workspace::display;
 
 use crate::{
-  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, ProjectSettingsText},
   ui::icon::{Icon, icon},
 };
 
@@ -21,7 +21,7 @@ const DOT: f32 = 6.0;
 pub(super) fn line(ctx: &Ctx, connection: &DecisionConnection, pending: bool) -> Element {
   let (words, color) = sentence(ctx, connection, pending);
   let mark: Element = if pending {
-    icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextSecondary).into()
+    icon(Icon::LoaderCircle, IconSize::Sm, ExtraColor::TextSecondary.role()).into()
   } else {
     Row::new()
       .width(Dimension::Px(DOT))
@@ -46,7 +46,7 @@ pub(super) fn line(ctx: &Ctx, connection: &DecisionConnection, pending: bool) ->
       Text::new(&words)
         .id("decision-status")
         .variant(ProjectSettingsText::Hint.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .flex(1.0),
     )
     .into()
@@ -62,15 +62,15 @@ fn sentence(ctx: &Ctx, connection: &DecisionConnection, pending: bool) -> (Arc<s
   if pending {
     return (
       ctx.t_args("decision_connection.checking", [("host", host)]),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     );
   }
   match connection.last_check().map(|check| &check.result) {
     Some(DecisionCheckResult::Connected) => (ctx.t("decision_connection.connected"), PaletteColor::Success),
-    Some(DecisionCheckResult::KeyRefused) => (ctx.t("decision_connection.keyRefused"), PaletteColor::Danger),
+    Some(DecisionCheckResult::KeyRefused) => (ctx.t("decision_connection.keyRefused"), PaletteColor::Destructive),
     Some(DecisionCheckResult::NothingAnswers) => (
       ctx.t_args("decision_connection.nothingAnswers", [("host", host)]),
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
     ),
     Some(DecisionCheckResult::NotSystemOneApi) => (
       ctx.t_args("decision_connection.wrongApi", [("host", host), ("path", path)]),
@@ -80,7 +80,7 @@ fn sentence(ctx: &Ctx, connection: &DecisionConnection, pending: bool) -> (Arc<s
       ctx.t_args("decision_connection.modelGone", [("model", model.as_str())]),
       PaletteColor::Warning,
     ),
-    None => (ctx.t("decision_connection.notChecked"), PaletteColor::TextMuted),
+    None => (ctx.t("decision_connection.notChecked"), PaletteColor::MutedForeground),
   }
 }
 

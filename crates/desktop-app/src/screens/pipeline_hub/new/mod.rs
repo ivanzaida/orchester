@@ -143,7 +143,9 @@ impl NewPipeline {
           .entry(source)
           .filter(|entry| entry.body.is_some())
           // A name at the limit cannot be extended: the copy's field starts on the name itself, which the slug refuses.
-          .map(|entry| copy_name(ctx, &entry.name).map_or_else(|| entry.name.to_string(), |name| name.as_str().to_owned()));
+          .map(|entry| {
+            copy_name(ctx, &entry.name).map_or_else(|| entry.name.to_string(), |name| name.as_str().to_owned())
+          });
         match name {
           Some(name) => (Choice::Copy, source.to_string(), name),
           None => (Choice::Copy, String::new(), String::new()),

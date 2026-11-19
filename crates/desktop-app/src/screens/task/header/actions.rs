@@ -70,7 +70,7 @@ fn after_title(ctx: &Ctx, props: &HeaderProps) -> Option<Element> {
     Text::new(&ctx.t_args("task.formerKey", [("key", former)]))
       .id("task-former-key")
       .variant(ExtraTypography::MonoKey.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap()
       .into()
   })

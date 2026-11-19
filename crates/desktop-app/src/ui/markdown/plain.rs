@@ -34,7 +34,15 @@ fn push_block(text: &mut String, block: &MarkdownBlock) {
     MarkdownBlock::Paragraph(inlines) | MarkdownBlock::Heading { children: inlines, .. } => {
       push_inlines(text, inlines);
     }
-    MarkdownBlock::BlockQuote(blocks) | MarkdownBlock::FootnoteDefinition { blocks, .. } => {
+    MarkdownBlock::BlockQuote(blocks)
+    | MarkdownBlock::Admonition { blocks, .. }
+    | MarkdownBlock::FootnoteDefinition { blocks, .. } => {
+      blocks.iter().for_each(|block| push_block(text, block));
+      return;
+    }
+    MarkdownBlock::Details { summary, blocks, .. } => {
+      text.push_str(summary);
+      text.push('\n');
       blocks.iter().for_each(|block| push_block(text, block));
       return;
     }
@@ -69,6 +77,7 @@ fn push_inlines(text: &mut String, inlines: &[MarkdownInline]) {
       | MarkdownInline::Code(value)
       | MarkdownInline::Math(value)
       | MarkdownInline::Html(value)
+      | MarkdownInline::Kbd(value)
       | MarkdownInline::FootnoteReference(value) => text.push_str(value),
       MarkdownInline::Emphasis(children)
       | MarkdownInline::Strong(children)

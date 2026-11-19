@@ -47,7 +47,7 @@ use crate::{
     settings::frame,
   },
   services::Services,
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field_error},
@@ -350,7 +350,7 @@ fn footer(ctx: &mut Ctx, draft: &Draft, servers: &Servers) -> Element {
     Text::new(&t(ctx, key))
       .id("api-add-needs")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextSecondary)
+      .color(ExtraColor::TextSecondary.role())
       .nowrap()
   });
   let reason = Row::new()
@@ -358,12 +358,12 @@ fn footer(ctx: &mut Ctx, draft: &Draft, servers: &Servers) -> Element {
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&t(ctx, "accounts.api.personNote"))
         .id("api-add-note")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     );

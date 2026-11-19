@@ -111,7 +111,7 @@ fn back(ctx: &mut Ctx, project: ProjectId) -> Element {
   let arrow = opening(navigation.to(list))
     .id("module-back")
     .describe("a11y_name", ctx.t("modules.page.back"))
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted));
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground));
   Row::new()
     .id("module-back-row")
     .spacing(ExtraSpacing::Snug.role())

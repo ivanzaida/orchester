@@ -140,7 +140,7 @@ fn confirmation(ctx: &mut Ctx, confirm: &Confirm) -> Element {
       Text::new(&message_text(ctx, failed))
         .id(format!("run-remove-error-{number}"))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .width(Dimension::Pct(100.0))
     }))
     .child(actions(ctx, confirm))
@@ -165,7 +165,7 @@ fn note(glyph: Icon, text: &str) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
-    .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::MutedForeground))
     .child(Text::new(text).variant(ExtraTypography::Note.role()).flex(1.0))
     .into()
 }
@@ -201,7 +201,7 @@ fn worktree_line(ctx: &Ctx, run: &Run, worktree: &LeftWorktree, separator: &str)
   let unread = unread_entry(worktree).map(|problem| {
     Text::new(&message_text(ctx, &problem))
       .variant(ExtraTypography::Note.role())
-      .color(PaletteColor::Danger)
+      .color(PaletteColor::Destructive)
   });
   Column::new()
     .width(Dimension::Pct(100.0))

@@ -36,13 +36,13 @@ pub enum CardSurface {
 impl CardSurface {
   const fn colors(self) -> (Option<PaletteColor>, PaletteColor) {
     match self {
-      Self::Panel => (Some(PaletteColor::SurfacePanel), PaletteColor::Border),
-      Self::Raised => (Some(PaletteColor::SurfaceRaised), PaletteColor::Border),
+      Self::Panel => (Some(PaletteColor::Canvas), PaletteColor::Border),
+      Self::Raised => (Some(PaletteColor::Card), PaletteColor::Border),
       Self::Outline => (None, PaletteColor::Border),
-      Self::Decision => (None, PaletteColor::BorderStrong),
-      Self::Attention => (Some(PaletteColor::SurfaceRaised), PaletteColor::Warning),
+      Self::Decision => (None, PaletteColor::Input),
+      Self::Attention => (Some(PaletteColor::Card), PaletteColor::Warning),
       Self::Pending => (None, PaletteColor::Warning),
-      Self::Stopped => (Some(PaletteColor::SurfaceRaised), PaletteColor::Danger),
+      Self::Stopped => (Some(PaletteColor::Card), PaletteColor::Destructive),
     }
   }
 }

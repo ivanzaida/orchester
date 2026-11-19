@@ -13,38 +13,38 @@ fn run_services_roles_follow_the_services_tab() {
       RunServicesText::Name,
       (12.5, FontWeight::Medium),
       "Geist Mono",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       RunServicesText::Port,
       (12.0, FontWeight::Normal),
       "Geist Mono",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       RunServicesText::Uptime,
       (12.0, FontWeight::Normal),
       "Geist Mono",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     // The live log's title, a line's time and its words (`ftDRR`, `TPtll`, `FCQe1` in `iw8mT`).
     (
       RunServicesText::LogTitle,
       (12.0, FontWeight::Medium),
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       RunServicesText::LogTime,
       (11.5, FontWeight::Normal),
       "Geist Mono",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       RunServicesText::LogLine,
       (11.5, FontWeight::Normal),
       "Geist Mono",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
   ] {
     let style = theme.typography_style(role.role());

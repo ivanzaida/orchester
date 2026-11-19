@@ -30,11 +30,11 @@ const TIME_WIDTH: f32 = 64.0;
 pub fn row(ctx: &Ctx, layer: &LayerRecord) -> Element {
   let id = format!("task-tests-layer-{}", layer.layer.as_str());
   let (glyph, tone) = if !layer.ran {
-    (Icon::CircleDashed, PaletteColor::TextMuted)
+    (Icon::CircleDashed, PaletteColor::MutedForeground)
   } else if layer.passed() {
     (Icon::CircleCheck, PaletteColor::Success)
   } else {
-    (Icon::CircleX, PaletteColor::Danger)
+    (Icon::CircleX, PaletteColor::Destructive)
   };
   let suites: Vec<&str> = layer.suites.iter().map(|suite| suite.suite.as_str()).collect();
   let suites = suites.join(&ctx.t("summary.tests.suiteSeparator"));
@@ -67,7 +67,7 @@ pub fn row(ctx: &Ctx, layer: &LayerRecord) -> Element {
       Text::new(&suites)
         .id(format!("{id}-suites"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
@@ -103,7 +103,7 @@ fn counts(ctx: &Ctx, layer: &LayerRecord) -> Vec<Element> {
       .into()
   };
   if !layer.ran {
-    return vec![count(ctx.t("summary.tests.notRun"), PaletteColor::TextMuted)];
+    return vec![count(ctx.t("summary.tests.notRun"), PaletteColor::MutedForeground)];
   }
   let (failed, flaky, problems) = (layer.failed_tests(), layer.flaky_tests(), layer.suites_with_problems());
   if layer.layer == TestLayer::Lint && layer.passed() && flaky == 0 {
@@ -116,7 +116,7 @@ fn counts(ctx: &Ctx, layer: &LayerRecord) -> Vec<Element> {
   if failed > 0 {
     counts.push(count(
       ctx.t_args("summary.tests.failed", [("count", failed.to_string())]),
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
     ));
   }
   if flaky > 0 {
@@ -127,7 +127,7 @@ fn counts(ctx: &Ctx, layer: &LayerRecord) -> Vec<Element> {
   }
   if problems > 0 {
     let keys = ("summary.tests.problems.one", "summary.tests.problems.other");
-    counts.push(count(counted(ctx, keys, problems), PaletteColor::Danger));
+    counts.push(count(counted(ctx, keys, problems), PaletteColor::Destructive));
   }
   counts
 }

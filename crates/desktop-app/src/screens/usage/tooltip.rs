@@ -66,8 +66,8 @@ fn frame(id: &str, width: f32) -> Column {
     .width(Dimension::Px(width))
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .rounded(ExtraRadius::Tile.role())
     .box_shadow(ShadowStyle::Lg)
 }
@@ -111,7 +111,7 @@ pub fn detail_line(name: &str, value: &str) -> Element {
     .child(
       Text::new(value)
         .variant(ExtraTypography::MonoNote.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

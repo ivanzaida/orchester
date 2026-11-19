@@ -57,9 +57,9 @@ pub(super) fn stage_result(
   (stage, result): (AttemptStage, StageResult),
 ) -> (Arc<str>, PaletteColor) {
   match result {
-    StageResult::NotReached => (ctx.t("merges.page.result.notReached"), PaletteColor::TextMuted),
+    StageResult::NotReached => (ctx.t("merges.page.result.notReached"), PaletteColor::MutedForeground),
     StageResult::Refused => (refused_result(ctx, attempt), PaletteColor::Warning),
-    StageResult::Passed => (passed_result(ctx, attempt, stage), PaletteColor::TextMuted),
+    StageResult::Passed => (passed_result(ctx, attempt, stage), PaletteColor::MutedForeground),
   }
 }
 

@@ -498,7 +498,7 @@ impl ActionButton {
 impl From<ActionButton> for Element {
   fn from(button: ActionButton) -> Self {
     let color = if button.applied {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else {
       button.kind.content()
     };
@@ -517,26 +517,26 @@ impl From<ActionButton> for Element {
       .child(button.slot(color))
       .with_children(after);
     if button.kind == ButtonKind::Select {
-      frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
+      frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::MutedForeground));
     }
     if button.held {
       frame = frame.background(ExtraColor::Pressed.role()).describe("held", "true");
     }
     if button.menu_open {
       frame = frame
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .background(PaletteColor::Card)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
         .describe("menu_open", "true");
     }
     if button.applied {
       frame = frame
-        .background(PaletteColor::AccentMuted)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .background(PaletteColor::Highlight)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
         .describe("applied", "true");
     }
     if button.invalid {
       frame = frame
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))
         .describe("invalid", "true");
     }
     if let Some(element) = button.element {

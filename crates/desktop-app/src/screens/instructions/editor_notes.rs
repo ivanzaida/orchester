@@ -62,7 +62,7 @@ pub fn scope(ctx: &Ctx, fields: &Fields, data: &ProjectInstructions) -> Option<E
     Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .child(icon(Icon::Info, IconSize::Xs, PaletteColor::TextMuted))
+      .child(icon(Icon::Info, IconSize::Xs, PaletteColor::MutedForeground))
       .child(Text::new(&note).variant(TypographyStyle::Caption).flex(1.0))
       .into(),
   )

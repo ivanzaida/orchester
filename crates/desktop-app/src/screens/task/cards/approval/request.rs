@@ -139,7 +139,7 @@ pub(super) fn body(
     Text::new(&reason)
       .id(format!("{id}-reason"))
       .variant(ExtraTypography::Lead.role())
-      .color(PaletteColor::TextPrimary)
+      .color(PaletteColor::Foreground)
       .width(Dimension::Pct(100.0))
       .into()
   }));

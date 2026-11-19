@@ -49,7 +49,7 @@ pub(super) fn section(ctx: &mut Ctx, items: &Items<'_>) -> Vec<Element> {
     .child(icon(
       if folded { Icon::ChevronRight } else { Icon::ChevronDown },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ));
   let mut section = vec![section_gap().into(), head.into()];
   if !folded {

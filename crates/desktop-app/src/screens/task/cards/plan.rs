@@ -97,7 +97,7 @@ impl Component for PlanView {
     );
     let head = head(
       &id,
-      (Icon::Map, IconSize::Md, PaletteColor::TextSecondary),
+      (Icon::Map, IconSize::Md, ExtraColor::TextSecondary.role()),
       (&title, CardsText::Title.role()),
       stands(ctx, &card, (waiting, lost, outcome.as_ref())).into_element(&id),
     )
@@ -138,7 +138,7 @@ impl PlanView {
       (false, false) => lines[..PLAN_LINES].join("\n").into(),
     };
     let plan = MarkdownView::new(format!("{id}-lines"), shown, place.links.clone())
-      .style(CardsText::PlanLines.role(), PaletteColor::TextSecondary)
+      .style(CardsText::PlanLines.role(), ExtraColor::TextSecondary.role())
       .render(ctx);
     let more = (!whole).then(|| {
       let open = self.whole.clone();
@@ -262,7 +262,7 @@ fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost, outcome): (bool, bool, Opt
         PaletteColor::Success,
       ),
       Some(_) => decided(Icon::CircleCheck, "cards.state.approved", PaletteColor::Success),
-      None => decided(Icon::History, "cards.state.earlier", PaletteColor::TextMuted),
+      None => decided(Icon::History, "cards.state.earlier", PaletteColor::MutedForeground),
     },
     (Some(review), false) => match (&review.decision, review.by) {
       (PlanDecision::Approved, Answerer::Person) => {
@@ -273,13 +273,15 @@ fn stands(ctx: &Ctx, card: &PlanCard, (waiting, lost, outcome): (bool, bool, Opt
         "cards.state.approvedByAutomation",
         PaletteColor::Success,
       ),
-      (PlanDecision::ChangesRequested { .. }, Answerer::Person) => {
-        decided(Icon::Undo2, "cards.state.changesRequested", PaletteColor::TextSecondary)
-      }
+      (PlanDecision::ChangesRequested { .. }, Answerer::Person) => decided(
+        Icon::Undo2,
+        "cards.state.changesRequested",
+        ExtraColor::TextSecondary.role(),
+      ),
       (PlanDecision::ChangesRequested { .. }, Answerer::Automation) => decided(
         Icon::Undo2,
         "cards.state.changesRequestedByAutomation",
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       ),
     },
   }

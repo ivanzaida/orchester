@@ -122,7 +122,7 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize, search: &PickerSearch) -> Elemen
   let (entry, choice) = &shown.offered[at];
   let focused = shown.focused == Some(at);
   let mut children: Vec<Element> = vec![
-    icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(choice.icon, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     panel::matched_label(&choice.label, shown.filter, false),
     Text::new(&meta(ctx, entry))
       .variant(TypographyStyle::Caption)
@@ -214,18 +214,18 @@ fn meta(ctx: &Ctx, entry: &ModuleEntry) -> Arc<str> {
 fn state(ctx: &Ctx, shown: &Shown<'_>, (entry, key): (&ModuleEntry, &str)) -> Option<Element> {
   if entry.faded.is_some() {
     let words = ctx.t("orchestrator.watch.modules.nothingLeft");
-    return Some(panel::caption(&words, PaletteColor::TextMuted).into());
+    return Some(panel::caption(&words, PaletteColor::MutedForeground).into());
   }
   match &entry.leader {
     Leader::Nobody => None,
     Leader::Here { .. } => {
       let words = ctx.t("orchestrator.watch.modules.ledHere");
-      Some(panel::caption(&words, PaletteColor::TextMuted).into())
+      Some(panel::caption(&words, PaletteColor::MutedForeground).into())
     }
     Leader::JustAdded => Some(panel::added(ctx)),
     Leader::Elsewhere { chat, title, .. } => {
       let color = if entry.target == WatchTarget::Project {
-        PaletteColor::TextMuted
+        PaletteColor::MutedForeground
       } else {
         PaletteColor::Warning
       };

@@ -41,7 +41,7 @@ pub fn row(ctx: &mut Ctx, props: &Props, settings: &Settings) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(value("settings-auto-rules-count", &counted))
-    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted));
+    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground));
   SettingRow::new("settings-auto-rules", ctx.t("project_settings.projectRules"))
     .info(ctx.t("project_settings.projectRulesDetail"))
     .hint(hint)

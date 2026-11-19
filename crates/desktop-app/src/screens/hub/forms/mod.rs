@@ -168,7 +168,7 @@ impl<B> Form<'_, B> {
         input = input.invalid();
         Some(Sub {
           words,
-          color: PaletteColor::Danger,
+          color: PaletteColor::Destructive,
         })
       }
       None => line.sub.map(|sub| Sub::quiet(ctx.t(sub))),

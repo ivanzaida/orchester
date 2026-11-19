@@ -6,12 +6,17 @@
 
 use std::sync::Arc;
 
+#[expect(
+  deprecated,
+  reason = "`ui::Picture` draws its own skeleton and error line; the attachment shows its own placeholder and error view"
+)]
+use lurq::components::Image;
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Image, Row, Spacer, Text, TextOverflow},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   images::{ImageKey, ImageSource},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension},
@@ -36,7 +41,7 @@ pub fn busy(id: &str, words: &str) -> Row {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .describe("state", "loading")
-    .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::MutedForeground))
     .child(Text::new(words).variant(TypographyStyle::Description).nowrap())
 }
 
@@ -100,6 +105,10 @@ impl Preview {
     self
   }
 
+  #[expect(
+    deprecated,
+    reason = "`ui::Picture` draws its own skeleton and error line; the attachment shows its own placeholder and error view"
+  )]
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let head = self.head(ctx);
     let reading = ctx.t("attachments.adding");
@@ -125,7 +134,7 @@ impl Preview {
       .width(Dimension::Pct(100.0))
       .padding(SpacingSize::Md)
       .spacing(SpacingSize::Sm)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .child(head)
@@ -161,7 +170,7 @@ impl Preview {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(kind_icon(self.media), IconSize::Md, PaletteColor::TextMuted))
+      .child(icon(kind_icon(self.media), IconSize::Md, PaletteColor::MutedForeground))
       .child(
         Text::new(&self.name)
           .variant(TypographyStyle::Label)

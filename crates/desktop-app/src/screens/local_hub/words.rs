@@ -73,14 +73,14 @@ pub(super) fn line(ctx: &Ctx, (now, whose): (Timestamp, Whose<'_>), entry: &Entr
   if let Some(at) = entry.archived {
     return Said {
       text: archived_at(ctx, now, at),
-      color: PaletteColor::TextMuted,
+      color: PaletteColor::MutedForeground,
     };
   }
   let state = state(ctx, entry, whose);
   match unsaved {
     Some(Unsaved::Refused) => Said {
       text: ctx.t("local_hub.line.saveRefused"),
-      color: PaletteColor::Danger,
+      color: PaletteColor::Destructive,
     },
     Some(Unsaved::Edited) => Said {
       text: ctx.t_args("local_hub.line.unsaved", [("rest", state.text.to_string())]),
@@ -102,7 +102,7 @@ pub(in crate::screens) fn archived_at(ctx: &Ctx, now: Timestamp, at: Timestamp) 
 fn state(ctx: &Ctx, entry: &Entry, whose: Whose<'_>) -> Said {
   let muted = |text: Arc<str>| Said {
     text,
-    color: PaletteColor::TextMuted,
+    color: PaletteColor::MutedForeground,
   };
   // Only an MCP server has no version at all; any other kind without one has only a draft.
   if entry.number.is_none() && entry.kind != ResourceKind::McpServer {

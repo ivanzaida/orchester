@@ -59,7 +59,7 @@ pub(super) fn file_head(ctx: &mut Ctx, env: &Env, file: usize, width: Dimension)
       .child(icon(
         if folded { Icon::ChevronRight } else { Icon::ChevronDown },
         IconSize::Md,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ))
       .child(
         Text::new(diff.path())
@@ -76,7 +76,7 @@ pub(super) fn file_head(ctx: &mut Ctx, env: &Env, file: usize, width: Dimension)
           ],
         ))
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
       )
       .with_children(tags)
@@ -88,7 +88,7 @@ pub(super) fn file_head(ctx: &mut Ctx, env: &Env, file: usize, width: Dimension)
     .padding(Padding::horizontal(SpacingSize::Lg))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(fold)
@@ -107,7 +107,7 @@ fn tags(ctx: &Ctx, env: &Env, (id, path): (&str, &str)) -> Vec<Element> {
     .as_ref()
     .map_or(0, |conflicts| conflict::count_in(conflicts, path));
   if conflicts > 0 {
-    let look = TagLook::new(PaletteColor::SurfaceRaised, PaletteColor::Danger);
+    let look = TagLook::new(PaletteColor::Card, PaletteColor::Destructive);
     tags.push(tag(
       &format!("{id}-conflicts"),
       &conflict::tag_words(ctx, conflicts),
@@ -132,7 +132,7 @@ fn tags(ctx: &Ctx, env: &Env, (id, path): (&str, &str)) -> Vec<Element> {
   }
   if counts.outdated > 0 {
     let words = ctx.t_args("review_page.diff.outdated", [("count", counts.outdated.to_string())]);
-    let look = TagLook::new(PaletteColor::SurfaceRaised, PaletteColor::TextMuted);
+    let look = TagLook::new(PaletteColor::Card, PaletteColor::MutedForeground);
     tags.push(tag(&format!("{id}-outdated"), &words, look));
   }
   tags
@@ -178,7 +178,7 @@ pub(super) fn hunk(ctx: &Ctx, (old, new, section): (&str, &str, &str), width: Di
     .child(
       Text::new(&text)
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()
@@ -208,8 +208,8 @@ pub(super) fn note(ctx: &Ctx, shown: &FileNote, width: Dimension) -> Element {
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .background(PaletteColor::Card)
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(&text).variant(TypographyStyle::Description).nowrap())
     .into()
 }

@@ -182,10 +182,10 @@ impl PageTab {
             Text::new(&self.label)
               .id(format!("{}-label", self.id))
               .variant(TypographyStyle::Body)
-              .color(PaletteColor::TextMuted)
+              .color(PaletteColor::MutedForeground)
               .nowrap(),
           )
-          .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-icon", self.id)));
+          .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground).id(format!("{}-icon", self.id)));
         return Tooltip::new(self.id, reason).wrap(ctx, tab);
       }
       TabState::Open(open) => Some(open),
@@ -194,7 +194,7 @@ impl PageTab {
     let label: Element = if self.current {
       current_label(&self.label).id(format!("{}-label", self.id)).into()
     } else {
-      label_in_room(&self.id, &self.label, PaletteColor::TextSecondary).into()
+      label_in_room(&self.id, &self.label, ExtraColor::TextSecondary.role()).into()
     };
     let button = open
       .map_or_else(|| Button::empty().focusable(false), Press::button)
@@ -212,13 +212,13 @@ impl PageTab {
       self.dot,
     ));
     let button = if self.explanation.is_some() {
-      button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
+      button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground))
     } else {
       button
     };
     let button: Element = if self.current {
       button
-        .border_bottom(Border::inside(BorderSize::Md, PaletteColor::Accent))
+        .border_bottom(Border::inside(BorderSize::Md, PaletteColor::Primary))
         .into()
     } else {
       button.into()
@@ -273,7 +273,7 @@ fn counted_label(
           .color(if waits {
             PaletteColor::Warning
           } else {
-            PaletteColor::TextMuted
+            PaletteColor::MutedForeground
           })
           .nowrap(),
       )
@@ -387,7 +387,7 @@ pub fn page_tabs_divided(
         .id(format!("{id}-divider"))
         .width(Dimension::Px(width))
         .height(Dimension::Px(TAB_DIVIDER_HEIGHT))
-        .background(PaletteColor::BorderStrong)
+        .background(PaletteColor::Input)
         .into(),
     );
     row.extend(after.into_iter().map(|tab| tab.render(ctx)));
@@ -493,9 +493,9 @@ impl Segment {
       button = button.flex(1.0).min_width(Dimension::Px(0.0));
     }
     let (text, glyph) = if self.chosen {
-      (PaletteColor::TextPrimary, PaletteColor::TextPrimary)
+      (PaletteColor::Foreground, PaletteColor::Foreground)
     } else {
-      (PaletteColor::TextMuted, PaletteColor::TextMuted)
+      (PaletteColor::MutedForeground, PaletteColor::MutedForeground)
     };
     let typography = if self.chosen {
       TypographyStyle::Label
@@ -522,7 +522,7 @@ impl Segment {
             Text::new(&count)
               .id(count_id)
               .variant(TypographyStyle::Description)
-              .color(PaletteColor::TextMuted)
+              .color(PaletteColor::MutedForeground)
               .nowrap(),
           );
         chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
@@ -556,9 +556,9 @@ impl Segment {
 /// `danger_muted`, else `text_muted`.
 fn warned(button: Button, (label, label_id): (&Arc<str>, String), typography: TypographyStyle, chosen: bool) -> Button {
   let color = if chosen {
-    PaletteColor::Danger
+    PaletteColor::Destructive
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   let button = button
     .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
@@ -566,9 +566,9 @@ fn warned(button: Button, (label, label_id): (&Arc<str>, String), typography: Ty
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
     .describe("a11y_name", label.clone())
-    .child(icon(Icon::TriangleAlert, IconSize::Xs, PaletteColor::Danger))
+    .child(icon(Icon::TriangleAlert, IconSize::Xs, PaletteColor::Destructive))
     .child(Text::new(label).id(label_id).variant(typography).color(color).nowrap());
-  chosen_fill(button, chosen, PaletteColor::DangerMuted)
+  chosen_fill(button, chosen, PaletteColor::DestructiveMuted)
 }
 
 fn chosen_fill(button: Button, chosen: bool, fill: PaletteColor) -> Button {
@@ -587,7 +587,7 @@ pub fn segmented(id: &str, segments: impl IntoIterator<Item = Segment>, focus: F
     .padding(ExtraSpacing::Tight.role())
     .spacing(ExtraSpacing::Tight.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .with_children(segments.into_iter().map(|segment| segment.render(focus)))

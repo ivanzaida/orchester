@@ -13,7 +13,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
   components::{Row, Select, SelectOption, Text, TextOverflow},
   core::{Signal, signal::SignalValue},
@@ -24,7 +24,7 @@ use lurq::{
 };
 
 use crate::{
-  theme::{ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
+  theme::{ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, IconSize, TextRole},
   ui::icon::{Icon, icon},
 };
 
@@ -38,21 +38,21 @@ fn glyph(icon: Icon) -> SelectIcon {
 /// The style of every select: its box like a field's and its menu.
 pub fn select_style(ctx: &Ctx) -> SelectStyle {
   let theme = ctx.theme();
-  let text = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
+  let text = |typography, color| TextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
   let stroke = |color| SelectPartStyle::new().border_inside(BorderSize::Sm, color);
   let highlight = || SelectPartStyle::new().background(ExtraColor::Hover.role());
   SelectStyle::unstyled()
     .trigger(trigger_style(ctx, PaletteColor::Border))
-    .trigger_hovered(stroke(PaletteColor::BorderStrong))
-    .trigger_focused(stroke(PaletteColor::BorderFocus))
-    .trigger_open(stroke(PaletteColor::BorderFocus))
-    .placeholder_text(text(TypographyStyle::Description, PaletteColor::TextMuted))
+    .trigger_hovered(stroke(PaletteColor::Input))
+    .trigger_focused(stroke(PaletteColor::Ring))
+    .trigger_open(stroke(PaletteColor::Ring))
+    .placeholder_text(text(TypographyStyle::Description, PaletteColor::MutedForeground))
     .chevron(glyph(Icon::ChevronDown))
     .chevron_open(glyph(Icon::ChevronUp))
-    .chevron_color(PaletteColor::TextMuted)
+    .chevron_color(PaletteColor::MutedForeground)
     .menu(
-      stroke(PaletteColor::BorderStrong)
-        .background(PaletteColor::SurfaceRaised)
+      stroke(PaletteColor::Input)
+        .background(PaletteColor::Card)
         .rounded(ExtraRadius::Tile.role())
         .padding(Padding::all(SpacingSize::Xs))
         .box_shadow(ShadowStyle::Md),
@@ -64,21 +64,21 @@ pub fn select_style(ctx: &Ctx) -> SelectStyle {
         .min_height(ControlHeight::Md.value())
         .padding(Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs))
         .rounded(RadiusSize::Sm)
-        .text(text(TypographyStyle::Description, PaletteColor::TextPrimary)),
+        .text(text(TypographyStyle::Description, PaletteColor::Foreground)),
     )
     .option_hovered(highlight())
     .option_selected_hovered(highlight())
     .option_highlighted(highlight())
     .option_selected_highlighted(highlight())
-    .option_disabled(SelectPartStyle::new().text_color(PaletteColor::TextMuted))
+    .option_disabled(SelectPartStyle::new().text_color(PaletteColor::MutedForeground))
     .option_detail(
       SelectPartStyle::new()
         .typography(TypographyStyle::Caption)
-        .text_color(PaletteColor::TextMuted),
+        .text_color(PaletteColor::MutedForeground),
     )
     .single_checkmark(true)
     .checkmark(glyph(Icon::Check))
-    .checkmark_color(PaletteColor::TextPrimary)
+    .checkmark_color(PaletteColor::Foreground)
     .checkmark_size(IconSize::Md.size())
     .checkmark_position(SelectCheckmarkPosition::Trailing)
     .checkmark_gap(SpacingSize::Sm)
@@ -88,14 +88,14 @@ fn trigger_style(ctx: &Ctx, color: PaletteColor) -> SelectPartStyle {
   let theme = ctx.theme();
   SelectPartStyle::new()
     .border_inside(BorderSize::Sm, color)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .rounded(RadiusSize::Md)
     .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
     .min_height(ControlHeight::Md.value())
     .text(
-      FormTextRole {
+      TextRole {
         typography: TypographyStyle::Description,
-        color: PaletteColor::TextPrimary,
+        color: PaletteColor::Foreground,
       }
       .resolve(&theme.typography(), &theme.palette()),
     )
@@ -203,7 +203,7 @@ where
       style = style.trigger(trigger_style(ctx, PaletteColor::Warning));
     }
     if self.invalid {
-      style = style.trigger(trigger_style(ctx, PaletteColor::Danger));
+      style = style.trigger(trigger_style(ctx, PaletteColor::Destructive));
     }
     let mut select = Select::new(self.value)
       .name(self.name.clone())
@@ -257,17 +257,17 @@ fn leading_trigger(id: &str, (glyph, mono): (Option<Icon>, bool), label: &str) -
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextSecondary).flex_shrink(0.0)))
+    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Base, ExtraColor::TextSecondary.role()).flex_shrink(0.0)))
     .child(
       Text::new(label)
         .id(format!("{id}-label"))
         .variant(style)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     )
-    .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::MutedForeground).flex_shrink(0.0))
     .into()
 }

@@ -144,7 +144,7 @@ impl Search {
       .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .with_children(loader.then(|| icon(Icon::LoaderCircle, IconSize::Xs, PaletteColor::TextMuted)))
+      .with_children(loader.then(|| icon(Icon::LoaderCircle, IconSize::Xs, PaletteColor::MutedForeground)))
       .child(
         Text::new(&words)
           .variant(OrchestratorText::HistoryMeta.role())
@@ -215,7 +215,7 @@ impl Matched {
         .child(
           Text::new(&who)
             .variant(OrchestratorText::HistoryLine.role())
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .nowrap(),
         )
         .child(

@@ -156,7 +156,7 @@ fn create(ctx: &mut Ctx, form: &Form) -> Element {
     .align_items(Alignment::Center)
     .describe("a11y_name", label.to_string())
     .child(Text::new(&label).variant(StartupText::Link.role()))
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextPrimary));
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::Foreground));
   Row::new()
     .id(format!("{ID}-no-account"))
     .spacing(ExtraSpacing::Snug.role())

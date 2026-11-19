@@ -28,7 +28,7 @@ use orchester_workspace::{
 
 use crate::{
   navigation::link::Open,
-  theme::{ExtraRadius, ExtraSpacing, IconSize, NeedsYouText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, NeedsYouText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -50,7 +50,7 @@ pub(super) fn note(ctx: &Ctx, id: &str, (item, settled): (&NeedItem, &Settled), 
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .rounded(ExtraRadius::Tile.role())
     .child(icon(glyph, IconSize::Md, color))
     .child(
@@ -123,10 +123,10 @@ fn first_line(text: &str) -> &str {
 fn glyph(settled: &Settled) -> (Icon, PaletteColor) {
   match settled {
     Settled::Approved { .. } | Settled::Answered { .. } => (Icon::CircleCheck, PaletteColor::Success),
-    Settled::Denied { .. } => (Icon::Ban, PaletteColor::TextSecondary),
-    Settled::Ended { .. } => (Icon::ClockAlert, PaletteColor::TextMuted),
-    Settled::Lost => (Icon::CirclePause, PaletteColor::TextMuted),
-    Settled::Unknown => (Icon::CircleCheck, PaletteColor::TextMuted),
+    Settled::Denied { .. } => (Icon::Ban, ExtraColor::TextSecondary.role()),
+    Settled::Ended { .. } => (Icon::ClockAlert, PaletteColor::MutedForeground),
+    Settled::Lost => (Icon::CirclePause, PaletteColor::MutedForeground),
+    Settled::Unknown => (Icon::CircleCheck, PaletteColor::MutedForeground),
   }
 }
 

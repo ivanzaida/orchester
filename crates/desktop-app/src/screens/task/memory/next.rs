@@ -229,7 +229,7 @@ fn given_row(ctx: &Ctx, given: &Given, memory: &TaskMemory) -> Row {
     .child(icon(
       words::glyph(content.kind()),
       IconSize::Base,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .child(
       Text::new(&shown)
@@ -274,7 +274,7 @@ fn left_out_line(words: &str) -> Element {
     .id("memory-next-left-out")
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
-    .child(icon(Icon::CircleMinus, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::CircleMinus, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .flex(1.0)
@@ -303,13 +303,13 @@ fn saving(ctx: &Ctx, settings: &MemorySettings) -> Column {
           .width(Dimension::Px(SAVING_LABEL_WIDTH))
           .flex_shrink(0.0)
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted),
+          .color(PaletteColor::MutedForeground),
       )
       .child(
         Text::new(value)
           .flex(1.0)
           .variant(ExtraTypography::Prose.role())
-          .color(PaletteColor::TextPrimary),
+          .color(PaletteColor::Foreground),
       )
   };
   Column::new()

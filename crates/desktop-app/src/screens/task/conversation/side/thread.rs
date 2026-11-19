@@ -29,7 +29,7 @@ use crate::{
   mcp::input_gate::{Guarded, InputGate, press_answerer},
   navigation::Navigation,
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskView},
-  theme::{ControlHeight, ExtraSpacing, IconSize, SideSpacing, SideText},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize, SideSpacing, SideText},
   ui::{
     avatar::agent_avatar,
     button::{ActionButton, ButtonKind},
@@ -98,7 +98,7 @@ fn asked(ctx: &mut Ctx, id: &str, text: &str, at: Timestamp) -> Element {
             .left(ExtraSpacing::Inset.role())
             .right(ExtraSpacing::Inset.role()),
         )
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .rounded(RadiusSize::Lg)
         .child(
           Text::new(text)
@@ -155,7 +155,7 @@ fn answering(ctx: &mut Ctx, props: &PaneProps, id: &str) -> Element {
     .id(format!("side-answer-reading-{id}"))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::MutedForeground))
     .child(Text::new(&reading).variant(SideText::Scope.role()))
     .into();
   let meta = ctx.t("side_question.answering");
@@ -198,7 +198,7 @@ fn answer(ctx: &mut Ctx, (props, state): (&PaneProps, &SideQuestions), question:
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger))
+        .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Destructive))
         .child(
           Text::new(&why)
             .id(format!("side-answer-failed-{id}"))
@@ -256,7 +256,7 @@ fn source_row(ctx: &mut Ctx, props: &PaneProps, id: &str, source: &SideSource) -
         .id(format!("side-source-open-{id}"))
         .spacing(ExtraSpacing::Fine.role())
         .child(Text::new(&label).variant(SideText::Open.role()).nowrap())
-        .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextSecondary))
+        .child(icon(Icon::ArrowUpRight, IconSize::Sm, ExtraColor::TextSecondary.role()))
     });
   Row::new()
     .id(format!("side-source-{id}"))
@@ -267,7 +267,7 @@ fn source_row(ctx: &mut Ctx, props: &PaneProps, id: &str, source: &SideSource) -
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(Text::new(&source.name).variant(name.role()).nowrap())
     .child(
       Text::new(&source.detail)
@@ -374,7 +374,7 @@ fn nothing_to_read(ctx: &mut Ctx, props: &PaneProps) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::CircleHelp, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::CircleHelp, IconSize::Md, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .variant(SideText::Scope.role())

@@ -23,7 +23,8 @@ use super::row::Tone;
 use crate::{
   navigation::link::Open,
   theme::{
-    ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsSpacing, ProjectSettingsText, SettingsText,
+    ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsSpacing, ProjectSettingsText,
+    SettingsText,
   },
   ui::{
     code_box::CodeBox,
@@ -54,15 +55,15 @@ impl From<Icon> for Glyph {
 impl Glyph {
   fn render(self, ctx: &Ctx, size: IconSize) -> Element {
     match self {
-      Self::Icon(glyph) => icon(glyph, size, PaletteColor::TextSecondary).into(),
-      Self::GitHub => crate::ui::github_mark::github_mark(ctx, size, PaletteColor::TextSecondary),
+      Self::Icon(glyph) => icon(glyph, size, ExtraColor::TextSecondary.role()).into(),
+      Self::GitHub => crate::ui::github_mark::github_mark(ctx, size, ExtraColor::TextSecondary.role()),
     }
   }
 }
 
 /// An empty row's 28 tile: only its `border` stroke, its 14 glyph `text_muted` (`Tile` `Uagnp`).
 pub(crate) fn outlined_tile(glyph: Icon) -> Row {
-  square(TILE, RadiusSize::Md).child(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+  square(TILE, RadiusSize::Md).child(icon(glyph, IconSize::Md, PaletteColor::MutedForeground))
 }
 
 fn square(size: f32, radius: RadiusSize) -> Row {
@@ -112,7 +113,7 @@ impl From<EmptyRow> for Element {
       .padding(Padding::symmetric(ProjectSettingsSpacing::RowX.role(), SpacingSize::Md))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
-      .child(square(TILE, RadiusSize::Md).child(icon(row.glyph, IconSize::Md, PaletteColor::TextMuted)))
+      .child(square(TILE, RadiusSize::Md).child(icon(row.glyph, IconSize::Md, PaletteColor::MutedForeground)))
       .child(
         Column::new()
           .flex(1.0)
@@ -150,7 +151,7 @@ pub(crate) fn question(id: &str, title: &str, body: &[Arc<str>], actions: Vec<El
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(
@@ -196,7 +197,7 @@ fn crumb(id: &str, parent: &str, through: Option<&str>, here: Option<&str>, open
     .rounded(ExtraRadius::Link.role())
     .hovered_style(Style::new().background(crate::theme::ExtraColor::Hover.role()))
     .describe("a11y_name", parent.to_owned())
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(parent).variant(ProjectSettingsText::Hint.role()).nowrap());
   let part = |words: &str, part: &str, color: PaletteColor| {
     Row::new()
@@ -216,8 +217,8 @@ fn crumb(id: &str, parent: &str, through: Option<&str>, here: Option<&str>, open
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(link)
-    .with_children(through.map(|through| part(through, "through", PaletteColor::TextMuted)))
-    .with_children(here.map(|here| part(here, "here", PaletteColor::TextSecondary)))
+    .with_children(through.map(|through| part(through, "through", PaletteColor::MutedForeground)))
+    .with_children(here.map(|here| part(here, "here", ExtraColor::TextSecondary.role())))
     .into()
 }
 
@@ -250,7 +251,7 @@ pub(crate) fn entity_head(
   actions: Vec<Element>,
 ) -> Element {
   let tile = square(HEAD_TILE, ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .child(glyph.render(ctx, IconSize::Lg));
   Row::new()
     .id(id.to_owned())

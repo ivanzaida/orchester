@@ -24,7 +24,7 @@ use crate::{
       page,
     },
   },
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText, ProjectSettingsSpacing},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchesterText, ProjectSettingsSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -53,7 +53,7 @@ pub(super) fn local(
   let only_you = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::MutedForeground))
     .child(value("sharing-local", &ctx.t("sharing.share.onlyYou")));
   let local = SettingRow::new("sharing-task-list", ctx.t("sharing.share.localProject"))
     .hint(tasks)
@@ -147,7 +147,7 @@ pub fn moves_to_account(ctx: &Ctx, project: &str) -> Element {
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
     .background(PaletteColor::InfoMuted)
-    .child(icon(Icon::UserRound, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(Icon::UserRound, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t_args("sharing.share.movesToAccount", [("project", project)]))
         .id("sharing-moves-to-account-text")
@@ -182,7 +182,7 @@ fn card(ctx: &Ctx, id: &str, (title, shared): (&str, &str)) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Inset.role())
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
     .child(Text::new(&ctx.t(title)).variant(OrchesterText::CardTitle.role()))
@@ -202,7 +202,7 @@ fn card(ctx: &Ctx, id: &str, (title, shared): (&str, &str)) -> Element {
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
+        .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::MutedForeground))
         .child(
           Text::new(&ctx.t("sharing.link.sends.never"))
             .variant(ExtraTypography::Note.role())
@@ -222,7 +222,7 @@ fn sends_row(id: &str, label: &str, value: &str) -> Row {
     .child(
       Text::new(label)
         .variant(ExtraTypography::Property.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Px(SENDS_LABEL))
         .flex_shrink(0.0),
     )
@@ -230,7 +230,7 @@ fn sends_row(id: &str, label: &str, value: &str) -> Row {
       Text::new(value)
         .id(format!("{id}-value"))
         .variant(ExtraTypography::Property.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0),
     )
 }

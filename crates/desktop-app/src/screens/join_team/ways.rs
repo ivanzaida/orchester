@@ -10,7 +10,7 @@ use lurq::{
 };
 
 use crate::{
-  theme::{DISABLED_OPACITY, ExtraRadius, ExtraSpacing, IconSize, StartupText},
+  theme::{DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize, StartupText},
   ui::icon::{Icon, icon},
 };
 
@@ -37,7 +37,7 @@ pub(super) fn way(id: &str, head: Element, parts: Vec<Element>) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Xl)
     .spacing(SpacingSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(head)
@@ -82,7 +82,7 @@ pub(super) fn tile(glyph: Icon) -> Row {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(glyph, IconSize::Lg, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Lg, ExtraColor::TextSecondary.role()))
 }

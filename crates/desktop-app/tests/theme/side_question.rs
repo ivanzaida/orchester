@@ -33,11 +33,11 @@ fn side_question_roles_follow_the_design() {
   let palette = |color| theme.palette_color(color);
   assert_eq!(
     theme.typography_style(SideText::Scope.role()).color,
-    palette(PaletteColor::TextSecondary)
+    palette(ExtraColor::TextSecondary.role())
   );
   assert_eq!(
     theme.typography_style(SideText::Failed.role()).color,
-    palette(PaletteColor::Danger)
+    palette(PaletteColor::Destructive)
   );
   for (spacing, value) in [(SideSpacing::Gap, 12.0), (SideSpacing::Edge, 4.0)] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");

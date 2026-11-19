@@ -141,7 +141,7 @@ impl Component for RunRow {
         Text::new(&when(ctx, record))
           .id(format!("run-row-{}-when", record.id))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap(),
@@ -149,7 +149,7 @@ impl Component for RunRow {
       .with_children(line.as_ref().map(|line| worktree(ctx, record, line)))
       .child(self.menu(ctx, &props, line.as_ref()));
     let main = if props.this_run {
-      main.background(PaletteColor::SurfaceRaised)
+      main.background(PaletteColor::Card)
     } else {
       main
     };
@@ -166,7 +166,7 @@ impl Component for RunRow {
             Text::new(&message_text(ctx, error))
               .id(format!("run-remove-error-{}", record.id))
               .variant(ExtraTypography::Note.role())
-              .color(PaletteColor::Danger)
+              .color(PaletteColor::Destructive)
               .flex(1.0),
           )
       }))

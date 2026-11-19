@@ -18,7 +18,7 @@ use crate::{
   clipboard::copy_for_a_minute,
   mcp::input_gate::{InputGate, TokenShown},
   services::Services,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterSpacing, OrchesterText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterSpacing, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -35,8 +35,8 @@ pub(super) fn code_box(id: &str, code: &str) -> Row {
     .padding(Padding::symmetric(OrchesterSpacing::CodeSide.role(), SpacingSize::Md))
     .justify(Justify::Center)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(ExtraColor::InputSurface.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(lurq::app::theme::RadiusSize::Md)
     .child(
       Text::new(code)
@@ -215,7 +215,7 @@ fn check_code_box(id: &str, code: &str) -> Row {
       ExtraSpacing::Loose.role(),
     ))
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(lurq::app::theme::RadiusSize::Md)
     .child(

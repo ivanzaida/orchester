@@ -113,7 +113,7 @@ fn slug(ctx: &mut Ctx, slug: &str) -> Row {
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
-    .child(icon(Icon::Lock, IconSize::Base, PaletteColor::TextMuted).id("pipeline-hub-slug-locked"));
+    .child(icon(Icon::Lock, IconSize::Base, PaletteColor::MutedForeground).id("pipeline-hub-slug-locked"));
   rows::row(
     "pipeline-hub-slug-row",
     &ctx.t("pipeline_hub.settings.slug"),

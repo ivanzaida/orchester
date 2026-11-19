@@ -77,7 +77,7 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let color = if unmet {
     PaletteColor::Warning
   } else {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   };
   let run = ctx.t_args(
     "task.waitsOn.runLine",
@@ -109,7 +109,7 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
         Text::new(&run)
           .id("task-run-line")
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
       .into(),
@@ -128,12 +128,12 @@ pub fn depends_on(ctx: &Ctx, task: &TaskContext) -> Option<Element> {
       .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .child(icon(Icon::Hourglass, IconSize::Base, PaletteColor::TextSecondary))
+      .child(icon(Icon::Hourglass, IconSize::Base, ExtraColor::TextSecondary.role()))
       .child(
         Text::new(&words)
           .id("task-property-depends-label")
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
       .into(),
@@ -229,12 +229,12 @@ impl Component for WaitRow {
         Some(PaletteColor::WarningMuted),
         PaletteColor::Warning,
       ),
-      (Place::Summary, false) => (PaletteColor::TextMuted, None, PaletteColor::Border),
-      (Place::Conversation, false) => (PaletteColor::TextSecondary, None, PaletteColor::Border),
+      (Place::Summary, false) => (PaletteColor::MutedForeground, None, PaletteColor::Border),
+      (Place::Conversation, false) => (ExtraColor::TextSecondary.role(), None, PaletteColor::Border),
     };
     let (words_color, link_color) = match props.place {
-      Place::Summary => (PaletteColor::TextSecondary, PaletteColor::TextPrimary),
-      Place::Conversation => (PaletteColor::TextSecondary, PaletteColor::TextSecondary),
+      Place::Summary => (ExtraColor::TextSecondary.role(), PaletteColor::Foreground),
+      Place::Conversation => (ExtraColor::TextSecondary.role(), ExtraColor::TextSecondary.role()),
     };
     let spacing = match props.place {
       Place::Summary => SpacingSize::Sm,
@@ -267,7 +267,7 @@ impl Component for WaitRow {
       Text::new(&message_text(ctx, &error))
         .id(format!("{}-error", props.id))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .width(Dimension::Pct(100.0))
     });
     let origin = (props.place == Place::Conversation).then(|| origin(ctx, &props.wait));
@@ -302,12 +302,12 @@ fn origin(ctx: &Ctx, wait: &RunWaitView) -> Element {
     .padding(Padding::default().left(AVATAR_SIZE + ExtraSpacing::Loose.value()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::SquarePlus, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::SquarePlus, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .id("conversation-wait-origin-text")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

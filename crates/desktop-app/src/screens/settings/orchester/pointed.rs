@@ -77,7 +77,7 @@ impl PointedInvite {
     }
     row
       .ref_element(self.row.clone())
-      .border(Border::outside(BorderSize::Md, PaletteColor::BorderFocus))
+      .border(Border::outside(BorderSize::Md, PaletteColor::Ring))
       .class("pointed")
   }
 }

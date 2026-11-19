@@ -23,7 +23,7 @@ use orchester_core::connection::stream::{TodoList, TodoState};
 
 use super::{Shown, WHOLE, count, current, folded_line, item_row, shown};
 use crate::{
-  theme::{ExtraSpacing, IconSize, TodoText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TodoText},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -74,7 +74,7 @@ impl Component for PinnedPlan {
       .id(props.id.to_string())
       .describe("folded", folded.to_string())
       .width(Dimension::Pct(100.0))
-      .background(PaletteColor::SurfacePanel)
+      .background(PaletteColor::Canvas)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
       .child(head)
@@ -88,7 +88,7 @@ impl PinnedPlan {
     let id = &props.id;
     let toggle = self.folded.clone();
     let lead: [Element; 3] = [
-      icon(Icon::ListChecks, IconSize::Base, PaletteColor::TextSecondary).into(),
+      icon(Icon::ListChecks, IconSize::Base, ExtraColor::TextSecondary.role()).into(),
       Text::new(&ctx.t("conversation.plan.title"))
         .variant(TodoText::Title.role())
         .nowrap()
@@ -111,12 +111,12 @@ impl PinnedPlan {
           .min_width(Dimension::Px(0.0))
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center)
-          .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary))
+          .child(icon(glyph, IconSize::Base, ExtraColor::TextSecondary.role()))
           .child(
             Text::new(&item.text)
               .id(format!("{id}-current"))
               .variant(TodoText::Item.role())
-              .color(PaletteColor::TextPrimary)
+              .color(PaletteColor::Foreground)
               .nowrap()
               .text_overflow(TextOverflow::Elipsis)
               .flex(1.0)
@@ -174,7 +174,7 @@ impl PinnedPlan {
         ),
         Shown::More(more) => folded_line(
           format!("{id}-more"),
-          (Icon::Ellipsis, PaletteColor::TextMuted),
+          (Icon::Ellipsis, PaletteColor::MutedForeground),
           &ctx.t_args("conversation.plan.more", [("count", more.to_string().as_str())]),
           (ctx.t("conversation.plan.showAll"), open.clone()),
         ),
@@ -227,5 +227,5 @@ impl PinnedPlan {
 
 /// The head's chevron: down while the box is open (it folds down onto the composer), up while folded.
 fn chevron(glyph: Icon) -> Element {
-  icon(glyph, IconSize::Sm, PaletteColor::TextMuted).into()
+  icon(glyph, IconSize::Sm, PaletteColor::MutedForeground).into()
 }

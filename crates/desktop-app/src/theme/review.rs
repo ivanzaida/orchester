@@ -50,10 +50,10 @@ impl ReviewText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Tag => style(11.0, FontWeight::Medium, 1.2, 0.0, palette.text_muted),
-      Self::Message => style(13.0, FontWeight::Normal, 1.45, 0.0, palette.text_primary),
-      Self::Strip => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::MenuHeading => style(11.0, FontWeight::Medium, 1.2, 0.0, palette.text_muted),
+      Self::Tag => style(11.0, FontWeight::Medium, 1.2, 0.0, palette.muted_foreground),
+      Self::Message => style(13.0, FontWeight::Normal, 1.45, 0.0, palette.foreground),
+      Self::Strip => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::MenuHeading => style(11.0, FontWeight::Medium, 1.2, 0.0, palette.muted_foreground),
     }
   }
 }

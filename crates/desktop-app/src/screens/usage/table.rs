@@ -226,12 +226,12 @@ fn content(id: &str, column: &TableColumn, cell: Cell) -> Element {
     Cell::Text(words) => fit(
       text(&words)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     ),
     Cell::Muted(words) if column.figures => fit(
       text(&words)
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     ),
     Cell::Muted(words) => fit(text(&words).variant(TypographyStyle::Description)),
     Cell::Strong(words) if column.figures => fit(text(&words).variant(UsageText::TotalFigure.role())),

@@ -20,7 +20,7 @@ pub fn key_cap(id: &str, keys: &str) -> Element {
     .height(Dimension::Px(HEIGHT))
     .padding(Padding::horizontal(ExtraSpacing::Pair.role()))
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Sm)
     // A cap keeps its width beside words that give way.

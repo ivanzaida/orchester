@@ -23,7 +23,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab},
-  theme::{ExtraSpacing, UsageRadius, UsageText},
+  theme::{ExtraColor, ExtraSpacing, UsageRadius, UsageText},
 };
 
 /// The share of spent tokens' bar (`Bar` `BBtL7`).
@@ -94,7 +94,7 @@ fn figures(ctx: &Ctx, failed: &FailedRuns) -> Element {
 /// The failed runs' tokens against the other runs', as one bar with its legend (`Share of spent` `TdLmm`).
 fn split(ctx: &Ctx, failed: &FailedRuns) -> Element {
   let other = failed.of_spent.saturating_sub(failed.spent);
-  let (failed_color, other_color) = (PaletteColor::TextSecondary, PaletteColor::BorderStrong);
+  let (failed_color, other_color) = (ExtraColor::TextSecondary.role(), PaletteColor::Input);
   let parts = [(failed.spent, failed_color.clone()), (other, other_color.clone())]
     .into_iter()
     .filter(|(tokens, _)| *tokens > 0)
@@ -113,7 +113,7 @@ fn split(ctx: &Ctx, failed: &FailedRuns) -> Element {
       .child(
         Text::new(&ctx.t_args(key, [("tokens", &*words::tokens(tokens))]))
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
   };

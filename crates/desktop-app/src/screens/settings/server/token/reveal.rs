@@ -3,10 +3,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -20,7 +17,7 @@ use crate::{
     AppMcp, BearerToken, ServerState,
     input_gate::{InputGate, TokenShown},
   },
-  theme::{ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -120,7 +117,7 @@ pub(super) fn value(ctx: &Ctx, shown: Option<&BearerToken>) -> Element {
       text
         .id("settings-mcp-token-text")
         .variant(ExtraTypography::PropertyMono.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .min_width(Dimension::Px(0.0))
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),

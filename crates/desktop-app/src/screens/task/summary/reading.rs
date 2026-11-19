@@ -183,7 +183,7 @@ fn output(ctx: &Ctx) -> Column {
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .rounded(RadiusSize::Md)
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .child(bone(14.0, 14.0))
         .child(skeleton::line(ctx, TypographyStyle::Description, *title))
         .child(skeleton::line(ctx, TypographyStyle::Description, *line))

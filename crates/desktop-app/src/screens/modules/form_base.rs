@@ -253,7 +253,7 @@ fn heading(ctx: &Ctx, key: &str) -> Element {
     .child(
       Text::new(&ctx.t(key))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }

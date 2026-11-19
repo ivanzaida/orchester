@@ -31,7 +31,6 @@ mod failure;
 mod files;
 mod flow;
 mod fonts;
-mod form;
 mod groups;
 mod hub;
 pub mod instructions;
@@ -82,7 +81,10 @@ mod watching;
 use std::time::Duration;
 
 use lurq::{
-  app::{App, theme::Theme},
+  app::{
+    App,
+    theme::{Theme, ThemeCaret},
+  },
   layout::scrollbar::ScrollBarStyle,
 };
 
@@ -112,7 +114,7 @@ pub use self::{
   leading::{CEILINGS_FORM_WIDTH, LeadingSpacing, LeadingText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
-  markdown::{blank_line_between_blocks, code_lines},
+  markdown::blank_line_between_blocks,
   memory::{MemorySpacing, MemoryText},
   merge_attempt::{AttemptSpacing, AttemptText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing, text_area_scrollbar},
@@ -154,7 +156,7 @@ pub use self::{
   team_state::TeamStateText,
   test_results::TestsText,
   todo_list::TodoText,
-  typography::{ExtraTypography, IconSize},
+  typography::{ExtraTypography, IconSize, TextRole},
   usage::{UsageRadius, UsageSpacing, UsageText},
   watching::{WatchingSpacing, WatchingText},
 };
@@ -224,17 +226,22 @@ pub fn install(app: &mut App, mode: Mode) {
   side_question::install(theme);
   watching::install(theme);
   leading::install(theme);
+  markdown::install(theme);
   theme.set_shadows(shadow::shadows());
-  theme.set_form(form::form());
+  // The caret of lurq 0.62, 1 wide and as high as the text: the design's fields draw no other.
+  theme.set_caret(ThemeCaret::legacy());
 }
 
 /// Switches the colors to `mode`: the palette, and the text styles, scrollbar and Markdown whose colors
 /// come from it. Every component that reads the theme follows on its next render.
 pub fn apply(theme: &Theme, mode: Mode) {
+  // The app chooses light or dark itself (`appearance`): lurq's own controls take the same, and a change of the
+  // system's appearance leaves the palette to the app.
+  theme.set_preferred_appearance(Some(mode.appearance()));
   let palette = palette::palette(mode);
   theme.set_typography(typography::typography(&palette));
   theme.set_scrollbar(ScrollBarStyle {
-    thumb_color: palette.border_strong,
+    thumb_color: palette.input,
     ..ScrollBarStyle::thin()
   });
   theme.set_markdown(markdown::markdown(&palette));

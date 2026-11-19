@@ -466,7 +466,7 @@ fn section_head(id: &str, title: &str, (count, end): (Option<&str>, Option<Eleme
     Text::new(count)
       .id(format!("{id}-count"))
       .variant(ExtraTypography::Property.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .into()
   });
   section_head_with(id, title, (count, end))

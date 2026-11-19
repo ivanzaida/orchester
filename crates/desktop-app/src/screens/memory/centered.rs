@@ -89,7 +89,7 @@ impl From<Centered> for Element {
           .justify(Justify::Center)
           .padding(Padding::horizontal(SecretsSpacing::Page.role()))
           .spacing(ExtraSpacing::Loose.role()),
-        Element::from(icon(state.glyph, IconSize::Xl, PaletteColor::TextMuted).id(format!("{id}-glyph"))),
+        Element::from(icon(state.glyph, IconSize::Xl, PaletteColor::MutedForeground).id(format!("{id}-glyph"))),
         MemoryText::PanelTitle.role(),
         MemoryText::StateText.role(),
       ),

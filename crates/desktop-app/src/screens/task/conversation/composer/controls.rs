@@ -122,7 +122,7 @@ fn attach(ctx: &mut Ctx, attached: &DraftAttachments) -> Element {
     .justify(Justify::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::Plus, IconSize::Nav, PaletteColor::TextSecondary));
+    .child(icon(Icon::Plus, IconSize::Nav, ExtraColor::TextSecondary.role()));
   Tooltip::new("composer-attach", ctx.t("attachments.attachHint")).wrap(ctx, square)
 }
 
@@ -147,7 +147,7 @@ fn send(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
       pressable(move || press())
         .id("composer-send")
         .describe("state", "enabled")
-        .hovered_style(Style::new().background(PaletteColor::AccentHover))
+        .hovered_style(Style::new().background(PaletteColor::PrimaryHover))
         .child(face)
         .into()
     }
@@ -180,7 +180,7 @@ fn send(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
     .describe("action", label.to_string())
     .height(Dimension::Px(ControlHeight::Md.value()))
     .align_items(Alignment::Center)
-    .background(PaletteColor::Accent)
+    .background(PaletteColor::Primary)
     .rounded(RadiusSize::Md)
     .clip()
     .opacity(if enabled { 1.0 } else { DISABLED_OPACITY })
@@ -241,7 +241,7 @@ fn options(ctx: &mut Ctx, bar: &Bar<'_>) -> Element {
       .id("composer-send-options")
       .ref_element(bar.anchor.clone())
       .describe("a11y_name", label)
-      .hovered_style(Style::new().background(PaletteColor::AccentHover))
+      .hovered_style(Style::new().background(PaletteColor::PrimaryHover))
       .child(chevron)
       .into()
   } else {

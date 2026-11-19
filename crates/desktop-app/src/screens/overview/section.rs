@@ -67,7 +67,7 @@ pub(super) fn counted_head(id: &str, title: &str, count: Option<Element>, end: O
 pub(super) fn muted(words: &str) -> Text {
   Text::new(words)
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .nowrap()
 }
 
@@ -83,7 +83,7 @@ pub(super) fn link(id: &str, label: &str, press: Press) -> Element {
     .child(
       Text::new(label)
         .variant(TypographyStyle::Button)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .into()

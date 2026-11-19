@@ -1,25 +1,26 @@
 //! How Markdown an agent or a person wrote reads (`ui::markdown`). The design draws only its plain
 //! parts: body text in the caller's style (a chat message 13/1.5 `D8JGX4`, a plan 12.5/1.6 `vGWCj`), a
 //! heading at the body's size in 600 `text_primary` (`iQEpj` in `Q5J0r`), links in `accent_text` 500
-//! (`p86ea`), code in Geist Mono on `code_bg` inside a `border` stroke, radius 6, as the command box
-//! (`yhiM8`). Everything else comes from existing variables: larger headings step up from the body,
-//! quotes sit on `surface_raised`, list markers and tables use the muted text and borders. The colors are
-//! the palette's, so the theme sets them again when the mode changes.
+//! (`p86ea`), inline code in Geist Mono. Everything else comes from existing variables: larger headings step up
+//! from the body (`typography`'s `heading1` to `heading6`), list markers and tables use the muted text and borders.
+//! A code block and a quote are lurq's `ui::CodeBlock` and `ui::Blockquote`, drawn by their recipes in the theme.
+//! The colors are the palette's, so the theme sets them again when the mode changes.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{MarkdownBlockStyle, MarkdownInlineStyle, ThemeMarkdown, ThemePalette},
+  app::theme::{MarkdownBlockStyle, MarkdownInlineStyle, Theme, ThemeMarkdown, ThemePalette},
   layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
   node::{border::BorderRadius, color::Color, padding::Padding},
+  ui::{CodeBlock, CodeBlockPart, CodeBlockState},
 };
 
 use super::{ExtraColor, fonts::MONO};
 
 const CODE_RADIUS: f32 = 6.0;
 const CODE_PADDING: f32 = 8.0;
-/// The sides of a chat's code block's lines (`PHied`).
-const CODE_LINES_SIDES: f32 = 12.0;
+/// Geist Mono's size in a code block, the app's `Mono`.
+const CODE_SIZE: f32 = 12.0;
 const BLOCK_SPACING: f32 = 8.0;
 const ITEM_SPACING: f32 = 2.0;
 /// The room before a list item's text: a numeral with its period, a bullet.
@@ -48,12 +49,12 @@ fn heading(scale: f32, color: Color) -> MarkdownInlineStyle {
   inline(|style| {
     style.text.font_size_scale = Some(scale);
     style.text.weight = Some(FontWeight::SemiBold);
-    style.text.color = Some(color);
+    style.text.color = Some(color.into());
   })
 }
 
 /// Geist Mono without ligatures, a little smaller than the text around it.
-fn code(line_height: Option<f32>, color: Color) -> MarkdownInlineStyle {
+fn code(color: Color) -> MarkdownInlineStyle {
   inline(|style| {
     style.text.font_family = Some(Arc::from(MONO));
     style.text.font_size_scale = Some(0.92);
@@ -62,71 +63,72 @@ fn code(line_height: Option<f32>, color: Color) -> MarkdownInlineStyle {
       FontFeature::disable(*b"liga"),
       FontFeature::disable(*b"calt"),
     ]));
-    style.text.color = Some(color);
-    style.text.line_height = line_height;
+    style.text.color = Some(color.into());
   })
 }
 
 fn colored(color: Color) -> MarkdownInlineStyle {
-  inline(|style| style.text.color = Some(color))
+  inline(|style| style.text.color = Some(color.into()))
 }
 
 fn boxed(background: Option<Color>, border: Color, padding: Option<Padding>) -> MarkdownBlockStyle {
   MarkdownBlockStyle {
-    background,
-    border_color: Some(border),
+    background: background.map(Into::into),
+    border_color: Some(border.into()),
     border_width: Some(1.0),
     radius: Some(CODE_RADIUS),
     padding,
   }
 }
 
+/// A Markdown's code block, lurq's `ui::CodeBlock`: on `code_bg` inside its `border` stroke, radius 6, its code in
+/// Geist Mono 12 with 8 around it, as the command box (`yhiM8`).
+pub(super) fn install(theme: &Theme) {
+  theme.patch_recipe::<CodeBlock>(|rules| {
+    rules
+      .state(CodeBlockState::Framed, CodeBlockPart::Root, |style| {
+        style.background(ExtraColor::CodeBackground.role()).radius(CODE_RADIUS)
+      })
+      .base(CodeBlockPart::Code, |style| {
+        style
+          .font_size(CODE_SIZE)
+          .padding_x(CODE_PADDING)
+          .padding_y(CODE_PADDING)
+      })
+  });
+}
+
 pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
   let link = inline(|style| {
     style.text.weight = Some(FontWeight::Medium);
-    style.text.color = Some(palette.get(ExtraColor::AccentText.role()));
+    style.text.color = Some(palette.get(ExtraColor::AccentText.role()).into());
   });
   let strong = inline(|style| {
     style.text.weight = Some(FontWeight::SemiBold);
-    style.text.color = Some(palette.text_primary);
+    style.text.color = Some(palette.foreground.into());
   });
   let sans = MarkdownInlineStyle::new();
   ThemeMarkdown {
     document_spacing: BLOCK_SPACING,
     list_item_spacing: ITEM_SPACING,
     nested_block_spacing: ITEM_SPACING,
-    code_block_spacing: BLOCK_SPACING,
-    blockquote_gap: BLOCK_SPACING,
     list_marker_gap: ITEM_SPACING,
     ordered_list_marker_width: ORDERED_MARKER,
     unordered_list_marker_width: BULLET_MARKER,
-    heading: heading(1.0, palette.text_primary),
-    heading_1: heading(1.15, palette.text_primary),
-    heading_2: heading(1.08, palette.text_primary),
-    heading_3: heading(1.0, palette.text_primary),
-    heading_4: heading(1.0, palette.text_primary),
-    heading_5: heading(1.0, palette.text_primary),
-    heading_6: heading(1.0, palette.text_primary),
+    heading: heading(1.0, palette.foreground),
+    heading_1: heading(1.15, palette.foreground),
+    heading_2: heading(1.08, palette.foreground),
+    heading_3: heading(1.0, palette.foreground),
+    heading_4: heading(1.0, palette.foreground),
+    heading_5: heading(1.0, palette.foreground),
+    heading_6: heading(1.0, palette.foreground),
     strong,
     link,
-    inline_code: code(None, palette.text_primary),
-    code_block: code(Some(1.5), palette.text_primary),
-    code_block_label: colored(palette.text_muted),
-    list_marker: colored(palette.text_muted),
-    blockquote_marker: colored(palette.text_muted),
-    table_header: colored(palette.text_primary),
+    inline_code: code(palette.foreground),
+    list_marker: colored(palette.muted_foreground),
+    table_header: colored(palette.foreground),
     table_cell: sans,
-    table_marker: colored(palette.text_muted),
-    code_block_box: boxed(
-      Some(palette.get(ExtraColor::CodeBackground.role())),
-      palette.border,
-      Some(Padding::all(CODE_PADDING)),
-    ),
-    blockquote_box: boxed(
-      Some(palette.surface_raised),
-      palette.border,
-      Some(Padding::all(CODE_PADDING)),
-    ),
+    table_marker: colored(palette.muted_foreground),
     table_box: boxed(None, palette.border, None),
     table_header_box: MarkdownBlockStyle {
       padding: Some(Padding::all(CODE_PADDING)),
@@ -146,16 +148,14 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
       // One line of words fills the box between its ends.
       style.text.line_height = Some((TOOLTIP_HEIGHT - 2.0 * TOOLTIP_ENDS) / TOOLTIP_SIZE);
       style.text.weight = Some(FontWeight::Medium);
-      style.text.color = Some(palette.text_inverse);
+      style.text.color = Some(palette.primary_foreground.into());
     }),
     link_tooltip_box: MarkdownBlockStyle {
-      background: Some(palette.text_primary),
+      background: Some(palette.foreground.into()),
       radius: Some(TOOLTIP_RADIUS),
       padding: Some(Padding::symmetric(TOOLTIP_SIDES, TOOLTIP_ENDS)),
       ..MarkdownBlockStyle::new()
     },
-    // A code block wider than its column scrolls sideways under the app's own scrollbar.
-    code_block_scrollbar: None,
     ..ThemeMarkdown::default()
   }
 }
@@ -165,18 +165,6 @@ pub fn markdown(palette: &ThemePalette) -> ThemeMarkdown {
 pub fn blank_line_between_blocks(markdown: &ThemeMarkdown, body: &TextStyle) -> ThemeMarkdown {
   ThemeMarkdown {
     document_spacing: body.font_size * body.line_height,
-    ..markdown.clone()
-  }
-}
-
-/// The lines of a chat's code block under its head (`Code` `PHied` in `PqqIK`): `markdown`'s code without a box of
-/// its own, inside the block's, 8 over and under them and 12 at their sides.
-pub fn code_lines(markdown: &ThemeMarkdown) -> ThemeMarkdown {
-  ThemeMarkdown {
-    code_block_box: MarkdownBlockStyle {
-      padding: Some(Padding::symmetric(CODE_LINES_SIDES, CODE_PADDING)),
-      ..MarkdownBlockStyle::new()
-    },
     ..markdown.clone()
   }
 }

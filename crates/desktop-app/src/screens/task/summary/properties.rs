@@ -33,7 +33,7 @@ use crate::{
   navigation::Navigation,
   routes::{Route, TaskView},
   screens::task::TaskContext,
-  theme::{ExtraSpacing, IconSize, TaskSpacing},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TaskSpacing},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -62,10 +62,10 @@ pub enum Look {
 /// `value`, set as `look` says, as the element `id`.
 pub fn value(id: &str, value: &str, look: Look) -> Text {
   let (typography, color) = match look {
-    Look::Primary => (TypographyStyle::Description, PaletteColor::TextPrimary),
-    Look::Secondary => (TypographyStyle::Description, PaletteColor::TextSecondary),
-    Look::Mono => (TypographyStyle::Mono, PaletteColor::TextSecondary),
-    Look::Muted => (TypographyStyle::Description, PaletteColor::TextMuted),
+    Look::Primary => (TypographyStyle::Description, PaletteColor::Foreground),
+    Look::Secondary => (TypographyStyle::Description, ExtraColor::TextSecondary.role()),
+    Look::Mono => (TypographyStyle::Mono, ExtraColor::TextSecondary.role()),
+    Look::Muted => (TypographyStyle::Description, PaletteColor::MutedForeground),
   };
   Text::new(value)
     .id(id.to_owned())
@@ -87,7 +87,7 @@ pub fn row(id: &str, key: &str, value: impl Into<Element>, padding: SpacingSize)
       Text::new(key)
         .id(format!("{id}-key"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Px(KEY_WIDTH))
         .flex_shrink(0.0),
     )
@@ -213,7 +213,7 @@ fn status(ctx: &Ctx, task: &TaskContext) -> Element {
   } else {
     ctx.t(crate::ui::status::workflow_key(status))
   };
-  labelled("task-property-status", (glyph, PaletteColor::TextSecondary), &word)
+  labelled("task-property-status", (glyph, ExtraColor::TextSecondary.role()), &word)
 }
 
 fn priority(ctx: &Ctx, task: &TaskContext) -> Element {
@@ -413,7 +413,7 @@ fn branch_and_merge(ctx: &mut Ctx, task: &TaskContext) -> Element {
 /// An identifier on one line in Geist Mono 12 `text_secondary`, cut to its room with the whole of it in a tooltip.
 pub fn cut(ctx: &mut Ctx, id: &str, text: &str) -> Element {
   let text = Truncated::new(id.to_owned(), text.to_owned(), TypographyStyle::Mono)
-    .color(PaletteColor::TextSecondary)
+    .color(ExtraColor::TextSecondary.role())
     .render(ctx);
   Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(text).into()
 }
@@ -434,8 +434,8 @@ fn memory_link(ctx: &mut Ctx, task: &TaskContext) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().top(SpacingSize::Md))
     .spacing(SpacingSize::Sm)
-    .child(icon(Icon::Brain, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Brain, IconSize::Base, PaletteColor::MutedForeground))
     .child(value("task-memory-link-label", &words, Look::Secondary))
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::MutedForeground))
     .into()
 }

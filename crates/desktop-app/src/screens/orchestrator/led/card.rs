@@ -38,7 +38,7 @@ use crate::{
   routes::{OrchestratorChat, ProjectPage, Route},
   screens::orchestrator::line::{LineLink, link_element},
   services::Services,
-  theme::{ExtraSpacing, IconSize, OrchestratorText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -180,8 +180,8 @@ impl LedCardView {
       .padding(SpacingSize::Md)
       .spacing(ExtraSpacing::Loose.role())
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .rounded(RadiusSize::Md)
       .child(glyph)
       .child(words)
@@ -190,7 +190,7 @@ impl LedCardView {
     let failed = self.choose.state().get().error.map(|why| {
       tinted_note(
         format!("{id}-error"),
-        (Icon::CircleAlert, PaletteColor::Danger),
+        (Icon::CircleAlert, PaletteColor::Destructive),
         &message_text(ctx, &why),
       )
     });
@@ -292,12 +292,12 @@ fn settled_line(ctx: &mut Ctx, props: &LedProps, settled: &Settled) -> Element {
     .padding(Padding::horizontal(SpacingSize::Xs))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground).flex_shrink(0.0))
     .child(
       Text::new(&what)
         .id(format!("{id}-words"))
         .variant(OrchestratorText::Line.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .flex_shrink(0.0),
     )
@@ -305,7 +305,7 @@ fn settled_line(ctx: &mut Ctx, props: &LedProps, settled: &Settled) -> Element {
       Text::new(&aside)
         .id(format!("{id}-aside"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex(1.0)

@@ -13,14 +13,14 @@ fn service_cards_roles_follow_the_cards() {
       ServiceCardsText::Body,
       (12.5, FontWeight::Normal, 1.5),
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     // A service's program and arguments (`GZxEp`).
     (
       ServiceCardsText::Command,
       (12.0, FontWeight::Normal, 1.3),
       "Geist Mono",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     // Whether a start is approved, the slots line, the macOS line and what a slots holder runs (`jBOKa`, `XR7xh`,
     // `s3ehm`, `VXOA1`).
@@ -28,21 +28,21 @@ fn service_cards_roles_follow_the_cards() {
       ServiceCardsText::Detail,
       (12.0, FontWeight::Normal, 1.3),
       "Geist",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     // A slots holder's task key (`Otz6B`).
     (
       ServiceCardsText::HolderKey,
       (12.0, FontWeight::Normal, 1.3),
       "Geist Mono",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     // *Open ↗* at a holder's end (`psrsV`).
     (
       ServiceCardsText::Open,
       (12.0, FontWeight::Medium, 1.3),
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
   ] {
     let style = theme.typography_style(role.role());

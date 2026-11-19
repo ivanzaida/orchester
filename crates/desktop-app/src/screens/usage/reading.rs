@@ -141,9 +141,9 @@ fn chart(names: &[Option<AxisName>]) -> Column {
     .with_children(names.iter().map(|name| {
       slot().with_children(name.as_ref().map(|name| {
         let color = if name.today {
-          PaletteColor::TextPrimary
+          PaletteColor::Foreground
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         };
         Text::new(&name.text)
           .variant(TypographyStyle::Caption)

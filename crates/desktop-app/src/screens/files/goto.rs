@@ -161,8 +161,8 @@ fn search_panel(ctx: &mut Ctx, page: &Page<'_>, list: Option<&FileList>) -> Elem
     .padding(ExtraSpacing::Snug.role())
     .spacing(ExtraSpacing::Tight.role())
     .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .box_shadow(ShadowStyle::Lg)
     .on_key_down(keys)
     .child(field.render(ctx))
@@ -208,9 +208,9 @@ fn move_keys(
 fn result(ctx: &Ctx, (path, query): (&str, &str), current: bool, choose: Open) -> Element {
   let (folder, name) = path.rsplit_once('/').unwrap_or(("", path));
   let glyph_color = if current {
-    PaletteColor::TextPrimary
+    PaletteColor::Foreground
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   let row = opening(choose)
     .id(format!("files-go-to:{path}"))

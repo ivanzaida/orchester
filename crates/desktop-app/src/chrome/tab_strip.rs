@@ -258,7 +258,7 @@ fn tab_button(
       .height(Dimension::Px(UNSAVED_DOT))
       .flex_shrink(0.0)
       .rounded(ExtraRadius::Full.role())
-      .background(PaletteColor::TextSecondary)
+      .background(ExtraColor::TextSecondary.role())
       .into()
   });
   let marks = marks(projects, tab);
@@ -278,9 +278,9 @@ fn tab_button(
 /// A tab at the window's home that shows the folders icon alone (`Tab/Home` `qqzuJ`).
 fn home_tab(button: Button, active: bool) -> Element {
   let color = if active {
-    PaletteColor::TextPrimary
+    PaletteColor::Foreground
   } else {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   };
   button
     .width(Dimension::Px(ICON_TAB_WIDTH))
@@ -298,14 +298,14 @@ fn labelled_tab(
 ) -> Element {
   let (glyph, text, style) = if active {
     (
-      PaletteColor::TextSecondary,
-      PaletteColor::TextPrimary,
+      ExtraColor::TextSecondary.role(),
+      PaletteColor::Foreground,
       TypographyStyle::Label,
     )
   } else {
     (
-      PaletteColor::TextMuted,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
+      PaletteColor::MutedForeground,
       TypographyStyle::Description,
     )
   };
@@ -347,6 +347,6 @@ fn new_tab(ctx: &mut Ctx, navigation: Navigation) -> Element {
     .justify(Justify::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::Plus, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::Plus, IconSize::Md, PaletteColor::MutedForeground))
     .into()
 }

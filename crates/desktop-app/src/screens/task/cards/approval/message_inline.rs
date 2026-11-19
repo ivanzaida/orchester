@@ -13,7 +13,7 @@ use orchester_core::run::{DenialNote, DenialNoteError};
 use super::{answers::Answering, message};
 use crate::{
   screens::task::cards::{decisions::Given, frame::held},
-  theme::{CardsText, ExtraSpacing},
+  theme::{CardsText, ExtraColor, ExtraSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -75,8 +75,8 @@ pub(super) fn editor(ctx: &mut Ctx, answering: &Answering<'_>) -> Vec<Element> {
   let block = Column::new()
     .id(format!("{id}-message-block"))
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+    .background(ExtraColor::InputSurface.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Ring))
     .rounded(RadiusSize::Md)
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
@@ -100,7 +100,7 @@ fn input(ctx: &Ctx, answering: &Answering<'_>) -> TextInput {
   .describe("a11y_name", ctx.t("cards.approval.message.field"))
   .placeholder(&ctx.t("cards.approval.message.field"))
   .placeholder_style(ctx.theme().typography_style(CardsText::Context.role()))
-  .caret_color(PaletteColor::TextPrimary)
+  .caret_color(PaletteColor::Foreground)
   .width(Dimension::Pct(100.0))
   .multiline()
   .rows(1, 12)

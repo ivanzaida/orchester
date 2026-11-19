@@ -198,7 +198,7 @@ impl Editor {
       // What was typed stays: the `danger` icon only, no red fill (`SsC16`).
       Notice::new("skill-save-error", NoticeTone::Info, title)
         .icon(Icon::CircleAlert)
-        .mark(lurq::app::theme::PaletteColor::Danger)
+        .mark(lurq::app::theme::PaletteColor::Destructive)
         .body(message_text(ctx, error))
         .action(retry)
         .action(reload)

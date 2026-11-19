@@ -36,7 +36,7 @@ use super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, may_press},
-  theme::{DecisionText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DecisionText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -247,7 +247,7 @@ impl ChoiceCard<'_> {
           .child(
             Text::new(&label)
               .variant(ExtraTypography::Note.role())
-              .color(PaletteColor::TextSecondary),
+              .color(ExtraColor::TextSecondary.role()),
           )
           .child(
             SelectField::new("plan-limit-connection", label.clone(), self.other.clone(), options)

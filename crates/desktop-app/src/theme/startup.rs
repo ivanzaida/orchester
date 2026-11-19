@@ -12,6 +12,7 @@ use lurq::{
 
 use super::{
   fonts::ICONS,
+  palette::text_secondary,
   typography::{mono, style},
 };
 
@@ -142,7 +143,7 @@ impl StartupText {
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
-    let (primary, secondary, muted) = (palette.text_primary, palette.text_secondary, palette.text_muted);
+    let (primary, secondary, muted) = (palette.foreground, text_secondary(palette), palette.muted_foreground);
     match self {
       Self::TileIcon => TextStyle {
         font_family: Arc::from(ICONS),

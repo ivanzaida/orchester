@@ -57,15 +57,15 @@ pub fn row(ctx: &mut Ctx, navigation: &Navigation) -> Element {
     .spacing(SpacingSize::Sm)
     .rounded(RadiusSize::Md)
     // An input's fill: the light theme's border alone is lost on the sidebar's surface.
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .align_items(Alignment::Center)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::Search, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Search, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&label)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .flex(1.0),
     )

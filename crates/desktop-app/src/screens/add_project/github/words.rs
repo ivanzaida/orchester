@@ -14,7 +14,7 @@ use orchester_workspace::{
   repository::init::{Commits, LocalRepository},
 };
 
-use crate::ui::icon::Icon;
+use crate::{theme::ExtraColor, ui::icon::Icon};
 
 /// Longest folder path shown in full in a property (`Value` in `gutA8`).
 const PATH_CHARS: usize = 64;
@@ -22,49 +22,70 @@ const PATH_CHARS: usize = 64;
 /// The status under the title (`Status line` `yKHnp`): its icon, the icon's and the word's colors, and the
 /// word's key; `None` while detecting.
 pub(super) fn status(state: Option<&DetectionState>) -> (Icon, PaletteColor, PaletteColor, &'static str) {
-  use PaletteColor::{Danger, Success, TextMuted, TextSecondary, Warning};
+  use PaletteColor::{Destructive, MutedForeground, Success, Warning};
+  let secondary = || ExtraColor::TextSecondary.role();
   let Some(state) = state else {
     return (
       Icon::LoaderCircle,
-      TextSecondary,
-      TextSecondary,
+      secondary(),
+      secondary(),
       "setup.github.status.checking",
     );
   };
   match state {
-    DetectionState::Detected { .. } => (
-      Icon::CircleCheck,
-      Success,
-      TextSecondary,
-      "setup.github.status.detected",
-    ),
+    DetectionState::Detected { .. } => (Icon::CircleCheck, Success, secondary(), "setup.github.status.detected"),
     DetectionState::NoRemote => (
       Icon::CircleMinus,
-      TextMuted,
-      TextSecondary,
+      MutedForeground,
+      secondary(),
       "setup.github.status.localOnly",
     ),
     DetectionState::NotGitHub => (
       Icon::CircleMinus,
-      TextMuted,
-      TextSecondary,
+      MutedForeground,
+      secondary(),
       "setup.github.status.notGitHub",
     ),
     DetectionState::NoDefaultBranch => (
       Icon::CircleMinus,
-      TextMuted,
-      TextSecondary,
+      MutedForeground,
+      secondary(),
       "setup.github.status.emptyRepository",
     ),
-    DetectionState::GhNotFound => (Icon::CircleAlert, Danger, Danger, "setup.github.status.ghNotFound"),
+    DetectionState::GhNotFound => (
+      Icon::CircleAlert,
+      Destructive,
+      Destructive,
+      "setup.github.status.ghNotFound",
+    ),
     DetectionState::NotSignedIn => (Icon::CircleAlert, Warning, Warning, "setup.github.status.notSignedIn"),
     DetectionState::WrongAccount { .. } => (Icon::CircleAlert, Warning, Warning, "setup.github.status.wrongAccount"),
     DetectionState::NoAccess { .. } => (Icon::Lock, Warning, Warning, "setup.github.status.noAccess"),
     DetectionState::MissingScope { .. } => (Icon::KeyRound, Warning, Warning, "setup.github.status.missingScope"),
-    DetectionState::Unrecognized => (Icon::CircleHelp, Danger, Danger, "setup.github.status.unrecognized"),
-    DetectionState::NotAGitRepository => (Icon::CircleX, Danger, Danger, "setup.github.status.notRepository"),
-    DetectionState::GitFailed => (Icon::CircleAlert, Danger, Danger, "setup.github.status.gitFailed"),
-    DetectionState::CouldNotRun => (Icon::CircleAlert, Danger, Danger, "setup.github.status.couldNotRun"),
+    DetectionState::Unrecognized => (
+      Icon::CircleHelp,
+      Destructive,
+      Destructive,
+      "setup.github.status.unrecognized",
+    ),
+    DetectionState::NotAGitRepository => (
+      Icon::CircleX,
+      Destructive,
+      Destructive,
+      "setup.github.status.notRepository",
+    ),
+    DetectionState::GitFailed => (
+      Icon::CircleAlert,
+      Destructive,
+      Destructive,
+      "setup.github.status.gitFailed",
+    ),
+    DetectionState::CouldNotRun => (
+      Icon::CircleAlert,
+      Destructive,
+      Destructive,
+      "setup.github.status.couldNotRun",
+    ),
     DetectionState::Unreachable => (Icon::CircleAlert, Warning, Warning, "setup.github.status.unreachable"),
     DetectionState::RateLimited => (Icon::Clock, Warning, Warning, "setup.github.status.rateLimited"),
   }
@@ -185,8 +206,12 @@ pub(super) fn properties(
   let (Some(detection), Some(state)) = (detection, state) else {
     let checking = ctx.t("setup.github.value.checking");
     return vec![
-      prop("repository", checking.clone(), Value::Text(PaletteColor::TextMuted)),
-      prop("account", checking, Value::Text(PaletteColor::TextMuted)),
+      prop(
+        "repository",
+        checking.clone(),
+        Value::Text(PaletteColor::MutedForeground),
+      ),
+      prop("account", checking, Value::Text(PaletteColor::MutedForeground)),
     ];
   };
   match detection {
@@ -196,7 +221,7 @@ pub(super) fn properties(
         rows.push(prop(
           "git",
           ctx.t("setup.github.value.noGitRepository"),
-          Value::Text(PaletteColor::Danger),
+          Value::Text(PaletteColor::Destructive),
         ));
       }
       rows
@@ -205,12 +230,12 @@ pub(super) fn properties(
       let mut rows = Vec::new();
       if let Some(git) = local.and_then(|local| git_value(ctx, local)) {
         rows.push(folder_property(ctx, folder));
-        rows.push(prop("git", git, Value::Text(PaletteColor::TextPrimary)));
+        rows.push(prop("git", git, Value::Text(PaletteColor::Foreground)));
       }
       rows.push(prop(
         "remote",
         ctx.t_args("setup.github.value.noRemote", [("remote", remote.as_str())]),
-        Value::Text(PaletteColor::TextSecondary),
+        Value::Text(ExtraColor::TextSecondary.role()),
       ));
       rows
     }
@@ -274,7 +299,7 @@ fn github(
   state: &DetectionState,
   expected: Option<&GitHubLogin>,
 ) -> Vec<(&'static str, Arc<str>, Value)> {
-  let primary = || Value::Text(PaletteColor::TextPrimary);
+  let primary = || Value::Text(PaletteColor::Foreground);
   let repository = (
     "repository",
     match found.view() {
@@ -340,9 +365,11 @@ fn account(ctx: &Ctx, found: &GitHubDetection, state: &DetectionState) -> Arc<st
 /// The account's color: what is not known is `text_muted`, what is wrong `warning`.
 fn account_look(state: &DetectionState) -> Value {
   Value::Text(match state {
-    DetectionState::GhNotFound | DetectionState::Unrecognized | DetectionState::CouldNotRun => PaletteColor::TextMuted,
+    DetectionState::GhNotFound | DetectionState::Unrecognized | DetectionState::CouldNotRun => {
+      PaletteColor::MutedForeground
+    }
     DetectionState::NotSignedIn | DetectionState::WrongAccount { .. } => PaletteColor::Warning,
-    _ => PaletteColor::TextPrimary,
+    _ => PaletteColor::Foreground,
   })
 }
 

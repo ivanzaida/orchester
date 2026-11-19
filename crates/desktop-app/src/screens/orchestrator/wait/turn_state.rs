@@ -45,7 +45,7 @@ use crate::{
   project::try_again,
   screens::orchestrator::timeline::TurnRow,
   services::Services,
-  theme::{ExtraSpacing, IconSize, OrchestratorSpacing, OrchestratorText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, OrchestratorSpacing, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -126,7 +126,7 @@ impl Component for TurnStateRow {
           ("of", of.to_string()),
         ];
         let words = ctx.t_args("orchestrator.turnState.triedAgain", args);
-        let muted = (Icon::RotateCw, PaletteColor::TextMuted);
+        let muted = (Icon::RotateCw, PaletteColor::MutedForeground);
         ("tried_again", muted, words, Some(reason(ctx, why)))
       }
       EventTurn::LeftToPerson { tries, why } => {
@@ -146,7 +146,12 @@ impl Component for TurnStateRow {
         let warning = (Icon::CircleAlert, PaletteColor::Warning);
         ("left_to_person", warning, words, Some(why))
       }
-      EventTurn::Held(hold) => ("held", (Icon::Pause, PaletteColor::TextMuted), held(ctx, *hold), None),
+      EventTurn::Held(hold) => (
+        "held",
+        (Icon::Pause, PaletteColor::MutedForeground),
+        held(ctx, *hold),
+        None,
+      ),
       // The working line says which try thinks.
       EventTurn::Trying { .. } => return Row::new(),
     };
@@ -175,7 +180,7 @@ impl Component for TurnStateRow {
         Text::new(&words)
           .id(format!("{}-words", props.id))
           .variant(OrchestratorText::Line.role())
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap()
           .text_overflow(TextOverflow::Elipsis)
           .flex_shrink(1.0)

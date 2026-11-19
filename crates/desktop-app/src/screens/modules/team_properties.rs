@@ -22,7 +22,7 @@ use super::{
 use crate::{
   screens::{settings::orchester::moment, usage::words::date_time},
   team::pages::{TeamClaim, TeamModule},
-  theme::{ExtraRadius, ExtraSpacing, IconSize, ModulesSpacing},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ModulesSpacing},
   ui::icon::{Icon, icon},
 };
 
@@ -32,13 +32,13 @@ pub fn column(ctx: &Ctx, module: &TeamModule) -> Element {
   let key = |key: &str| ctx.t(key);
   let branch = glyphed(
     "module-property-branch-value",
-    (Icon::GitBranch, PaletteColor::TextSecondary),
-    (&module.branch, PaletteColor::TextPrimary),
+    (Icon::GitBranch, ExtraColor::TextSecondary.role()),
+    (&module.branch, PaletteColor::Foreground),
   );
   let created = text(
     "module-property-created-value",
     &date_time(ctx, module.module.created_at()),
-    PaletteColor::TextPrimary,
+    PaletteColor::Foreground,
   );
   let rows = [
     (
@@ -93,7 +93,7 @@ fn state(ctx: &Ctx, state: ModuleState) -> Element {
     .rounded(ExtraRadius::Full.role())
     .background(match state {
       ModuleState::Open => PaletteColor::Success,
-      ModuleState::Closed => PaletteColor::TextMuted,
+      ModuleState::Closed => PaletteColor::MutedForeground,
     });
   Row::new()
     .spacing(ExtraSpacing::Snug.role())
@@ -102,7 +102,7 @@ fn state(ctx: &Ctx, state: ModuleState) -> Element {
     .child(text(
       "module-property-state-value",
       &words::state(ctx, state),
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ))
     .into()
 }
@@ -113,8 +113,8 @@ fn assignee(ctx: &Ctx, module: &TeamModule) -> Element {
   match &module.assignee {
     Some(person) => glyphed(
       id,
-      (Icon::User, PaletteColor::TextSecondary),
-      (&words::person(ctx, person), PaletteColor::TextPrimary),
+      (Icon::User, ExtraColor::TextSecondary.role()),
+      (&words::person(ctx, person), PaletteColor::Foreground),
     ),
     None => muted(id, &ctx.t("modules.team.properties.notAssigned")),
   }
@@ -131,8 +131,8 @@ fn delivers(ctx: &Ctx, module: &TeamModule) -> Element {
     .map_or(&*checked_out, |branch| branch.as_str());
   glyphed(
     "module-property-delivers-value",
-    (Icon::GitMerge, PaletteColor::TextSecondary),
-    (base, PaletteColor::TextPrimary),
+    (Icon::GitMerge, ExtraColor::TextSecondary.role()),
+    (base, PaletteColor::Foreground),
   )
 }
 
@@ -142,8 +142,8 @@ fn claim(ctx: &Ctx, claim: Option<&TeamClaim>) -> Element {
   let Some(claim) = claim else {
     return glyphed(
       id,
-      (Icon::CircleDashed, PaletteColor::TextMuted),
-      (&ctx.t("modules.team.notClaimed"), PaletteColor::TextMuted),
+      (Icon::CircleDashed, PaletteColor::MutedForeground),
+      (&ctx.t("modules.team.notClaimed"), PaletteColor::MutedForeground),
     );
   };
   let holder = words::person(ctx, &claim.holder);
@@ -162,7 +162,7 @@ fn claim(ctx: &Ctx, claim: Option<&TeamClaim>) -> Element {
   glyphed(
     id,
     (Icon::UserRoundCheck, PaletteColor::Success),
-    (&words, PaletteColor::TextPrimary),
+    (&words, PaletteColor::Foreground),
   )
 }
 
@@ -178,7 +178,7 @@ fn glyphed(id: &str, (glyph, tone): (Icon, PaletteColor), (words, color): (&str,
 }
 
 fn muted(id: &str, words: &str) -> Element {
-  text(id, words, PaletteColor::TextMuted).into()
+  text(id, words, PaletteColor::MutedForeground).into()
 }
 
 /// `words` on one line, which a long value (a branch's name) ends with an ellipsis rather than past the column.

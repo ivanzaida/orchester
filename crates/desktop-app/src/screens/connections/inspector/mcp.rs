@@ -92,7 +92,7 @@ pub(super) fn parts(ctx: &mut Ctx, server: &McpServer, inspecting: &Inspecting<'
     super::sentence(
       "connection-off-note",
       &ctx.t_args(key, [("profiles", users.join(", "))]),
-      lurq::app::theme::PaletteColor::TextMuted,
+      lurq::app::theme::PaletteColor::MutedForeground,
     )
   });
   Parts {

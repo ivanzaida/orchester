@@ -168,7 +168,7 @@ impl PropertyChip {
     }
     let toggle = state.open.clone();
     pressable(move || toggle.update(|open| *open = !*open))
-      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)))
+      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Input)))
   }
 
   /// The chip's words: its name unless it is set, in `warning` while a run needs it, and its value.
@@ -180,7 +180,7 @@ impl PropertyChip {
         .color(if self.warning {
           PaletteColor::Warning
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         })
         .nowrap()
     });
@@ -188,9 +188,9 @@ impl PropertyChip {
       .id(format!("{}-value", self.id))
       .variant(TypographyStyle::Label)
       .color(if set {
-        PaletteColor::TextPrimary
+        PaletteColor::Foreground
       } else {
-        PaletteColor::TextSecondary
+        ExtraColor::TextSecondary.role()
       })
       .nowrap();
     chip.with_children(label).child(value)
@@ -200,15 +200,11 @@ impl PropertyChip {
   pub fn render(self, state: &ChipState, panel: Option<Element>) -> Element {
     let open = state.open.get();
     let set = self.look == Look::Set;
-    let stroke = if open {
-      PaletteColor::BorderFocus
-    } else {
-      PaletteColor::Border
-    };
+    let stroke = if open { PaletteColor::Ring } else { PaletteColor::Border };
     let glyph = if set {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     };
     let mut chip = self
       .surface(state)
@@ -224,14 +220,14 @@ impl PropertyChip {
       .describe("look", if set { "set" } else { "empty" })
       .child(icon(self.icon, IconSize::Base, glyph));
     if set || open {
-      chip = chip.background(PaletteColor::SurfaceRaised);
+      chip = chip.background(PaletteColor::Card);
     }
     let mut chip = self.words(chip, set);
     if let Some(reason) = &self.unavailable {
       chip = chip
         .describe("state", "unavailable")
         .describe("reason", reason.clone())
-        .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-lock", self.id)));
+        .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground).id(format!("{}-lock", self.id)));
     }
     let popup = match &self.inside {
       Some((column, width, end_inset)) => popover_inside(
@@ -263,15 +259,11 @@ pub fn more_chip(ctx: &Ctx, state: &ChipState, on: bool, panel: Option<Element>)
     .describe("a11y_name", ctx.t("task_form.fields.more.label"))
     .describe("open", if open { "true" } else { "false" })
     .describe("on", if on { "true" } else { "false" })
-    .child(icon(Icon::Ellipsis, IconSize::Lg, PaletteColor::TextSecondary));
+    .child(icon(Icon::Ellipsis, IconSize::Lg, ExtraColor::TextSecondary.role()));
   if on || open {
-    button = button.background(PaletteColor::SurfaceRaised).border(Border::inside(
+    button = button.background(PaletteColor::Card).border(Border::inside(
       BorderSize::Sm,
-      if open {
-        PaletteColor::BorderFocus
-      } else {
-        PaletteColor::Border
-      },
+      if open { PaletteColor::Ring } else { PaletteColor::Border },
     ));
   }
   Row::new().child(button).child(state.popover(panel)).into()
@@ -385,14 +377,14 @@ impl MenuOption {
   fn check(&self) -> Option<Text> {
     self
       .chosen
-      .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary))
+      .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::Foreground))
   }
 
   fn glyph(&self) -> Text {
     let color = if self.chosen {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     };
     icon(self.icon, IconSize::Md, color)
   }
@@ -474,7 +466,7 @@ pub fn menu_head(text: &str) -> Element {
     .child(
       Text::new(text)
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }

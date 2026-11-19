@@ -16,7 +16,7 @@ use lurq::{
 
 use super::{bone, round_bone};
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, GroupText, IconSize, skeleton_line},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, GroupText, IconSize, skeleton_line},
   ui::icon::{Icon, icon},
 };
 
@@ -77,7 +77,7 @@ pub fn field(ctx: &Ctx, width: f32, value: f32) -> Row {
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .child(line(ctx, TypographyStyle::Description, value))
 }
 
@@ -86,7 +86,7 @@ pub fn unit_field(ctx: &Ctx, width: f32, value: f32, unit: &str) -> Row {
   field(ctx, width, value).child(Spacer::new().flex(1.0)).child(
     Text::new(unit)
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap(),
   )
 }
@@ -106,7 +106,7 @@ pub fn select(ctx: &Ctx, width: f32, value: f32) -> Row {
   field(ctx, width, value).child(Spacer::new().flex(1.0)).child(icon(
     Icon::ChevronDown,
     IconSize::Md,
-    PaletteColor::TextMuted,
+    PaletteColor::MutedForeground,
   ))
 }
 /// A button that comes with the data: a bone of its size.
@@ -116,7 +116,7 @@ pub fn button(width: f32) -> Column {
 
 /// A row's chevron, real: the row will open a page.
 pub fn chevron() -> Text {
-  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)
+  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)
 }
 
 /// Words that stay real, or the bone of words not read yet, so long.

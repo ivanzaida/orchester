@@ -32,7 +32,7 @@ use crate::{
   screens::settings::orchester::moment,
   services::updates,
   team::TeamFailure,
-  theme::{ExtraSpacing, ExtraTypography, HubText, IconSize, TasksSpacing},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, HubText, IconSize, TasksSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -145,7 +145,7 @@ fn running(ctx: &mut Ctx, root: &Path, local: &ProjectTasks) -> Option<Column> {
       Text::new(&rows.len().to_string())
         .id("tasks-team-running-count")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     );
   let note = Row::new()
     .id("tasks-team-outage-note")
@@ -153,7 +153,7 @@ fn running(ctx: &mut Ctx, root: &Path, local: &ProjectTasks) -> Option<Column> {
     .padding(Padding::vertical(ExtraSpacing::Tight.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("tasks.team.outageNote"))
         .variant(HubText::TeamLine.role())
@@ -213,7 +213,7 @@ fn row(ctx: &Ctx, (key, title): (&str, &str), latest: &LatestRun, reports: usize
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::LoaderCircle, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(Text::new(key).variant(ExtraTypography::MonoKey.role()).nowrap())
     .child(Text::new(title).variant(ExtraTypography::Strong.role()).nowrap())
     .child(Spacer::new().flex(1.0))

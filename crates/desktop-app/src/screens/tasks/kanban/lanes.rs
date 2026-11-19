@@ -20,7 +20,7 @@ use super::{
   model::{ColumnModel, LaneModel},
 };
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -117,21 +117,21 @@ fn lane_head(ctx: &Ctx, state: &BoardState, (lane, columns): (&LaneModel, &[Colu
     .child(icon(
       if folded { Icon::ChevronRight } else { Icon::ChevronDown },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
-    .child(icon(lane.glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(lane.glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&lane.label)
         .id(format!("{id}-name"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(
       Text::new(&lane.count().to_string())
         .id(format!("{id}-count"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .with_children((lane.needs_you > 0).then(|| needs_you(ctx, lane.needs_you, &format!("{id}-needs-you"))))

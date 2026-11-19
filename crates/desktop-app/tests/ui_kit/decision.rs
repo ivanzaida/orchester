@@ -10,7 +10,7 @@ use std::sync::{
 
 use lurq::{app::App, layout::text_style::FontWeight};
 use orchester_app::{
-  theme::{self, CardsSpacing, CardsText, Mode},
+  theme::{self, CardsSpacing, CardsText, ExtraColor, Mode},
   ui::decision::{Answer, AnsweredLine, Asked, Decision, Stage},
 };
 
@@ -231,11 +231,11 @@ fn decision_card_theme_roles_follow_the_design() {
   let palette = theme.palette();
   assert_eq!(
     theme.typography_style(CardsText::Context.role()).color,
-    palette.text_secondary
+    palette.get(ExtraColor::TextSecondary.role())
   );
   assert_eq!(
     theme.typography_style(CardsText::Quiet.role()).color,
-    palette.text_muted
+    palette.muted_foreground
   );
   assert_eq!(
     theme.spacing_value(CardsSpacing::InlineEnds.role()),

@@ -8,7 +8,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectSettingsText {
@@ -68,23 +71,23 @@ impl ProjectSettingsText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::GroupTitle => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
+      Self::GroupTitle => style(12.0, FontWeight::SemiBold, 1.3, 0.0, text_secondary(palette)),
       // The design's lines of a hint and of a mono label are 16 high (`f7dgB`, `HaAqu` in `06` `d6auya`), so an
       // item's row is 54 with them.
-      Self::Hint => style(12.0, FontWeight::Normal, LINE_16 / 12.0, 0.0, palette.text_muted),
-      Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::MonoValue => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::MonoLabel => mono(style(
-        12.5,
-        FontWeight::Medium,
-        LINE_16 / 12.5,
+      Self::Hint => style(12.0, FontWeight::Normal, LINE_16 / 12.0, 0.0, palette.muted_foreground),
+      Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::MonoValue => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::MonoLabel => mono(style(12.5, FontWeight::Medium, LINE_16 / 12.5, 0.0, palette.foreground)),
+      Self::MonoHint => mono(style(
+        12.0,
+        FontWeight::Normal,
+        LINE_16 / 12.0,
         0.0,
-        palette.text_primary,
+        palette.muted_foreground,
       )),
-      Self::MonoHint => mono(style(12.0, FontWeight::Normal, LINE_16 / 12.0, 0.0, palette.text_muted)),
-      Self::PageTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::MonoPageTitle => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
-      Self::Written => style(12.5, FontWeight::Normal, 1.55, 0.0, palette.text_primary),
+      Self::PageTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::MonoPageTitle => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.foreground)),
+      Self::Written => style(12.5, FontWeight::Normal, 1.55, 0.0, palette.foreground),
     }
   }
 }

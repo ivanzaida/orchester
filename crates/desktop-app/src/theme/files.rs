@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// Text of the code viewer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,9 +42,9 @@ impl FilesText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::RefusedPath => mono(style(17.0, FontWeight::SemiBold, 1.25, 0.0, palette.text_primary)),
-      Self::Name => style(12.5, FontWeight::Normal, 1.25, 0.0, palette.text_secondary),
-      Self::NameMatch => style(12.5, FontWeight::SemiBold, 1.25, 0.0, palette.text_primary),
+      Self::RefusedPath => mono(style(17.0, FontWeight::SemiBold, 1.25, 0.0, palette.foreground)),
+      Self::Name => style(12.5, FontWeight::Normal, 1.25, 0.0, text_secondary(palette)),
+      Self::NameMatch => style(12.5, FontWeight::SemiBold, 1.25, 0.0, palette.foreground),
     }
   }
 }

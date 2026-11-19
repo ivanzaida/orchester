@@ -23,7 +23,7 @@ use orchester_workspace::{display, tasks::detail::RunView};
 use super::super::{super::TaskContext, step_label, tab_link};
 use crate::{
   routes::TaskTab,
-  theme::{DecisionText, ExtraSpacing, IconSize, TaskText},
+  theme::{DecisionText, ExtraColor, ExtraSpacing, IconSize, TaskText},
   ui::{
     card::{CardSurface, card},
     chat::links,
@@ -78,10 +78,10 @@ fn report(ctx: &mut Ctx, run: &RunView, failed: &StepKey) -> Option<[Element; 2]
         .height(Dimension::Px(AVATAR))
         .align_items(Alignment::Center)
         .justify(Justify::Center)
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .rounded(RadiusSize::Md)
-        .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary)),
+        .child(icon(glyph, IconSize::Sm, ExtraColor::TextSecondary.role())),
     )
     .child(Text::new(reporter).variant(DecisionText::Subhead.role()))
     .child(
@@ -105,7 +105,7 @@ fn report(ctx: &mut Ctx, run: &RunView, failed: &StepKey) -> Option<[Element; 2]
     output.text.as_str().into()
   };
   let text = MarkdownView::new("task-retry-report-text", text, links(ctx))
-    .style(DecisionText::Report.role(), PaletteColor::TextPrimary)
+    .style(DecisionText::Report.role(), PaletteColor::Foreground)
     .render(ctx);
   let body = card("task-retry-report", CardSurface::Raised)
     .spacing(SpacingSize::Sm)
@@ -122,7 +122,7 @@ fn preserved(ctx: &mut Ctx, props: &TaskContext, run: &RunView) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Archive, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Archive, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(&text).variant(TypographyStyle::Description).flex(1.0))
     .child(tab_link(
       ctx,

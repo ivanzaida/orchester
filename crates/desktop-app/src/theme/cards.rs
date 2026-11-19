@@ -10,7 +10,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// The answers an answered card did not choose, dimmed (`AAgL1`, `F0nR9` in `hm5wE`).
 pub const NOT_CHOSEN_OPACITY: f32 = 0.5;
@@ -117,24 +120,24 @@ impl CardsText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(12.5, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
-      Self::ApprovalTitle => style(13.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
-      Self::PlanLines => style(12.5, FontWeight::Normal, 1.6, 0.0, palette.text_secondary),
-      Self::Decided => style(12.5, FontWeight::Medium, 1.35, 0.0, palette.text_primary),
-      Self::Asked => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
-      Self::Context => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.text_secondary),
-      Self::Decision => style(15.0, FontWeight::SemiBold, 1.4, -0.1, palette.text_primary),
-      Self::Whole => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
-      Self::Quiet => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Lead => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Chosen => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::Action => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary)),
-      Self::Command => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary)),
-      Self::Review => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::Probability => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_primary)),
-      Self::DenialMessage => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
-      Self::AnsweredCommand => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
-      Self::RiskValue => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
+      Self::Title => style(12.5, FontWeight::SemiBold, 1.35, 0.0, palette.foreground),
+      Self::ApprovalTitle => style(13.0, FontWeight::SemiBold, 1.35, 0.0, palette.foreground),
+      Self::PlanLines => style(12.5, FontWeight::Normal, 1.6, 0.0, text_secondary(palette)),
+      Self::Decided => style(12.5, FontWeight::Medium, 1.35, 0.0, palette.foreground),
+      Self::Asked => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.foreground),
+      Self::Context => style(13.0, FontWeight::Normal, 1.55, 0.0, text_secondary(palette)),
+      Self::Decision => style(15.0, FontWeight::SemiBold, 1.4, -0.1, palette.foreground),
+      Self::Whole => style(12.0, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
+      Self::Quiet => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Lead => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Chosen => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::Action => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, text_secondary(palette))),
+      Self::Command => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.foreground)),
+      Self::Review => style(12.5, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
+      Self::Probability => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, palette.foreground)),
+      Self::DenialMessage => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.foreground),
+      Self::AnsweredCommand => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
+      Self::RiskValue => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
     }
   }
 }

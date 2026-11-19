@@ -26,7 +26,7 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  theme::{AttemptText, DeliveryText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{AttemptText, DeliveryText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -194,7 +194,7 @@ fn facts(ctx: &Ctx, project: &ShownProject) -> Row {
       .child(
         Text::new(&ctx.t(key))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
       .child(bone(*width, BONE_HEIGHT))
@@ -237,7 +237,7 @@ fn sections(ctx: &Ctx) -> Column {
         .child(
           Text::new(&stage_name(ctx, *stage))
             .variant(TypographyStyle::Body)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap(),
         )
         .child(touches)

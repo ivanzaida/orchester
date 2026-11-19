@@ -23,7 +23,7 @@ use super::{
   work::Write,
 };
 use crate::{
-  theme::{ExtraRadius, ExtraTypography, MemorySpacing},
+  theme::{ExtraColor, ExtraRadius, ExtraTypography, MemorySpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -52,7 +52,7 @@ pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins:
       Text::new(memory.content().text())
         .id(format!("{id}-text"))
         .variant(ExtraTypography::Lead.role())
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
     .child(
       Row::new()
@@ -76,7 +76,7 @@ pub fn proposal(ctx: &mut Ctx, (memory, records): (&Memory, &[Memory]), origins:
       SpacingSize::Md,
     ))
     .spacing(crate::theme::ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
     .child(
@@ -111,7 +111,7 @@ fn supersedes(ctx: &Ctx, memory: &Memory, records: &[Memory], origins: &Origins,
     parts::status(
       &format!("{id}-supersedes"),
       (Icon::Replace, label),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     )
     .into(),
   )

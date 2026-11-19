@@ -36,7 +36,7 @@ use crate::{
     is_synthetic_input,
   },
   services::Services,
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::{BadgeTone, badge},
@@ -299,7 +299,7 @@ fn held_note(id: &str, words: &str) -> Row {
     .child(
       Text::new(words)
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
 }

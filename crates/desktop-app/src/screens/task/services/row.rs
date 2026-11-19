@@ -150,7 +150,7 @@ fn address(ctx: &mut Ctx, id: &str, service: &RunService, parts: &RowParts<'_>) 
         Text::new(&service.url)
           .id(format!("{id}-address"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
       .into(),
@@ -166,9 +166,9 @@ fn address(ctx: &mut Ctx, id: &str, service: &RunService, parts: &RowParts<'_>) 
     }
     RunServiceState::Crashed { .. } | RunServiceState::Stopped => {
       let color = if matches!(service.state, RunServiceState::Crashed { .. }) {
-        PaletteColor::Danger
+        PaletteColor::Destructive
       } else {
-        PaletteColor::TextMuted
+        PaletteColor::MutedForeground
       };
       room
         .child(
@@ -195,14 +195,14 @@ fn link(ctx: &Ctx, id: &str, url: &str, open: Arc<dyn Fn(Arc<str>) + Send + Sync
       ctx.t_args("run_services.actions.open", [("url", url.to_owned())]),
     )
     .spacing(ExtraSpacing::Snug.role())
-    .child(icon(Icon::Globe, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(Icon::Globe, IconSize::Sm, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&address)
         .id(format!("{id}-url"))
         .variant(ExtraTypography::PropertyMono.role())
         .nowrap(),
     )
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::MutedForeground))
     .into()
 }
 

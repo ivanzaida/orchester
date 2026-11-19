@@ -42,7 +42,7 @@ pub(super) struct Shown<'a> {
 pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
   let groups: Vec<Column> = if shown.filter == HubFilter::Archived {
     let archived: Vec<&Entry> = listing.shown(shown.filter).collect();
-    let named = ("archived", "team_hub.group.archived", PaletteColor::TextMuted);
+    let named = ("archived", "team_hub.group.archived", PaletteColor::MutedForeground);
     vec![group_of(
       ctx,
       listing,
@@ -90,8 +90,8 @@ fn section(ctx: &lurq::app::ctx::Ctx, group: Group, count: usize) -> Row {
     ctx,
     match group {
       Group::NeedsYouHere => ("needs", "team_hub.group.needs", PaletteColor::Warning),
-      Group::Ready => ("ready", "team_hub.group.ready", PaletteColor::TextMuted),
-      Group::OffHere => ("off", "team_hub.group.off", PaletteColor::TextMuted),
+      Group::Ready => ("ready", "team_hub.group.ready", PaletteColor::MutedForeground),
+      Group::OffHere => ("off", "team_hub.group.off", PaletteColor::MutedForeground),
     },
     count,
   )

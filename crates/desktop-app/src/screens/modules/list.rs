@@ -200,7 +200,7 @@ impl ModulesList {
     let status = Text::new(&ctx.t("modules.description"))
       .id("modules-description")
       .variant(TypographyStyle::Description)
-      .color(lurq::app::theme::PaletteColor::TextMuted)
+      .color(lurq::app::theme::PaletteColor::MutedForeground)
       .nowrap();
     header::header(header::Header {
       id: "modules-header",

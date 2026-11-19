@@ -47,13 +47,13 @@ pub enum Kind {
 impl Kind {
   pub const fn look(self) -> (Icon, PaletteColor, &'static str) {
     match self {
-      Self::Blocked => (Icon::Lock, PaletteColor::TextMuted, "unavailable-reason"),
-      Self::Ready => (Icon::CircleCheck, PaletteColor::TextMuted, "ready"),
-      Self::Busy => (Icon::LoaderCircle, PaletteColor::TextMuted, "progress"),
+      Self::Blocked => (Icon::Lock, PaletteColor::MutedForeground, "unavailable-reason"),
+      Self::Ready => (Icon::CircleCheck, PaletteColor::MutedForeground, "ready"),
+      Self::Busy => (Icon::LoaderCircle, PaletteColor::MutedForeground, "progress"),
       Self::Problem => (Icon::CircleAlert, PaletteColor::Warning, "problem"),
       Self::NotReady => (Icon::CircleAlert, PaletteColor::Warning, "not-ready"),
       Self::CannotTell => (Icon::CircleAlert, PaletteColor::Warning, "cannot-tell"),
-      Self::Note(glyph) => (glyph, PaletteColor::TextMuted, "note"),
+      Self::Note(glyph) => (glyph, PaletteColor::MutedForeground, "note"),
     }
   }
 }

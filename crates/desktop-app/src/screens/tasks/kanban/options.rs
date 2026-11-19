@@ -135,7 +135,7 @@ impl Component for BoardOptions {
         Row::new()
           .spacing(ExtraSpacing::Snug.role())
           .align_items(Alignment::Center)
-          .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+          .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
           .child(Text::new(&ctx.t("tasks.display.note")).variant(ExtraTypography::Note.role())),
       );
     let list = self.list(ctx, &props, open);
@@ -145,8 +145,8 @@ impl Component for BoardOptions {
       .padding(SpacingSize::Md)
       .spacing(ExtraSpacing::Loose.role())
       .rounded(RadiusSize::Lg)
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .child(layout_switch(ctx, &props.display, "tasks-board-options-layout", true))
       .child(groups)
       .child(separator(ctx))
@@ -181,26 +181,26 @@ impl BoardOptions {
       .padding(Padding::horizontal(SpacingSize::Sm))
       .spacing(ExtraSpacing::Snug.role())
       .rounded(RadiusSize::Md)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border(Border::inside(
         BorderSize::Sm,
         if chosen {
-          PaletteColor::BorderFocus
+          PaletteColor::Ring
         } else {
           PaletteColor::Border
         },
       ))
       .describe("a11y_name", ctx.t(label))
-      .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
       .child(
         Text::new(&ctx.t(value))
           .id(format!("tasks-board-options-{name}-value"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .flex(1.0)
           .nowrap(),
       )
-      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground));
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(SELECT_ROW))
@@ -327,7 +327,7 @@ fn properties(ctx: &Ctx, display: &Signal<Display>, now: &Display) -> Column {
     .child(
       Text::new(&ctx.t("tasks.board.options.properties"))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .with_children(rows)
 }
@@ -353,8 +353,8 @@ fn chip(ctx: &Ctx, display: &Signal<Display>, now: &Display, property: Property)
     );
   if on {
     chip
-      .background(PaletteColor::AccentMuted)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Highlight)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
   } else {
     chip.border(Border::inside(BorderSize::Sm, PaletteColor::Border))
   }

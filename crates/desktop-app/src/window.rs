@@ -87,10 +87,7 @@ pub fn open_showing(runtime: &Runtime, launch: &Launch, position: Option<WindowP
   tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });
 
   #[cfg(feature = "devtools")]
-  {
-    lurq::app::devtools::load_fonts(&mut app);
-    tree.mount_devtools(&mut app);
-  }
+  tree.mount_devtools(&mut app);
 
   run(app, tree, position);
   // `run` returns once the window has closed: the servers stop and the discovery file goes.

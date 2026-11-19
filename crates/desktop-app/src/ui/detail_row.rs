@@ -32,7 +32,7 @@ pub fn detail_row(id: &str, key: &str, value: &str, kind: DetailValue) -> Row {
   let value = Text::new(value)
     .id(id.to_owned())
     .variant(typography)
-    .color(PaletteColor::TextPrimary)
+    .color(PaletteColor::Foreground)
     .flex(1.0);
   detail_row_of(id, key, value)
 }
@@ -49,7 +49,7 @@ pub fn detail_row_of(id: &str, key: &str, value: impl Into<Element>) -> Row {
       Text::new(key)
         .id(format!("{id}-key"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Px(KEY_WIDTH)),
     )
     .child(value)

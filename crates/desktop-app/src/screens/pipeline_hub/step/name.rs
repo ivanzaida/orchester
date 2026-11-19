@@ -19,7 +19,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::{KeyboardEvent, mouse_event::MouseEvent},
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Button, Row, Stack, Text, TextInput},
   core::{ElementRef, Ref, Signal},
@@ -35,7 +35,7 @@ use super::{
 };
 use crate::{
   screens::pipeline_hub::edit::Edit,
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, HubText, IconSize},
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, HubText, IconSize, TextRole},
   ui::{
     field::field_error,
     icon::{Icon, icon},
@@ -213,9 +213,9 @@ impl StepName {
     }
     if refused || editing {
       let ring = if refused {
-        PaletteColor::Danger
+        PaletteColor::Destructive
       } else {
-        PaletteColor::BorderFocus
+        PaletteColor::Ring
       };
       name = name.border(Border::inside(BorderSize::Sm, ring));
     }
@@ -226,9 +226,9 @@ impl StepName {
   /// unseen under the name as words, which a long name ends in an ellipsis with the whole name in its tooltip.
   fn input(&self, ctx: &mut Ctx, props: &Props, editing: bool) -> Stack {
     let theme = ctx.theme();
-    let shown = FormTextRole {
+    let shown = TextRole {
       typography: HubText::PanelTitle.role(),
-      color: PaletteColor::TextPrimary,
+      color: PaletteColor::Foreground,
     }
     .resolve(&theme.typography(), &theme.palette());
     let tracking = shown.letter_spacing;
@@ -237,7 +237,7 @@ impl StepName {
     let (restore, cancelled, edited) = (self.before.clone(), self.text.clone(), self.editing.clone());
     let mut input = TextInput::styled(self.text.clone(), shown)
       .letter_spacing(tracking)
-      .caret_color(PaletteColor::TextPrimary)
+      .caret_color(PaletteColor::Foreground)
       .id(Kind::Name.name())
       .describe("a11y_name", props.label.clone())
       .ref_element(self.input.clone())
@@ -291,9 +291,9 @@ impl StepName {
   /// The pencil after the name, which edits it too; faded and not pressable while a save is under way.
   fn pencil(&self, props: &Props, locked: bool) -> Button {
     let color = if self.hovered.get() && !locked {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     };
     let button = Button::empty()
       .id("pipeline-hub-step-name-edit")

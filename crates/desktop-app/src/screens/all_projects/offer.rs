@@ -18,7 +18,7 @@ use super::teams::Answer;
 use crate::{
   navigation::Navigation,
   routes::{JoinTarget, OrchesterView, Route},
-  theme::{IconSize, ProjectsText},
+  theme::{ExtraColor, IconSize, ProjectsText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -55,10 +55,10 @@ pub(super) fn strip(ctx: &mut Ctx, offer: &OfferedProject, answer: &Answer) -> E
     .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Md))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .child(icon(Icon::Users, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::Users, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&text)
         .id("all-projects-offer-text")

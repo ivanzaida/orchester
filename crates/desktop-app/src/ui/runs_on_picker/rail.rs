@@ -151,7 +151,7 @@ fn item(
 ) -> Element {
   let mark = match connection.mark {
     Mark::Agent(mark) => mark.render(ctx, IconSize::Md),
-    Mark::Cloud => icon(Icon::Cloud, IconSize::Md, PaletteColor::TextSecondary).into(),
+    Mark::Cloud => icon(Icon::Cloud, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
   };
   let choosable = connection.unavailable.is_none();
   let button = if choosable {
@@ -207,7 +207,7 @@ fn limit_dot(id: &str, connection: &str) -> Element {
     .pointer_events_none()
     .rounded(ExtraRadius::Full.role())
     .background(PaletteColor::Warning)
-    .border(Border::inside(BorderSize::Md, PaletteColor::SurfaceRaised))
+    .border(Border::inside(BorderSize::Md, PaletteColor::Card))
     .into()
 }
 
@@ -218,6 +218,6 @@ fn shown_bar(id: &str, connection: &str) -> Element {
     .absolute(BAR_LEFT, BAR_TOP, Dimension::Px(BAR_WIDTH), Dimension::Px(BAR_HEIGHT))
     .pointer_events_none()
     .rounded(ExtraRadius::Full.role())
-    .background(PaletteColor::Accent)
+    .background(PaletteColor::Primary)
     .into()
 }

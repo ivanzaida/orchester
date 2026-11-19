@@ -22,7 +22,7 @@ use crate::{
     page_head::MORE_MENU_WIDTH,
     parts::tile,
   },
-  theme::{ExtraSpacing, HubText, IconSize},
+  theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
     icon_button::IconButton,
@@ -37,7 +37,7 @@ pub fn crumb(ctx: &Ctx, selection: &Selection, new: bool) -> Element {
     .id("instruction-crumb")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(&ctx.t("hub.tabs.instructions")).variant(HubText::Crumb.role()));
   Row::new()
     .spacing(ExtraSpacing::Snug.role())
@@ -46,7 +46,7 @@ pub fn crumb(ctx: &Ctx, selection: &Selection, new: bool) -> Element {
     .with_children(new.then(|| {
       Text::new(&ctx.t("instructions.crumbNew"))
         .variant(HubText::Crumb.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
     }))
     .into()
 }

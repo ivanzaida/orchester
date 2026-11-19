@@ -22,7 +22,7 @@ use super::{
 };
 use crate::{
   navigation::link::Open,
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraSpacing, IconSize},
 };
 
 /// The most room an ancestor crumb takes: a longer name is cut there with an ellipsis. Ancestors keep
@@ -99,13 +99,13 @@ impl Crumb {
   fn render(self, ctx: &mut Ctx, id: String, last: bool) -> Element {
     let typography = self.typography;
     let color = if self.ancestor {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     } else if last && typography == TypographyStyle::Title {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else if last {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     };
     match self.open {
       Some(open) => {
@@ -119,7 +119,7 @@ impl Crumb {
           .flex_shrink(0.0)
           .max_width(Dimension::Px(ANCESTOR_MAX_WIDTH))
           .describe("a11y_name", name)
-          .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted)))
+          .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::MutedForeground)))
           .child(text)
           .into()
       }
@@ -143,8 +143,8 @@ pub fn breadcrumb(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, crumbs: Ve
       let mark = match separator {
         CrumbSeparator::Slash => Text::new(SLASH)
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted),
-        CrumbSeparator::Chevron => icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted),
+          .color(PaletteColor::MutedForeground),
+        CrumbSeparator::Chevron => icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::MutedForeground),
       };
       row = row.child(mark.id(format!("{id}-separator-{index}")));
     }

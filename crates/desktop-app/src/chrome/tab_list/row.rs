@@ -120,22 +120,22 @@ impl Component for ListRow {
         glyph(&props.tab),
         IconSize::Md,
         if props.current {
-          PaletteColor::TextPrimary
+          PaletteColor::Foreground
         } else {
-          PaletteColor::TextSecondary
+          ExtraColor::TextSecondary.role()
         },
       ))
       .with_children(words(&props))
       .with_children(
         props
           .hidden
-          .then(|| icon(Icon::EyeOff, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-hidden"))),
+          .then(|| icon(Icon::EyeOff, IconSize::Sm, PaletteColor::MutedForeground).id(format!("{id}-hidden"))),
       )
       .with_children(attention(ctx, &projects, &props.tab, format!("{id}-attention")))
       .with_children(
         props
           .current
-          .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary).id(format!("{id}-current"))),
+          .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::Foreground).id(format!("{id}-current"))),
       )
       .child(self.close_slot(ctx, &props, navigation));
     let row = match &props.kept {
@@ -143,16 +143,14 @@ impl Component for ListRow {
       None => row,
     };
     let row = if props.current {
-      row.class("current").background(PaletteColor::AccentMuted)
+      row.class("current").background(PaletteColor::Highlight)
     } else if props.ringed {
       row.background(ExtraColor::Hover.role())
     } else {
       row.hovered_style(Style::new().background(ExtraColor::Hover.role()))
     };
     if props.ringed {
-      row
-        .class("ringed")
-        .border_inside(BorderSize::Sm, PaletteColor::BorderFocus)
+      row.class("ringed").border_inside(BorderSize::Sm, PaletteColor::Ring)
     } else {
       row
     }
@@ -189,9 +187,9 @@ impl ListRow {
         Icon::X,
         IconSize::Sm,
         if hovered {
-          PaletteColor::TextPrimary
+          PaletteColor::Foreground
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         },
       ));
     let button = if hovered {
@@ -211,14 +209,14 @@ fn words(props: &RowProps) -> [Element; 2] {
     } else {
       TypographyStyle::Description
     })
-    .color(PaletteColor::TextPrimary)
+    .color(PaletteColor::Foreground)
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)
     .flex_shrink(1.0)
     .min_width(Dimension::Px(0.0));
   let project = Text::new(props.project.as_deref().unwrap_or_default())
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .nowrap()
     .text_overflow(TextOverflow::Elipsis)
     .flex(1.0)

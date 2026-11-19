@@ -92,7 +92,7 @@ impl Component for AppMenu {
       .rounded(RadiusSize::Md)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
       .child(mark())
-      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground));
     if self.open.get() {
       button = button.background(ExtraColor::Hover.role());
     }

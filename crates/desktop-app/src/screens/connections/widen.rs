@@ -26,7 +26,7 @@ use crate::{
     input_gate::{Guarded, InputGate, Protected, may_press},
     is_synthetic_input,
   },
-  theme::{ConnectionsText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ConnectionsText, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -300,7 +300,7 @@ fn question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButton)) -
   let reasons = props.reasons.iter().map(|reason| {
     Text::new(reason)
       .variant(ExtraTypography::Note.role())
-      .color(PaletteColor::TextSecondary)
+      .color(ExtraColor::TextSecondary.role())
       .width(Dimension::Pct(100.0))
   });
   Column::new()
@@ -351,7 +351,7 @@ fn card_question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButto
           Icon::ShieldAlert
         },
         IconSize::Base,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ))
       .child(
         Text::new(reason)
@@ -365,9 +365,9 @@ fn card_question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButto
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Lg)
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(ExtraRadius::Tile.role())
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .child(
       Text::new(&props.title)
         .id(format!("{}-title", props.id))
@@ -404,8 +404,8 @@ fn reviewer_question(props: &WidenProps, (keep, confirm): (ActionButton, ActionB
       SpacingSize::Md,
     ))
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .rounded(RadiusSize::Md)
     .child(
       Row::new()

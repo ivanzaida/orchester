@@ -305,7 +305,7 @@ fn pipeline(ctx: &mut Ctx, row: &TaskRow) -> Element {
     label,
     TypographyStyle::Description,
   )
-  .color(PaletteColor::TextMuted)
+  .color(PaletteColor::MutedForeground)
   .render(ctx)
 }
 

@@ -106,13 +106,13 @@ impl RecordRow {
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center);
     if memory.is_pinned() {
-      trailing = trailing.child(icon(Icon::Pin, IconSize::Base, PaletteColor::TextPrimary).id(format!("{id}-pinned")));
+      trailing = trailing.child(icon(Icon::Pin, IconSize::Base, PaletteColor::Foreground).id(format!("{id}-pinned")));
     }
     if let Some(status) = words::closed_status(ctx, memory.status()) {
       trailing = trailing.child(parts::status(
         &format!("{id}-status"),
         status,
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       ));
     }
     let actions = if self.hovered.get() && !state.busy() {
@@ -130,9 +130,9 @@ fn body(ctx: &mut Ctx, state: &MemoryState, props: &RowProps, id: &str) -> Eleme
   let content = memory.content();
   let shown = memory.status() == MemoryStatus::Active || memory.status() == MemoryStatus::Proposed;
   let color = if shown {
-    PaletteColor::TextPrimary
+    PaletteColor::Foreground
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   let handoff = (content.kind() == MemoryKind::Handoff).then(|| HandoffParts::of(content.text()));
   let text = handoff
@@ -240,7 +240,7 @@ fn history(ctx: &mut Ctx, state: &MemoryState, props: &RowProps, id: &str) -> El
     .child(icon(
       if open { Icon::ChevronDown } else { Icon::ChevronRight },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .child(Text::new(&label).variant(TypographyStyle::FieldLabel).nowrap());
   let mut history = Column::new()
@@ -264,7 +264,7 @@ fn history(ctx: &mut Ctx, state: &MemoryState, props: &RowProps, id: &str) -> El
           .child(
             Text::new(&earlier.text)
               .variant(ExtraTypography::Prose.role())
-              .color(PaletteColor::TextMuted),
+              .color(PaletteColor::MutedForeground),
           )
           .child(Text::new(&earlier.meta).variant(TypographyStyle::Caption)),
       );

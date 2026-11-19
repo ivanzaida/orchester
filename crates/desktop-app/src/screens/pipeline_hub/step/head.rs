@@ -95,7 +95,7 @@ pub(super) fn where_line(ctx: &mut Ctx, (project, entry): (ProjectId, &Entry), p
     .child(icon(
       Icon::ArrowLeft,
       IconSize::Sm,
-      lurq::app::theme::PaletteColor::TextSecondary,
+      crate::theme::ExtraColor::TextSecondary.role(),
     ))
     .child(
       Text::new(&pipeline)

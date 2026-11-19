@@ -203,7 +203,7 @@ impl Component for CeilingsRow {
     line(Line::Under, REST_HEIGHT)
       .id(props.id.clone())
       .describe("budget", ceilings.budget().map_or(0, |budget| budget.get()).to_string())
-      .child(icon(Icon::Gauge, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(Icon::Gauge, IconSize::Sm, PaletteColor::MutedForeground))
       .with_children(said(ctx, &props.id, props.led))
       .child(Spacer::new().flex(1.0))
       .child(change)
@@ -268,7 +268,7 @@ impl CeilingsRow {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Gauge, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Gauge, IconSize::Base, PaletteColor::MutedForeground))
       .child(
         Text::new(&ctx.t_args("orchestrator.lead.ceilings.form.title", [("name", &*props.name)]))
           .id(format!("{id}-title"))
@@ -282,8 +282,8 @@ impl CeilingsRow {
       .padding(SpacingSize::Lg)
       .spacing(ExtraSpacing::Inset.role())
       .rounded(ExtraRadius::Tile.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+      .background(PaletteColor::Card)
+      .border_inside(BorderSize::Sm, PaletteColor::Input)
       .box_shadow(ShadowStyle::Md)
       .child(head)
       .with_children(rows)
@@ -495,7 +495,11 @@ fn form_row(id: &str, label: &str, (hint, wrong): (Arc<str>, bool), controls: Ve
     .id(format!("{id}-hint"))
     .variant(ExtraTypography::Note.role())
     .width(Dimension::Pct(100.0));
-  let hint = if wrong { hint.color(PaletteColor::Danger) } else { hint };
+  let hint = if wrong {
+    hint.color(PaletteColor::Destructive)
+  } else {
+    hint
+  };
   let words = Column::new()
     .flex(1.0)
     .min_width(Dimension::Px(0.0))

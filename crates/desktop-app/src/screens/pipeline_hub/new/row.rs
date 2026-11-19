@@ -17,7 +17,7 @@ use crate::{
     },
     pipeline_hub::model::Listing,
   },
-  theme::{HubText, IconSize},
+  theme::{ExtraColor, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
     tooltip::Truncated,
@@ -48,8 +48,8 @@ pub(in crate::screens::pipeline_hub) fn section(ctx: &mut Ctx, new: &NewPipeline
     open: Button::empty(),
     group: None,
     kind: "pipeline".to_owned(),
-    mark: icon(Icon::Workflow, IconSize::Lg, PaletteColor::TextSecondary).into(),
-    name: (&name, PaletteColor::TextPrimary),
+    mark: icon(Icon::Workflow, IconSize::Lg, ExtraColor::TextSecondary.role()).into(),
+    name: (&name, PaletteColor::Foreground),
     line,
     tag: None,
     version: None,
@@ -59,7 +59,7 @@ pub(in crate::screens::pipeline_hub) fn section(ctx: &mut Ctx, new: &NewPipeline
     .child(section_row(
       "pipeline-hub-section-new",
       &ctx.t("pipeline_new.section"),
-      (&ctx.t("pipeline_new.notSaved"), PaletteColor::TextMuted),
+      (&ctx.t("pipeline_new.notSaved"), PaletteColor::MutedForeground),
     ))
     .child(row)
     .into()

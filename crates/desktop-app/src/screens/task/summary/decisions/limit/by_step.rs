@@ -73,7 +73,7 @@ fn step_row(ctx: &Ctx, stop: &Stop<'_>, row: &ProgressRow) -> Option<Element> {
     (value, PaletteColor::Warning)
   } else {
     let value = ctx.t_args("decisions.limit.byStep", [("tokens", used.as_str()), ("agent", agent)]);
-    (value, PaletteColor::TextPrimary)
+    (value, PaletteColor::Foreground)
   };
   let id = format!("raise-limit-step-{}", row.id);
   let text = Text::new(&value)

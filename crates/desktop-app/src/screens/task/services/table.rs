@@ -23,7 +23,7 @@ use super::{
   words,
 };
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -42,7 +42,7 @@ pub(super) fn stack_line(
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Layers, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(Icon::Layers, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&words::title(ctx, services, definitions))
         .id("task-services-stack-title")
@@ -53,7 +53,7 @@ pub(super) fn stack_line(
       Text::new(&words::detail(ctx, services, step))
         .id("task-services-stack-detail")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0)),
@@ -117,12 +117,12 @@ pub(super) fn note(ctx: &Ctx, step: Option<&StepView>) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .id("task-services-note-text")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

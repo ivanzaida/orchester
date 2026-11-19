@@ -135,7 +135,7 @@ impl Component for PageFailure {
         FailureSpacing::CardY.role(),
       ))
       .spacing(FailureSpacing::Parts.role())
-      .background(PaletteColor::SurfacePanel)
+      .background(PaletteColor::Canvas)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Lg)
       .child(top)
@@ -189,7 +189,7 @@ impl PageFailure {
           .child(icon(
             if shown { Icon::ChevronUp } else { Icon::ChevronDown },
             IconSize::Sm,
-            PaletteColor::TextMuted,
+            PaletteColor::MutedForeground,
           )),
       );
     Row::new()
@@ -310,6 +310,6 @@ fn danger_tile() -> Row {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .rounded(ExtraRadius::Full.role())
-    .background(PaletteColor::DangerMuted)
-    .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger))
+    .background(PaletteColor::DestructiveMuted)
+    .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Destructive))
 }

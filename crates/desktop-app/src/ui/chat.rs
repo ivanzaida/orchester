@@ -135,12 +135,12 @@ fn message_row(id: String, avatar: Avatar, head: Row, body: Vec<Element>) -> Row
       Row::new()
         .size(Dimension::Px(AVATAR_SIZE), Dimension::Px(AVATAR_SIZE))
         .flex_shrink(0.0)
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .rounded(RadiusSize::Md)
         .align_items(Alignment::Center)
         .justify(Justify::Center)
-        .child(icon(avatar.glyph(), IconSize::Base, PaletteColor::TextSecondary)),
+        .child(icon(avatar.glyph(), IconSize::Base, ExtraColor::TextSecondary.role())),
     )
     .child(
       Column::new()
@@ -295,7 +295,7 @@ fn person_column(id: &str) -> Column {
 /// The line under a person's message: a 12 icon in `color` and the words in 11 `text_muted` (in `color` when it is
 /// `text_primary`), 5 apart; `id` names it.
 pub fn delivery_line(id: &str, (glyph, color): (Icon, PaletteColor), words: &str) -> Element {
-  let strong = color == PaletteColor::TextPrimary;
+  let strong = color == PaletteColor::Foreground;
   let words = Text::new(words).variant(TypographyStyle::Caption);
   Row::new()
     .id(id.to_owned())

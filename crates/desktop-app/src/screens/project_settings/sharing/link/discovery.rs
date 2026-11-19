@@ -19,7 +19,7 @@ use super::{Link, Props};
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -96,7 +96,7 @@ fn offer((title, body): (&str, &str), steps: Column, (not_now, connect): (Action
     .width(Dimension::Pct(100.0))
     .padding(Padding::all(SpacingSize::Lg))
     .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
     .child(
@@ -140,11 +140,11 @@ fn step(id: &str, (number, next): (u8, bool), words: &str) -> Row {
     .variant(OrchesterText::StepNumber.role())
     .nowrap();
   let dot = if next {
-    dot.background(PaletteColor::TextPrimary).child(label)
+    dot.background(PaletteColor::Foreground).child(label)
   } else {
     dot
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-      .child(label.color(PaletteColor::TextMuted))
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
+      .child(label.color(PaletteColor::MutedForeground))
   };
   Row::new()
     .id(id.to_owned())
@@ -156,9 +156,9 @@ fn step(id: &str, (number, next): (u8, bool), words: &str) -> Row {
       Text::new(words)
         .variant(ExtraTypography::Prose.role())
         .color(if next {
-          PaletteColor::TextPrimary
+          PaletteColor::Foreground
         } else {
-          PaletteColor::TextSecondary
+          ExtraColor::TextSecondary.role()
         })
         .flex(1.0),
     )

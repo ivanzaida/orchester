@@ -6,7 +6,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::TextInputEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, SelectOption, Text, TextInput},
   layout::Alignment,
@@ -18,7 +18,7 @@ use orchester_workspace::memory::{draft::SaveTo, listing::KIND_ORDER};
 use super::{EditorMode, EditorProps, ImportanceChoice, KindChoice, RecordEditor, SaveToChoice};
 use crate::{
   screens::memory::{parts, state::MemoryState, words},
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, TextRole},
   ui::{
     chip::TagChip,
     field::{FieldInput, SelectField, field, field_error},
@@ -149,7 +149,7 @@ impl RecordEditor {
       .padding(Padding::horizontal(ExtraSpacing::Snug.role()))
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md);
     for tag in self.tags.get() {
@@ -174,7 +174,7 @@ impl RecordEditor {
   fn tag_input(&self, ctx: &Ctx, id: &str) -> TextInput {
     let theme = ctx.theme();
     let style = |color| {
-      FormTextRole {
+      TextRole {
         typography: TypographyStyle::Description,
         color,
       }
@@ -182,10 +182,10 @@ impl RecordEditor {
     };
     let typed = self.clone_fields();
     let left = self.clone_fields();
-    TextInput::styled(self.tag.clone(), style(PaletteColor::TextPrimary))
+    TextInput::styled(self.tag.clone(), style(PaletteColor::Foreground))
       .placeholder(&ctx.t("memory.editor.addTag"))
-      .placeholder_style(style(PaletteColor::TextMuted))
-      .caret_color(PaletteColor::TextPrimary)
+      .placeholder_style(style(PaletteColor::MutedForeground))
+      .caret_color(PaletteColor::Foreground)
       .id(format!("{id}-tag"))
       .describe("a11y_name", ctx.t("memory.editor.tags"))
       .flex(1.0)
@@ -301,7 +301,7 @@ fn facts(ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> E
       .child(
         Text::new(value)
           .variant(ExtraTypography::Prose.role())
-          .color(PaletteColor::TextPrimary),
+          .color(PaletteColor::Foreground),
       );
     if index == 0
       && let Some(task) = &props.source_task
@@ -329,7 +329,7 @@ fn facts(ctx: &mut Ctx, state: &MemoryState, props: &EditorProps, id: &str) -> E
             .width(Dimension::Px(FACT_LABEL_WIDTH))
             .flex_shrink(0.0)
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextMuted),
+            .color(PaletteColor::MutedForeground),
         )
         .child(values),
     );

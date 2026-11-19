@@ -176,18 +176,18 @@ fn counts(ctx: &Ctx, props: &RowProps, key: &str) -> Element {
         "a11y_name",
         ctx.t_args("review.comments", [("count", props.comments.to_string())]),
       )
-      .child(icon(Icon::MessageSquare, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(Icon::MessageSquare, IconSize::Sm, PaletteColor::MutedForeground))
       .child(mono(
         format!("review-comments-count-{key}"),
         &props.comments.to_string(),
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ))
   });
   let size = props.size.as_ref().map(|(files, added, removed)| {
     [
-      mono(format!("review-files-{key}"), files, PaletteColor::TextMuted),
+      mono(format!("review-files-{key}"), files, PaletteColor::MutedForeground),
       mono(format!("review-added-{key}"), added, PaletteColor::Success),
-      mono(format!("review-removed-{key}"), removed, PaletteColor::Danger),
+      mono(format!("review-removed-{key}"), removed, PaletteColor::Destructive),
     ]
   });
   Row::new()

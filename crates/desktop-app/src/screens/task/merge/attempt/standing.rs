@@ -103,7 +103,7 @@ impl Standing {
   /// The attempt page's status line's glyph and color: a merge that conflicts is `danger` there (13c `zWlkp`).
   pub(super) const fn page_glyph(self) -> (Icon, PaletteColor) {
     match self {
-      Self::Conflicts => (Icon::GitCompareArrows, PaletteColor::Danger),
+      Self::Conflicts => (Icon::GitCompareArrows, PaletteColor::Destructive),
       _ => self.glyph(),
     }
   }

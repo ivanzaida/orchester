@@ -19,7 +19,7 @@ pub(in crate::screens) fn status(ctx: &Ctx) -> Vec<Element> {
     .id("local-hub-local")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Laptop, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Laptop, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("local_hub.local"))
         .id("local-hub-local-label")

@@ -31,7 +31,7 @@ use super::TaskContext;
 use crate::{
   screens::settings::orchester::{Said, day_of, moment, sharing_said, shown_address},
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     detail_row::{DetailValue, detail_row},
     icon::{Icon, icon},
@@ -157,7 +157,7 @@ pub fn notice(ctx: &Ctx, task: &TaskContext, linked: Option<&Linked>) -> Element
         .id("task-not-shared-locked")
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
+        .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground))
         .child(Text::new(&ctx.t_args("task.notShared.locked", [("task", key)])).variant(ExtraTypography::Note.role())),
     )
     .into()
@@ -319,7 +319,7 @@ fn joined_section(ctx: &Ctx, task: &TaskContext, names: &Names, former: &str) ->
       .padding(Padding::new().top(SpacingSize::Xs))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Start)
-      .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
       .child(
         Text::new(&ctx.t_args("task.joined.note", [("former", former)]))
           .variant(ExtraTypography::Note.role())
@@ -362,7 +362,7 @@ fn block(id: &str, (title, glyph): (&Arc<str>, Option<Icon>), rows: Vec<Element>
         .padding(Padding::new().bottom(ExtraSpacing::Snug.role()))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .with_children(glyph.map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextSecondary)))
+        .with_children(glyph.map(|glyph| icon(glyph, IconSize::Base, ExtraColor::TextSecondary.role())))
         .child(
           Text::new(title)
             .id(format!("{id}-title"))

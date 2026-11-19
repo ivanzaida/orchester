@@ -75,7 +75,7 @@ impl Component for Switcher {
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(tile(&showing.name, TILE, BrowserText::SwitcherInitial))
     .child(Text::new(&showing.name).variant(TypographyStyle::Label).nowrap())
-    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground));
     let button = if self.open.get() {
       button.background(ExtraColor::Hover.role())
     } else {
@@ -247,7 +247,7 @@ fn row(
   .hovered_style(Style::new().background(ExtraColor::Hover.role()))
   .child(tile(name, ROW_TILE, BrowserText::SwitcherInitial))
   .child(text)
-  .with_children(current.then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)));
+  .with_children(current.then(|| icon(Icon::Check, IconSize::Md, PaletteColor::Foreground)));
   button.into()
 }
 
@@ -259,7 +259,7 @@ fn tile(name: &str, side: f32, text: BrowserText) -> Row {
     .height(Dimension::Px(side))
     .flex_shrink(0.0)
     .rounded(RadiusSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .align_items(Alignment::Center)
     .justify(Justify::Center)

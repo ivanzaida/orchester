@@ -11,7 +11,7 @@ use lurq::{
   node::Element,
 };
 use orchester_app::{
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -36,7 +36,7 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
     cell("Tooltip · b6q3OZ (rest the pointer)", tooltip(ctx, state)),
     cell(
       "loader-circle · turning",
-      icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::TextSecondary).id("g-loader"),
+      icon(Icon::LoaderCircle, IconSize::Md, ExtraColor::TextSecondary.role()).id("g-loader"),
     ),
   ])
   .into()])
@@ -104,7 +104,7 @@ fn permissions(state: &State) -> Row {
     .child(
       Text::new("Run permissions")
         .variant(ExtraTypography::Strong.role())
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
     .child(Text::new("Builder · 03 Implement · Claude · sonnet-4.5").variant(ExtraTypography::Note.role()))
     .child(

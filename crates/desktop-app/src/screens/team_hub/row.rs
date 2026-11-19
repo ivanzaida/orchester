@@ -20,7 +20,7 @@ use super::{
 use crate::{
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::hub::agent_row::{AgentRow, agent_row, line, tag_chip},
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{agent_mark::AgentMark, icon::icon, pressable::opening},
 };
 
@@ -34,7 +34,7 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
   let said = match &entry.archived {
     Some(changed) => words::Said {
       text: words::archived_by(ctx, changed),
-      color: PaletteColor::TextMuted,
+      color: PaletteColor::MutedForeground,
     },
     None => said,
   };
@@ -45,7 +45,7 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
     group: Some(entry.group),
     kind: entry.kind.name().to_owned(),
     mark: mark(ctx, entry),
-    name: (&entry.name, PaletteColor::TextPrimary),
+    name: (&entry.name, PaletteColor::Foreground),
     line: line(&id, &said.text, said.color).into(),
     tag: tag(ctx, entry, shown.filter, &id),
     version: version(entry, shown.filter),
@@ -56,7 +56,7 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
 /// muted.
 fn mark(ctx: &Ctx, entry: &Entry) -> Element {
   if entry.archived.is_some() {
-    return icon(entry.glyph(), IconSize::Lg, PaletteColor::TextMuted).into();
+    return icon(entry.glyph(), IconSize::Lg, PaletteColor::MutedForeground).into();
   }
   match entry.cli {
     Some(cli) => AgentMark::of(cli).render(ctx, IconSize::Lg),
@@ -67,10 +67,10 @@ fn mark(ctx: &Ctx, entry: &Entry) -> Element {
 /// What a row's glyph says: how the resource stands here, in the color of its line.
 fn glyph_color(entry: &Entry) -> PaletteColor {
   match (entry.group, entry.kind) {
-    (Group::NeedsYouHere, _) if words::said_in_danger(entry) => PaletteColor::Danger,
+    (Group::NeedsYouHere, _) if words::said_in_danger(entry) => PaletteColor::Destructive,
     (Group::NeedsYouHere, _) => PaletteColor::Warning,
-    (Group::OffHere, _) => PaletteColor::TextMuted,
-    (Group::Ready, Kind::Instruction | Kind::Skill | Kind::Profile) => PaletteColor::TextSecondary,
+    (Group::OffHere, _) => PaletteColor::MutedForeground,
+    (Group::Ready, Kind::Instruction | Kind::Skill | Kind::Profile) => ExtraColor::TextSecondary.role(),
     (Group::Ready, Kind::McpServer | Kind::Tool) => PaletteColor::Success,
   }
 }

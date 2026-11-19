@@ -63,7 +63,7 @@ pub(super) fn split(
       let after = ways.after_answer.clone();
       pressable(move || after())
         .describe("state", "enabled")
-        .hovered_style(Style::new().background(PaletteColor::AccentHover))
+        .hovered_style(Style::new().background(PaletteColor::PrimaryHover))
     }
     None => inert(Button::empty()).describe("state", "disabled"),
   }
@@ -88,7 +88,7 @@ pub(super) fn split(
     Some(_) => {
       let toggle = open.clone();
       pressable(move || toggle.update(|open| *open = !*open))
-        .hovered_style(Style::new().background(PaletteColor::AccentHover))
+        .hovered_style(Style::new().background(PaletteColor::PrimaryHover))
     }
     None => inert(Button::empty()),
   }
@@ -102,7 +102,7 @@ pub(super) fn split(
     .describe("action", "after-answer")
     .height(side)
     .align_items(Alignment::Center)
-    .background(PaletteColor::Accent)
+    .background(PaletteColor::Primary)
     .rounded(RadiusSize::Md)
     .clip()
     .opacity(if ways.is_some() { 1.0 } else { DISABLED_OPACITY })

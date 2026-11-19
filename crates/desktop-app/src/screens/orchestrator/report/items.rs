@@ -15,7 +15,10 @@ use orchester_core::{
 };
 use orchester_workspace::display;
 
-use crate::ui::{icon::Icon, message::message_text};
+use crate::{
+  theme::ExtraColor,
+  ui::{icon::Icon, message::message_text},
+};
 
 /// A value a line has nothing for.
 const NONE: &str = "—";
@@ -114,7 +117,7 @@ impl Words<'_> {
         ActionWay::Direct => (
           "orchestrator.report.item.direct",
           Icon::Waypoints,
-          PaletteColor::TextSecondary,
+          ExtraColor::TextSecondary.role(),
         ),
         ActionWay::Applied => (
           "orchestrator.report.item.applied",
@@ -158,7 +161,7 @@ impl Words<'_> {
     let working = report.working.iter().map(|run| {
       self.run(
         run,
-        (Icon::Play, PaletteColor::TextSecondary),
+        (Icon::Play, ExtraColor::TextSecondary.role()),
         ("orchestrator.report.item.working", None),
       )
     });
@@ -239,7 +242,7 @@ impl Words<'_> {
     let spent = compact_tokens(usage.spent);
     let total = Item {
       glyph: Icon::Coins,
-      tone: PaletteColor::TextMuted,
+      tone: PaletteColor::MutedForeground,
       text: match usage.budget {
         Some(budget) => self.t(
           "orchestrator.report.item.total",
@@ -262,7 +265,7 @@ impl Words<'_> {
     };
     let tasks = usage.tasks.iter().map(|task| Item {
       glyph: Icon::Coins,
-      tone: PaletteColor::TextMuted,
+      tone: PaletteColor::MutedForeground,
       text: self.task(&task.task, &task.title),
       meta: share(task.spent, task.active_ms),
       tip: None,
@@ -270,7 +273,7 @@ impl Words<'_> {
     });
     let providers = usage.providers.iter().map(|provider| Item {
       glyph: Icon::Bot,
-      tone: PaletteColor::TextMuted,
+      tone: PaletteColor::MutedForeground,
       text: match &provider.by {
         SharedBy::Provider {
           name: Some(name),
@@ -305,7 +308,7 @@ impl Words<'_> {
       .enumerate()
       .map(|(index, task)| Item {
         glyph: Icon::ListOrdered,
-        tone: PaletteColor::TextMuted,
+        tone: PaletteColor::MutedForeground,
         text: self.task(&task.task, &task.title),
         meta: self.t("orchestrator.report.item.next", &[("place", (index + 1).to_string())]),
         tip: None,
@@ -324,7 +327,7 @@ const fn stopped_look(end: RunEnd) -> ((Icon, PaletteColor), &'static str) {
       "orchestrator.report.stopped.ready",
     ),
     RunEnd::Failed => (
-      (Icon::CircleX, PaletteColor::Danger),
+      (Icon::CircleX, PaletteColor::Destructive),
       "orchestrator.report.stopped.failed",
     ),
     RunEnd::Stopped { why } => (

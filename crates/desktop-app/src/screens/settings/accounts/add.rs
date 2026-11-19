@@ -409,12 +409,12 @@ fn footer(ctx: &mut Ctx, work: &Work, blocked: bool) -> Element {
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ShieldCheck, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&t(ctx, "accounts.add.folderNote"))
         .id("account-add-note")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     );

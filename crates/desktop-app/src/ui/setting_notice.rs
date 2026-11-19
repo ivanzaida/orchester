@@ -24,10 +24,14 @@ use crate::theme::{ExtraSpacing, ExtraTypography, IconSize, SettingsText};
 
 const fn colors(tone: NoticeTone) -> (PaletteColor, PaletteColor, Icon) {
   match tone {
-    NoticeTone::Neutral => (PaletteColor::SurfaceRaised, PaletteColor::TextMuted, Icon::Info),
+    NoticeTone::Neutral => (PaletteColor::Card, PaletteColor::MutedForeground, Icon::Info),
     NoticeTone::Info => (PaletteColor::InfoMuted, PaletteColor::Info, Icon::Info),
     NoticeTone::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning, Icon::TriangleAlert),
-    NoticeTone::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger, Icon::CircleAlert),
+    NoticeTone::Danger => (
+      PaletteColor::DestructiveMuted,
+      PaletteColor::Destructive,
+      Icon::CircleAlert,
+    ),
     NoticeTone::Success => (PaletteColor::SuccessMuted, PaletteColor::Success, Icon::CircleCheck),
   }
 }
@@ -232,8 +236,8 @@ impl From<SettingPanel> for Element {
       .with_children(panel.parts);
     let frame = if panel.danger {
       frame
-        .background(PaletteColor::DangerMuted)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
+        .background(PaletteColor::DestructiveMuted)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))
         .describe("tone", "danger")
     } else {
       frame.border(Border::inside(BorderSize::Sm, PaletteColor::Border))
@@ -249,7 +253,7 @@ pub fn status_line(id: &str, glyph: Icon, words: &str) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))

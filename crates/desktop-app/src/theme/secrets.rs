@@ -6,7 +6,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 /// Pending field groups and primary actions, ZO3gD and fEyY0.
 pub const SECRETS_PENDING_OPACITY: f32 = 0.6;
 
@@ -62,18 +65,18 @@ impl SecretsText {
   }
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::Name => mono(style(12.5, FontWeight::Medium, 1.4, 0.0, palette.text_primary)),
-      Self::InspectorName => mono(style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary)),
-      Self::Credential => mono(style(13.0, FontWeight::Normal, 1.4, 0.0, palette.text_primary)),
-      Self::ProjectInitial => style(10.0, FontWeight::SemiBold, 1.0, 0.0, palette.text_secondary),
-      Self::Mask => mono(style(14.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::InspectorTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.text_muted),
-      Self::ConfirmTitle => style(13.0, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
-      Self::ValueHint => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
-      Self::UsageHeading => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.text_muted),
-      Self::EnvironmentEmpty => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
+      Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
+      Self::Name => mono(style(12.5, FontWeight::Medium, 1.4, 0.0, palette.foreground)),
+      Self::InspectorName => mono(style(12.0, FontWeight::Normal, 1.4, 0.0, text_secondary(palette))),
+      Self::Credential => mono(style(13.0, FontWeight::Normal, 1.4, 0.0, palette.foreground)),
+      Self::ProjectInitial => style(10.0, FontWeight::SemiBold, 1.0, 0.0, text_secondary(palette)),
+      Self::Mask => mono(style(14.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::InspectorTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.4, palette.muted_foreground),
+      Self::ConfirmTitle => style(13.0, FontWeight::Medium, 1.4, 0.0, palette.foreground),
+      Self::ValueHint => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
+      Self::UsageHeading => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.muted_foreground),
+      Self::EnvironmentEmpty => style(12.5, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
     }
   }
 }

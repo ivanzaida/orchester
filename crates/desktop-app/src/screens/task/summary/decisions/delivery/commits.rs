@@ -121,7 +121,7 @@ fn row(commit: &LoggedCommit) -> Element {
     .child(
       Text::new(&commit.subject)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap()
@@ -130,7 +130,7 @@ fn row(commit: &LoggedCommit) -> Element {
     .child(
       Text::new(&clock(commit.at))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

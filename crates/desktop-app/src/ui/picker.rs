@@ -19,7 +19,7 @@ use super::{
   icon::{Icon, icon},
   pressable::pressable,
 };
-use crate::theme::{ControlHeight, ExtraSpacing, IconSize};
+use crate::theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize};
 
 pub struct Picker {
   id: Arc<str>,
@@ -79,13 +79,13 @@ impl From<Picker> for Element {
     let open = picker.open.clone();
     let is_open = picker.open.get();
     let glyph = match (picker.invalid, picker.warning) {
-      (true, _) => PaletteColor::Danger,
+      (true, _) => PaletteColor::Destructive,
       (false, true) => PaletteColor::Warning,
-      (false, false) => PaletteColor::TextSecondary,
+      (false, false) => ExtraColor::TextSecondary.role(),
     };
     let outline = match (picker.invalid, is_open) {
-      (true, _) => PaletteColor::Danger,
-      (false, true) => PaletteColor::BorderFocus,
+      (true, _) => PaletteColor::Destructive,
+      (false, true) => PaletteColor::Ring,
       (false, false) => PaletteColor::Border,
     };
     let trigger = pressable(move || open.update(|open| *open = !*open));
@@ -101,7 +101,7 @@ impl From<Picker> for Element {
       .padding(Padding::horizontal(SpacingSize::Sm))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border(Border::inside(BorderSize::Sm, outline))
       .rounded(RadiusSize::Md)
       .describe("a11y_name", picker.label.clone())
@@ -112,7 +112,7 @@ impl From<Picker> for Element {
         let label = Text::new(&picker.label)
           .id(format!("{}-label", picker.id))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .nowrap();
         if picker.fill {
           label
@@ -126,7 +126,7 @@ impl From<Picker> for Element {
       .child(icon(
         if is_open { Icon::ChevronUp } else { Icon::ChevronDown },
         IconSize::Sm,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ))
       .into()
   }

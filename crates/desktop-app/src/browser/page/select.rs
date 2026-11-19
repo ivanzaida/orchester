@@ -46,8 +46,8 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
     .padding(SpacingSize::Xs)
     .spacing(ExtraSpacing::Tight.role())
     .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .box_shadow(ShadowStyle::Md)
     .on_mouse_down(|event: MouseEvent| event.stop_propagation());
   for (index, option) in (0_u32..).zip(&select.list.options) {
@@ -73,7 +73,7 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
       Text::new(&option.label)
         .sensitive()
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex(1.0)
@@ -82,7 +82,7 @@ pub fn list(ctx: &mut Ctx, showing: &Showing, tab: &BrowserTabId, scale: Scale) 
     .with_children(
       option
         .selected
-        .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)),
+        .then(|| icon(Icon::Check, IconSize::Md, PaletteColor::Foreground)),
     );
     rows = rows.child(if option.disabled {
       row

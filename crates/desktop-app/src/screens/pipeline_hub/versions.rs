@@ -191,7 +191,7 @@ impl Versions {
       Some(view_more(ctx, &id))
     } else {
       current.then(|| {
-        icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)
+        icon(Icon::Check, IconSize::Md, PaletteColor::Foreground)
           .id(format!("{id}-check"))
           .into()
       })
@@ -288,7 +288,7 @@ fn view_more(ctx: &Ctx, id: &str) -> Element {
         .variant(HubText::PanelLink.role())
         .nowrap(),
     )
-    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground))
     .into()
 }
 

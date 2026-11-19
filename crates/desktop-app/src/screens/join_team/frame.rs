@@ -19,7 +19,7 @@ use lurq::{
 use crate::{
   navigation::Navigation,
   routes::Route,
-  theme::{ExtraRadius, ExtraSpacing, IconSize, StartupSpacing, StartupText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, StartupSpacing, StartupText},
   ui::{
     icon::{Icon, icon},
     pressable::opening,
@@ -177,10 +177,10 @@ fn breadcrumb(ctx: &mut Ctx, id: &str, (ancestors, crumb): (Vec<Crumb>, &str)) -
           .id(format!("{id}-crumb-{}", ancestor.name))
           .flex_shrink(0.0)
           .describe("a11y_name", ancestor.label.clone())
-          .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::TextMuted)))
+          .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::MutedForeground)))
           .child(Text::new(&ancestor.label).variant(StartupText::Crumb.role()).nowrap()),
       )
-      .child(icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::MutedForeground));
   }
   row.child(
     Text::new(crumb)
@@ -206,7 +206,7 @@ fn steps(ctx: &Ctx, id: &str, current: StartStep) -> Row {
         Row::new()
           .width(Dimension::Px(STEP_LINE))
           .height(Dimension::Px(STEP_LINE_HEIGHT))
-          .background(PaletteColor::BorderStrong),
+          .background(PaletteColor::Input),
       );
     }
     let here = step == current;
@@ -220,7 +220,7 @@ fn steps(ctx: &Ctx, id: &str, current: StartStep) -> Row {
       .nowrap();
     let (mark, label) = if done {
       let check = icon(Icon::CircleCheck, IconSize::Md, PaletteColor::Success);
-      (Element::from(check), label.color(PaletteColor::TextSecondary))
+      (Element::from(check), label.color(ExtraColor::TextSecondary.role()))
     } else {
       (step_number(index + 1, here).into(), label)
     };
@@ -241,9 +241,9 @@ fn steps(ctx: &Ctx, id: &str, current: StartStep) -> Row {
 /// A step's `number` in its ring, in `text_primary` when it is the current one (`Number` `P6t15`).
 fn step_number(number: usize, here: bool) -> Row {
   let (ring, digit) = if here {
-    (PaletteColor::TextPrimary, PaletteColor::TextPrimary)
+    (PaletteColor::Foreground, PaletteColor::Foreground)
   } else {
-    (PaletteColor::BorderStrong, PaletteColor::TextMuted)
+    (PaletteColor::Input, PaletteColor::MutedForeground)
   };
   Row::new()
     .width(Dimension::Px(STEP_NUMBER))
@@ -266,7 +266,7 @@ pub(crate) fn note(id: &str, text: &str, link: Option<Element>) -> Element {
     .id(id.to_owned())
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(text)
         .id(format!("{id}-text"))

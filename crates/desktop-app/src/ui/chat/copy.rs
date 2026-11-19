@@ -183,7 +183,7 @@ impl MessageActions {
     let (glyph, color, key) = match self.copied.get() {
       Copied::Not => (Icon::Copy, self.color(Action::Copy), "ui.chat.copyMessage"),
       Copied::Done => (Icon::Check, PaletteColor::Success, "ui.copied"),
-      Copied::Failed => (Icon::TriangleAlert, PaletteColor::Danger, "ui.copyFailed"),
+      Copied::Failed => (Icon::TriangleAlert, PaletteColor::Destructive, "ui.copyFailed"),
     };
     let words = ctx.t(key);
     let (copied, reset) = (self.copied.clone(), self.reset.clone());
@@ -210,7 +210,7 @@ impl MessageActions {
       }
       Err(why) => {
         // A held action takes no hover colour: its glyph stays `text_secondary`, at half.
-        let glyph = icon(action.icon(), IconSize::Md, PaletteColor::TextSecondary).opacity(DISABLED_OPACITY);
+        let glyph = icon(action.icon(), IconSize::Md, ExtraColor::TextSecondary.role()).opacity(DISABLED_OPACITY);
         held(self.button(props, action, (label, why), glyph), why)
       }
     }
@@ -219,9 +219,9 @@ impl MessageActions {
   /// `text_primary` for the glyph of the button the pointer is on, else `text_secondary`.
   fn color(&self, action: Action) -> PaletteColor {
     if self.pointed.get() == Some(action) {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     }
   }
 

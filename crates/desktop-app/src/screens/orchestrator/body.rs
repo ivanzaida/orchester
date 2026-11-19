@@ -41,8 +41,8 @@ use crate::{
   routes::{OrchestratorChat, ProjectPage, Route},
   services::Services,
   theme::{
-    DISABLED_OPACITY, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText,
-    beside_chat_lane, chat_scrollbar,
+    DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing,
+    OrchestratorText, beside_chat_lane, chat_scrollbar,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -565,10 +565,10 @@ fn send_problem(
     .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::DangerMuted)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
+    .background(PaletteColor::DestructiveMuted)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))
     .rounded(ExtraRadius::Tile.role())
-    .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger))
+    .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Destructive))
     .child(
       Column::new()
         .flex(1.0)
@@ -577,7 +577,7 @@ fn send_problem(
         .with_children((!unconfirmed).then(|| {
           Text::new(&ctx.t("orchestrator.sendProblem.body"))
             .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
         })),
     );
   if !unconfirmed && (!view.draft.get().trim().is_empty() || !view.attached.attached.get().0.is_empty()) {

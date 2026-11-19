@@ -17,7 +17,7 @@ use lurq::{
   layout::quad::QuadContent,
 };
 use orchester_app::{
-  theme::{IconSize, LOADER_STEPS, LOADER_TURN},
+  theme::{ExtraColor, IconSize, LOADER_STEPS, LOADER_TURN},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -35,9 +35,9 @@ fn loaders() -> Kit {
   Kit::show(|_| {
     Row::new()
       .spacing(SpacingSize::Lg)
-      .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextMuted))
-      .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::TextSecondary))
-      .child(icon(Icon::LoaderCircle, IconSize::Lg, PaletteColor::TextSecondary))
+      .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::MutedForeground))
+      .child(icon(Icon::LoaderCircle, IconSize::Md, ExtraColor::TextSecondary.role()))
+      .child(icon(Icon::LoaderCircle, IconSize::Lg, ExtraColor::TextSecondary.role()))
       .child(
         ActionButton::new("busy", ButtonKind::Primary, "Create & run")
           .icon(Icon::Play)
@@ -111,7 +111,7 @@ fn a_loader_keeps_the_window_animating_one_frame_a_pose_and_none_keeps_it_idle()
     "the next frame is due within a pose ({pose:?})"
   );
 
-  let idle = Kit::show(|_| icon(Icon::Check, IconSize::Md, PaletteColor::TextSecondary).into());
+  let idle = Kit::show(|_| icon(Icon::Check, IconSize::Md, ExtraColor::TextSecondary.role()).into());
   assert!(!idle.tree.has_active_timeline(), "a window without a loader is idle");
   assert_eq!(idle.tree.next_timeline_change(), None, "and asks for no frame");
 }

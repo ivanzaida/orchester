@@ -20,7 +20,7 @@ use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
   screens::task::TaskContext,
-  theme::{ExtraSpacing, IconSize, TaskSpacing},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TaskSpacing},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -40,7 +40,7 @@ pub fn led_in_row(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let project = task.project.open.project.id();
   let route = Route::Project(project, ProjectPage::Orchestrator(OrchestratorChat::Chat(leader.chat)));
   let text = Truncated::new(format!("{ID}-label"), words.clone(), TypographyStyle::Description)
-    .color(PaletteColor::TextPrimary)
+    .color(PaletteColor::Foreground)
     .render(ctx);
   let link = opening(Navigation::of(ctx).to(route))
     .id(ID)
@@ -48,9 +48,13 @@ pub fn led_in_row(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Snug.role())
-    .child(icon(Icon::MessagesSquare, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(
+      Icon::MessagesSquare,
+      IconSize::Base,
+      ExtraColor::TextSecondary.role(),
+    ))
     .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(text))
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::MutedForeground));
   Some(row(
     ID,
     &ctx.t("summary.properties.ledIn"),

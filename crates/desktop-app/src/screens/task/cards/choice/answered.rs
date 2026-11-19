@@ -29,7 +29,7 @@ use super::super::{
   frame::{Stands, frame, head, note},
 };
 use crate::{
-  theme::{CardsText, ExtraSpacing, IconSize},
+  theme::{CardsText, ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
     markdown::MarkdownView,
@@ -55,7 +55,11 @@ pub(super) fn card(ctx: &mut Ctx, id: &str, (place, card): (&Place, &ChoiceCard)
     .spacing(ExtraSpacing::Loose.role())
     .child(head(
       id,
-      (Icon::MessageCircleQuestion, IconSize::Md, PaletteColor::TextSecondary),
+      (
+        Icon::MessageCircleQuestion,
+        IconSize::Md,
+        ExtraColor::TextSecondary.role(),
+      ),
       (&title, CardsText::Title.role()),
       stands.into_element(id),
     ));
@@ -137,7 +141,7 @@ fn ended<'a>(ctx: &Ctx, card: &ChoiceCard, (asked, at): (&str, Timestamp)) -> Ou
     stands: Stands {
       glyph: Icon::ClockAlert,
       words: ctx.t("cards.state.ended"),
-      color: PaletteColor::TextMuted,
+      color: PaletteColor::MutedForeground,
     },
     answers: None,
     context: ctx.t_args(
@@ -158,7 +162,7 @@ fn answer_lines(ctx: &Ctx, id: &str, answer: &Answer) -> Vec<Element> {
       .child(
         Text::new(words)
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary),
+          .color(PaletteColor::Foreground),
       )
       .into()
   };

@@ -21,7 +21,7 @@ use lurq::{
 use orchester_core::task::requirements::{CurrentStanding, Fallback, LatestRun, RequirementsSource, TaskRequirements};
 
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     menu::{MenuItem, menu_at_end, menu_panel},
@@ -76,10 +76,10 @@ impl VersionMenu {
         Text::new(&label)
           .id("task-brief-version-label")
           .variant(ExtraTypography::Note.role())
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
-      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground));
     let tip = provenance(ctx, requirements, shown);
     let chip = Tooltip::new("task-brief-version-tip", tip).wrap(ctx, chip);
     let menu = self.open.get().then(|| {

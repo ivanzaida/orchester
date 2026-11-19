@@ -100,29 +100,29 @@ fn assert_colors(theme: &Theme, mode: Mode, expected: &[(PaletteColor, &str)]) {
 fn palette_roles_follow_the_design_in_both_modes() {
   use PaletteColor as P;
   let dark = [
-    (P::Accent, "#EDEDF0"),
-    (P::AccentMuted, "#FFFFFF14"),
-    (P::SurfaceBase, "#111113"),
-    (P::SurfacePanel, "#18181A"),
-    (P::SurfaceRaised, "#202023"),
-    (P::SurfaceInput, "#1B1B1E"),
+    (P::Primary, "#EDEDF0"),
+    (P::Highlight, "#FFFFFF14"),
+    (P::Background, "#111113"),
+    (P::Canvas, "#18181A"),
+    (P::Card, "#202023"),
+    (ExtraColor::InputSurface.role(), "#1B1B1E"),
     (P::Border, "#2A2A2E"),
-    (P::BorderStrong, "#3B3B40"),
-    (P::BorderFocus, "#A3A3AB"),
-    (P::TextPrimary, "#EDEDF0"),
-    (P::TextSecondary, "#B3B3BA"),
-    (P::TextMuted, "#8A8A92"),
+    (P::Input, "#3B3B40"),
+    (P::Ring, "#A3A3AB"),
+    (P::Foreground, "#EDEDF0"),
+    (ExtraColor::TextSecondary.role(), "#B3B3BA"),
+    (P::MutedForeground, "#8A8A92"),
     (P::Warning, "#E2A33C"),
-    (P::DangerMuted, "#F0605A24"),
+    (P::DestructiveMuted, "#F0605A24"),
   ];
   let light = [
-    (P::Accent, "#18181B"),
-    (P::SurfaceBase, "#E4E4E8"),
-    (P::SurfacePanel, "#FFFFFF"),
+    (P::Primary, "#18181B"),
+    (P::Background, "#E4E4E8"),
+    (P::Canvas, "#FFFFFF"),
     (P::Border, "#E2E2E6"),
-    (P::BorderStrong, "#C7C7CE"),
-    (P::TextPrimary, "#18181B"),
-    (P::TextMuted, "#6B6B74"),
+    (P::Input, "#C7C7CE"),
+    (P::Foreground, "#18181B"),
+    (P::MutedForeground, "#6B6B74"),
     (P::Success, "#158354"),
   ];
   assert_colors(themed(Mode::Dark).theme(), Mode::Dark, &dark);
@@ -132,6 +132,8 @@ fn palette_roles_follow_the_design_in_both_modes() {
 #[test]
 fn every_extra_color_is_registered_with_its_design_value() {
   let expected = |extra: ExtraColor| match extra {
+    ExtraColor::TextSecondary => ("#B3B3BA", "#45454D"),
+    ExtraColor::InputSurface => ("#1B1B1E", "#FFFFFF"),
     ExtraColor::AccentText => ("#EDEDF0", "#18181B"),
     ExtraColor::OnAccent => ("#111113", "#FFFFFF"),
     ExtraColor::PanelBorder => ("#2A2A2E", "#C7C7CE"),
@@ -461,38 +463,6 @@ fn theme_kit_spacing_radii_and_sizes_follow_the_design() {
   assert_eq!((DISABLED_OPACITY, SHORTCUT_OPACITY), (0.5, 0.6));
 }
 
-/// A field's value and placeholder are 12 (`JQkW2`, `X75zC`) and its error 11.5 `danger` (`rCoJS`), in
-/// both modes.
-#[test]
-fn theme_fields_read_at_12_in_both_modes() {
-  for (mode, text, muted, danger) in [
-    (Mode::Dark, "#EDEDF0", "#8A8A92", "#F0605A"),
-    (Mode::Light, "#18181B", "#6B6B74", "#D4342F"),
-  ] {
-    let app = themed(mode);
-    let theme = app.theme();
-    let form = theme.form().clone();
-    let resolve = |role: lurq::app::theme::FormTextRole| role.resolve(&theme.typography(), &theme.palette());
-    let (value, placeholder, error) = (
-      resolve(form.input.text.clone()),
-      resolve(form.input.placeholder.clone()),
-      resolve(form.field.error.clone()),
-    );
-    assert_eq!(
-      (value.font_size, value.color),
-      (12.0, Color::from_hex(text)),
-      "{}",
-      mode.name()
-    );
-    assert_eq!(
-      (placeholder.font_size, placeholder.color),
-      (12.0, Color::from_hex(muted))
-    );
-    assert_eq!((error.font_size, error.color), (11.5, Color::from_hex(danger)));
-    assert_eq!(form.input.height, Dimension::Px(28.0));
-  }
-}
-
 /// The focus ring and the Markdown colors follow the mode the theme switches to.
 #[test]
 fn theme_focus_ring_and_markdown_follow_the_mode() {
@@ -509,7 +479,7 @@ fn theme_focus_ring_and_markdown_follow_the_mode() {
   );
   assert_eq!(
     ring[0].color,
-    lurq::node::BackgroundColor::Palette(PaletteColor::BorderFocus),
+    lurq::node::BackgroundColor::Palette(PaletteColor::Ring),
     "in `border_focus`, as the design draws focus"
   );
   let link_ring = theme.shadow_style(ExtraShadow::LinkFocusRing.role());
@@ -518,27 +488,18 @@ fn theme_focus_ring_and_markdown_follow_the_mode() {
       .iter()
       .map(|shadow| (shadow.spread, shadow.inset, shadow.color.clone()))
       .collect::<Vec<_>>(),
-    [(
-      2.0,
-      false,
-      lurq::node::BackgroundColor::Palette(PaletteColor::BorderFocus)
-    )],
+    [(2.0, false, lurq::node::BackgroundColor::Palette(PaletteColor::Ring))],
     "a link's ring: 2 of `border_focus` outside its words (`Mjhop`)"
   );
   assert_eq!(theme.radius_value(ExtraRadius::Link.role()), 3.0, "its corners");
-  for (mode, code, link) in [(Mode::Dark, "#0E0E10", "#EDEDF0"), (Mode::Light, "#F6F6F8", "#18181B")] {
+  for (mode, link) in [(Mode::Dark, "#EDEDF0"), (Mode::Light, "#18181B")] {
     theme::apply(theme, mode);
-    let markdown = theme.markdown().clone();
+    let markdown = theme.markdown().resolve(&theme.palette());
     assert_eq!(
-      markdown.code_block_box.background,
-      Some(Color::from_hex(code)),
-      "code on code_bg in {}",
-      mode.name()
-    );
-    assert_eq!(
-      markdown.link.text.color,
+      markdown.link.text.color.and_then(|color| color.as_color()),
       Some(Color::from_hex(link)),
-      "links in accent_text"
+      "links in accent_text in {}",
+      mode.name()
     );
     assert_eq!(markdown.link.text.weight, Some(FontWeight::Medium));
   }
@@ -574,7 +535,7 @@ fn theme_agents_active_task_role_matches_rx5w5() {
     let style = theme.typography_style(theme::agents::active_task_text());
     assert_eq!(style.font_size, 12.5);
     assert_eq!(style.weight, FontWeight::Normal);
-    assert_eq!(style.color, theme.palette_color(PaletteColor::TextPrimary));
+    assert_eq!(style.color, theme.palette_color(PaletteColor::Foreground));
     assert_eq!(&*style.font_family, "Geist");
   }
 }

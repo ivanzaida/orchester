@@ -68,10 +68,10 @@ fn one(ctx: &Ctx, id: &str, field: &SlashField, badge: &Arguing) -> Element {
     )
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(ExtraRadius::Full.role())
-    .child(icon(shown.icon, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(shown.icon, IconSize::Sm, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&shown.verb)
         .id(format!("{badge_id}-verb"))
@@ -105,7 +105,7 @@ fn targets(ctx: &Ctx, badge_id: &str, badge: &Arguing) -> Vec<Element> {
   let mut parts: Vec<Element> = vec![
     Text::new(&ctx.t("composer.argument.dot"))
       .variant(SlashText::BadgeTarget.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap()
       .into(),
     Text::new(&named)
@@ -149,5 +149,5 @@ fn remove(ctx: &Ctx, (badge_id, field): (&str, &SlashField), (command, shown): (
       event.stop_propagation();
       field.remove_badge(command);
     })
-    .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground))
 }

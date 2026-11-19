@@ -31,7 +31,7 @@ use self::items::{Item, Part};
 use crate::{
   navigation::Navigation,
   routes::Route,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing, OrchestratorText},
   ui::{
     icon::{Icon, icon},
     pressable::{opening, pressable},
@@ -108,7 +108,7 @@ fn head(ctx: &Ctx, props: &ReportProps, open: &Signal<bool>) -> Element {
       .child(
         Text::new(&words)
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
   };
@@ -120,7 +120,7 @@ fn head(ctx: &Ctx, props: &ReportProps, open: &Signal<bool>) -> Element {
     .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Newspaper, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::Newspaper, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&title)
         .id(format!("{id}-title"))
@@ -139,7 +139,7 @@ fn head(ctx: &Ctx, props: &ReportProps, open: &Signal<bool>) -> Element {
     ))
     .child(total(
       "tokens",
-      (compact_tokens(report.usage.spent), PaletteColor::TextMuted),
+      (compact_tokens(report.usage.spent), PaletteColor::MutedForeground),
       ctx.t("orchestrator.report.totals.tokens"),
     ))
     .child(Spacer::new().flex(1.0))
@@ -152,10 +152,10 @@ fn head(ctx: &Ctx, props: &ReportProps, open: &Signal<bool>) -> Element {
     .child(icon(
       if shown { Icon::ChevronUp } else { Icon::ChevronDown },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ));
   if shown {
-    row.background(PaletteColor::SurfaceRaised).into()
+    row.background(PaletteColor::Card).into()
   } else {
     row.into()
   }

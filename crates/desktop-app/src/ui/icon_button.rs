@@ -42,7 +42,7 @@ pub enum IconButtonSize {
 
 impl IconButtonSize {
   /// Its width and height.
-  const fn sides(self) -> (f32, f32) {
+  fn sides(self) -> (f32, f32) {
     match self {
       Self::Regular => (ControlHeight::Md.value(), ControlHeight::Md.value()),
       Self::Small => (ControlHeight::Sm.value(), ControlHeight::Sm.value()),
@@ -52,11 +52,11 @@ impl IconButtonSize {
     }
   }
 
-  const fn glyph(self) -> (IconSize, PaletteColor) {
+  fn glyph(self) -> (IconSize, PaletteColor) {
     match self {
-      Self::Regular => (IconSize::Lg, PaletteColor::TextSecondary),
-      Self::Small | Self::Compact | Self::Toggle => (IconSize::Md, PaletteColor::TextMuted),
-      Self::Inspector => (IconSize::Nav, PaletteColor::TextSecondary),
+      Self::Regular => (IconSize::Lg, ExtraColor::TextSecondary.role()),
+      Self::Small | Self::Compact | Self::Toggle => (IconSize::Md, PaletteColor::MutedForeground),
+      Self::Inspector => (IconSize::Nav, ExtraColor::TextSecondary.role()),
     }
   }
 }
@@ -152,7 +152,7 @@ impl IconButton {
   pub fn render(self, ctx: &mut Ctx) -> Element {
     let (width, height) = self.size.sides();
     let (size, color) = self.size.glyph();
-    let color = if self.active { PaletteColor::TextPrimary } else { color };
+    let color = if self.active { PaletteColor::Foreground } else { color };
     let button = Button::empty()
       .id(self.id.clone())
       .width(Dimension::Px(width))

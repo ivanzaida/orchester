@@ -281,7 +281,7 @@ impl Component for Entry {
       .control(crate::ui::icon::icon(
         crate::ui::icon::Icon::ChevronRight,
         crate::theme::IconSize::Md,
-        lurq::app::theme::PaletteColor::TextMuted,
+        lurq::app::theme::PaletteColor::MutedForeground,
       ))
       .opens(Navigation::of(ctx).to(Route::Project(props.project.open.project.id(), ProjectPage::Storage)))
       .render(ctx);

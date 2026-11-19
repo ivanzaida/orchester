@@ -294,7 +294,7 @@ fn quiet(id: &str, label: &str, words: &str) -> Column {
       Text::new(words)
         .id(format!("{id}-note"))
         .variant(HubText::PanelHint.role())
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
 }
 

@@ -29,7 +29,7 @@ use crate::{
     },
     project_settings::kit::{Group, SettingRow, Tone, command_box, mono_value, value},
   },
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -173,7 +173,7 @@ fn wrong_account(
           Text::new(&ctx.t("connections.github.wrongAccountShort"))
             .id("connection-inspector-sentence")
             .variant(ProjectSettingsText::Hint.role())
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .width(Dimension::Pct(100.0)),
         ),
     )

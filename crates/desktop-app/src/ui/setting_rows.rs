@@ -48,9 +48,9 @@ pub enum HintTone {
 impl HintTone {
   const fn color(self) -> PaletteColor {
     match self {
-      Self::Muted => PaletteColor::TextMuted,
+      Self::Muted => PaletteColor::MutedForeground,
       Self::Warning => PaletteColor::Warning,
-      Self::Danger => PaletteColor::Danger,
+      Self::Danger => PaletteColor::Destructive,
       Self::Success => PaletteColor::Success,
     }
   }
@@ -142,7 +142,7 @@ impl SettingGroup {
     let words = Text::new(foot)
       .id(format!("{id}-text"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .flex(1.0)
       .min_width(Dimension::Px(0.0));
     self.foot = Some(
@@ -152,7 +152,7 @@ impl SettingGroup {
         .padding(Padding::all(ExtraSpacing::Tight.role()))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+        .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
         .child(words)
         .into(),
     );
@@ -171,7 +171,7 @@ impl From<SettingGroup> for Element {
         Text::new(&meta)
           .id(format!("{}-meta", group.id))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap()
@@ -232,7 +232,7 @@ pub fn group_note(id: &str, text: &str) -> Text {
   Text::new(text)
     .id(id.to_owned())
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
 }
 
@@ -383,9 +383,9 @@ impl SettingRow {
         .id(format!("{}-label", self.id))
         .variant(ExtraTypography::Strong.role())
         .color(match (self.faded, self.label_color.clone()) {
-          (true, _) => PaletteColor::TextMuted,
+          (true, _) => PaletteColor::MutedForeground,
           (false, Some(color)) => color,
-          (false, None) => PaletteColor::TextPrimary,
+          (false, None) => PaletteColor::Foreground,
         })
         .into(),
     };
@@ -393,7 +393,7 @@ impl SettingRow {
       let mark = Row::new()
         .id(format!("{}-info", self.id))
         .describe("a11y_name", info.clone())
-        .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted));
+        .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground));
       Tooltip::new(format!("{}-info", self.id), info).wrap(ctx, mark)
     });
     let hint: Option<Element> = match (&self.hint, self.bones.1) {
@@ -496,7 +496,7 @@ pub fn mono_value(id: &str, text: &str) -> Text {
   Text::new(text)
     .id(id.to_owned())
     .variant(ExtraTypography::PropertyMono.role())
-    .color(PaletteColor::TextSecondary)
+    .color(ExtraColor::TextSecondary.role())
     .nowrap()
     .min_width(Dimension::Px(0.0))
     .text_overflow(TextOverflow::Elipsis)
@@ -522,7 +522,7 @@ pub fn status(id: &str, (dot_color, color): (PaletteColor, PaletteColor), words:
 
 /// A row's chevron: the row opens a page (`Open` `w8dpO`).
 pub fn opens_mark() -> Text {
-  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)
+  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)
 }
 
 /// A 28 tile with `content` in its middle (`Tile` `BpusX`).
@@ -542,7 +542,7 @@ fn tile(side: f32, radius: RadiusSize, content: impl Into<Element>) -> Row {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(radius)
     .child(content)
@@ -556,7 +556,7 @@ pub fn marked_words(id: &str, glyph: Icon, words: &str) -> Row {
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Xs, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Xs, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))

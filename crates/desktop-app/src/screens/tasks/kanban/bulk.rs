@@ -382,8 +382,8 @@ fn bar_frame() -> Row {
     .spacing(ExtraSpacing::Tight.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .box_shadow(ShadowStyle::Md)
 }
 
@@ -391,7 +391,7 @@ fn divider() -> Column {
   Column::new()
     .width(Dimension::Px(DIVIDER.0))
     .height(Dimension::Px(DIVIDER.1))
-    .background(PaletteColor::BorderStrong)
+    .background(PaletteColor::Input)
 }
 
 /// Room of `width` beside the bar's 2 between its parts (`Gap` in `vTiQj`).

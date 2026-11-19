@@ -27,7 +27,7 @@ use super::{
 };
 use crate::{
   shell::clock::{Clock, clock},
-  theme::ExtraSpacing,
+  theme::{ExtraColor, ExtraSpacing},
   ui::{
     hover_card::{Fact, FactValue, FactsCard, hover_card},
     icon::Icon,
@@ -45,7 +45,7 @@ pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<E
     .shrink_limit(ShrinkLimit::Content)
     .spacing(ExtraSpacing::Fine.role())
     .align_items(Alignment::Center)
-    .child(dropping(&ctx.t(key), PaletteColor::TextMuted));
+    .child(dropping(&ctx.t(key), PaletteColor::MutedForeground));
   let mut row = pressed("status-runner", Press::run(move || open(BarAction::OpenRunnerLog)))
     .describe("state", state)
     .flex_shrink(1.0)
@@ -70,7 +70,7 @@ pub fn runner(ctx: &mut Ctx, runner: &RunnerFacts, dispatch: &Dispatch) -> Vec<E
     RunnerState::Failed { cause, attempts } => {
       let detail = offline_detail(ctx, cause, *attempts, runner);
       row = row.describe("cause", cause_name(cause));
-      words = words.child(dropping(&detail, PaletteColor::TextMuted).id("status-runner-detail"));
+      words = words.child(dropping(&detail, PaletteColor::MutedForeground).id("status-runner-detail"));
     }
     _ => {}
   }
@@ -107,9 +107,13 @@ fn look(state: &RunnerState) -> (PaletteColor, &'static str, &'static str) {
       "shell.status.runner.reconnecting",
       "reconnecting",
     ),
-    RunnerState::Stopping => (PaletteColor::TextMuted, "shell.status.runner.stopping", "stopping"),
-    RunnerState::Stopped => (PaletteColor::TextMuted, "shell.status.runner.stopped", "stopped"),
-    RunnerState::Failed { .. } => (PaletteColor::Danger, "shell.status.runner.offline", "offline"),
+    RunnerState::Stopping => (
+      PaletteColor::MutedForeground,
+      "shell.status.runner.stopping",
+      "stopping",
+    ),
+    RunnerState::Stopped => (PaletteColor::MutedForeground, "shell.status.runner.stopped", "stopped"),
+    RunnerState::Failed { .. } => (PaletteColor::Destructive, "shell.status.runner.offline", "offline"),
   }
 }
 
@@ -218,7 +222,12 @@ fn interrupted(ctx: &mut Ctx, runner: &RunnerFacts) -> Option<Element> {
       .shrink_order(give_way::ACTIVITY)
       .shrink_limit(ShrinkLimit::Content)
       .child(glyph(Icon::CirclePause, PaletteColor::Warning))
-      .child(cut(ctx, "status-interrupted-text", &text, PaletteColor::TextSecondary))
+      .child(cut(
+        ctx,
+        "status-interrupted-text",
+        &text,
+        ExtraColor::TextSecondary.role(),
+      ))
       .into(),
   )
 }

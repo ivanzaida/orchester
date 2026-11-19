@@ -9,7 +9,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Interval},
-    theme::{PaletteColor, TypographyStyle},
+    theme::TypographyStyle,
   },
   components::Text,
   core::Signal,
@@ -18,7 +18,10 @@ use lurq::{
 use orchester_core::{run::ActiveClock, time::Timestamp};
 use orchester_workspace::display;
 
-use crate::{theme::ExtraTypography, ui::message::message_text};
+use crate::{
+  theme::{ExtraColor, ExtraTypography},
+  ui::message::message_text,
+};
 
 const TICK: Duration = Duration::from_secs(1);
 
@@ -156,7 +159,7 @@ impl Component for Ticking {
       Clock::Since(_) | Clock::Retry { .. } => text.variant(TypographyStyle::Caption),
       Clock::Until(_) => text
         .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     }
   }
 }

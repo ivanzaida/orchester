@@ -174,21 +174,21 @@ fn group_line(ctx: &Ctx, (status, count, folded): (WorkflowStatus, usize, bool),
   .child(icon(
     if folded { Icon::ChevronRight } else { Icon::ChevronDown },
     IconSize::Sm,
-    PaletteColor::TextMuted,
+    PaletteColor::MutedForeground,
   ))
   .child(icon(glyph, IconSize::Base, tone))
   .child(
     Text::new(&label)
       .id(format!("{id}-label"))
       .variant(TypographyStyle::Label)
-      .color(PaletteColor::TextSecondary)
+      .color(ExtraColor::TextSecondary.role())
       .nowrap(),
   )
   .child(
     Text::new(&count.to_string())
       .id(format!("{id}-count"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap(),
   )
   .into()
@@ -209,19 +209,19 @@ fn acceptance_line(ctx: &Ctx, count: usize) -> Element {
     )
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::ShieldCheck, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ShieldCheck, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("modules.page.acceptance"))
         .id("module-group-acceptance-label")
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(
       Text::new(&count.to_string())
         .id("module-group-acceptance-count")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

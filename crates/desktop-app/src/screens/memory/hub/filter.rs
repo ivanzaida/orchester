@@ -98,7 +98,7 @@ fn settings_link(ctx: &mut Ctx, project: ProjectId) -> Element {
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
     .child(Text::new(&label).variant(HubText::Status.role()).nowrap())
-    .child(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::MutedForeground))
     .into()
 }
 
@@ -111,7 +111,7 @@ pub(super) fn not_shared(ctx: &Ctx, project: &str) -> Element {
     .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Laptop, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Laptop, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t_args("memory.hub.notShared", [("project", project)]))
         .id("memory-not-shared-text")

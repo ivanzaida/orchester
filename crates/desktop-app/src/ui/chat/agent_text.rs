@@ -16,7 +16,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::MouseEvent,
-    theme::{FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Markdown, MarkdownLink, MarkdownProps},
   node::{Element, dimension::Dimension},
@@ -33,7 +33,11 @@ use super::{
   presentation::{LinkWords, presentation},
   references,
 };
-use crate::{routes::Route, theme::ChatLinkLooks, ui::markdown::LinkHandler};
+use crate::{
+  routes::Route,
+  theme::{ChatLinkLooks, TextRole},
+  ui::markdown::LinkHandler,
+};
 
 /// What an agent wrote, `text`, in a chat of `project`; `names` are the projects' names, for what a link to another
 /// project's place says, and a press on a link goes to `links`. What a search found in it (`found`) is filled behind
@@ -130,9 +134,9 @@ impl Component for AgentText {
 fn markdown(ctx: &mut Ctx, props: &AgentTextProps, text: &Arc<str>, found: Option<&Found>) -> (Element, usize) {
   let (style, looks) = {
     let theme = ctx.theme();
-    let style = FormTextRole {
+    let style = TextRole {
       typography: TypographyStyle::Body,
-      color: PaletteColor::TextPrimary,
+      color: PaletteColor::Foreground,
     }
     .resolve(&theme.typography(), &theme.palette());
     let looks = ChatLinkLooks::of(theme, &style);

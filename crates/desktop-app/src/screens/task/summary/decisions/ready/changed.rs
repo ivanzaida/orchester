@@ -34,7 +34,7 @@ use super::super::{TaskContext, step_label, tab_link};
 use crate::{
   routes::TaskTab,
   services::Services,
-  theme::{DecisionSpacing, DecisionText, ExtraSpacing, ExtraTypography, IconSize, TaskText},
+  theme::{DecisionSpacing, DecisionText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     card::{CardSurface, card},
     icon::{Icon, icon},
@@ -240,7 +240,10 @@ fn file_row(file: &FileDiff) -> Element {
     )
     .child(Text::new(file.path()).variant(TypographyStyle::Mono).flex(1.0).nowrap())
     .child(count(&format!("+{}", file.additions()), PaletteColor::Success))
-    .child(count(&format!("\u{2212}{}", file.deletions()), PaletteColor::Danger))
+    .child(count(
+      &format!("\u{2212}{}", file.deletions()),
+      PaletteColor::Destructive,
+    ))
     .into()
 }
 
@@ -326,7 +329,7 @@ fn check(ctx: &Ctx, run: &RunView, step: &StepView) -> Element {
         .child(
           Text::new(&said)
             .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap(),
         ),
     )
@@ -350,7 +353,7 @@ pub(in super::super) fn section(
       Text::new(&figure)
         .id(format!("{id}-figure"))
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
     }));
   Column::new()

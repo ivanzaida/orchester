@@ -245,7 +245,7 @@ pub fn section_head(ctx: &Ctx, id: &str, title: &str, count: Option<usize>) -> R
       Text::new(&count.to_string())
         .id(format!("{id}-count"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     }))
 }

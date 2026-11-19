@@ -8,11 +8,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    events::MouseEvent,
-    theme::{PaletteColor, RadiusSize},
-  },
+  app::{ctx::Ctx, events::MouseEvent, theme::RadiusSize},
   components::{Button, Column, Placement, Popup},
   core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
@@ -97,7 +93,7 @@ pub(super) fn more_button(ctx: &mut Ctx, reorder: &Reorder, card: &StepCard, anc
       menu_for.set(Held(Some(key.clone())));
       open.set(!opened);
     })
-    .child(icon(Icon::Ellipsis, IconSize::Md, PaletteColor::TextSecondary).id(format!("{id}-icon")));
+    .child(icon(Icon::Ellipsis, IconSize::Md, ExtraColor::TextSecondary.role()).id(format!("{id}-icon")));
   if reorder.menu_open.get() && reorder.menu_for.get().is(&card.key) {
     return button.into();
   }

@@ -18,7 +18,7 @@ use orchester_core::{id::ProjectId, memory::Memory, project::TaskKey};
 use crate::{
   navigation::{Navigation, link::Open},
   routes::{ProjectPage, ProjectSettingsTab, Route, TaskView},
-  theme::{ExtraRadius, ExtraSpacing, IconSize, MemoryText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, MemoryText},
   ui::{
     chip::TagChip,
     icon::{Icon, icon},
@@ -55,7 +55,7 @@ pub fn glyph(mark: Icon) -> Row {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .child(icon(mark, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(mark, IconSize::Md, PaletteColor::MutedForeground))
 }
 
 /// `memory`'s tags (`iRiGk` in `J1utD`).
@@ -81,7 +81,7 @@ pub fn flag(id: &str, label: &str) -> Row {
     .id(id.to_owned())
     .padding(Padding::symmetric(ExtraSpacing::Snug.role(), ExtraSpacing::Hair.role()))
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Full.role())
     .child(Text::new(label).variant(MemoryText::Flag.role()).nowrap())
@@ -97,8 +97,8 @@ pub fn status(id: &str, (mark, words): (Icon, Arc<str>), color: PaletteColor) ->
     .child(icon(
       mark,
       IconSize::Sm,
-      if color == PaletteColor::TextSecondary {
-        PaletteColor::TextMuted
+      if color == ExtraColor::TextSecondary.role() {
+        PaletteColor::MutedForeground
       } else {
         color.clone()
       },
@@ -144,7 +144,7 @@ pub fn unreadable(ctx: &Ctx, count: usize) -> Element {
   // What was read stays: information with the `danger` icon, not a red fill (`SsC16`).
   Notice::new("memory-unreadable", NoticeTone::Info, title)
     .icon(Icon::CircleAlert)
-    .mark(PaletteColor::Danger)
+    .mark(PaletteColor::Destructive)
     .body(ctx.t("memory.unreadable.body"))
     .into()
 }

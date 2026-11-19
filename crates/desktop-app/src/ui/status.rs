@@ -35,7 +35,7 @@ use super::{
   icon::{Icon, icon},
   tooltip::Truncated,
 };
-use crate::theme::{ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
 
 /// What a run or one of its steps is doing, and the Blocked flag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,13 +91,13 @@ enum Tone {
 }
 
 impl Tone {
-  const fn color(self) -> PaletteColor {
+  fn color(self) -> PaletteColor {
     match self {
-      Self::Muted => PaletteColor::TextMuted,
-      Self::Secondary => PaletteColor::TextSecondary,
+      Self::Muted => PaletteColor::MutedForeground,
+      Self::Secondary => ExtraColor::TextSecondary.role(),
       Self::Warning => PaletteColor::Warning,
       Self::Success => PaletteColor::Success,
-      Self::Danger => PaletteColor::Danger,
+      Self::Danger => PaletteColor::Destructive,
     }
   }
 }
@@ -170,7 +170,7 @@ impl Status {
     }
   }
 
-  pub const fn icon(self) -> Icon {
+  pub fn icon(self) -> Icon {
     match self {
       Self::Draft | Self::NotStarted => Icon::CircleDashed,
       Self::Queued | Self::Waiting | Self::WaitingForPlanReset => Icon::Clock,
@@ -192,7 +192,7 @@ impl Status {
     }
   }
 
-  const fn tone(self) -> Tone {
+  fn tone(self) -> Tone {
     match self {
       Self::Draft | Self::Queued | Self::Canceled | Self::Waiting | Self::Skipped | Self::NotStarted => Tone::Muted,
       Self::Running | Self::Merged | Self::Working | Self::Blocked => Tone::Secondary,
@@ -212,12 +212,12 @@ impl Status {
   }
 
   /// The color of the icon and the word.
-  pub const fn color(self) -> PaletteColor {
+  pub fn color(self) -> PaletteColor {
     self.tone().color()
   }
 
   /// The i18n key of the word.
-  pub const fn key(self) -> &'static str {
+  pub fn key(self) -> &'static str {
     match self {
       Self::Draft => "ui.status.draft",
       Self::Queued => "ui.status.queued",
@@ -340,25 +340,29 @@ pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> Row {
 }
 
 /// A priority's icon, the i18n key of its word and its color.
-pub const fn priority_look(priority: Priority) -> (Icon, &'static str, PaletteColor) {
+pub fn priority_look(priority: Priority) -> (Icon, &'static str, PaletteColor) {
   match priority {
     Priority::Urgent => (Icon::CircleAlert, "ui.priority.urgent", PaletteColor::Warning),
-    Priority::High => (Icon::SignalHigh, "ui.priority.high", PaletteColor::TextSecondary),
-    Priority::Medium => (Icon::SignalMedium, "ui.priority.medium", PaletteColor::TextSecondary),
-    Priority::Low => (Icon::SignalLow, "ui.priority.low", PaletteColor::TextSecondary),
-    Priority::None => (Icon::Minus, "ui.priority.none", PaletteColor::TextMuted),
+    Priority::High => (Icon::SignalHigh, "ui.priority.high", ExtraColor::TextSecondary.role()),
+    Priority::Medium => (
+      Icon::SignalMedium,
+      "ui.priority.medium",
+      ExtraColor::TextSecondary.role(),
+    ),
+    Priority::Low => (Icon::SignalLow, "ui.priority.low", ExtraColor::TextSecondary.role()),
+    Priority::None => (Icon::Minus, "ui.priority.none", PaletteColor::MutedForeground),
   }
 }
 
 /// A workflow status's icon and its color.
-pub const fn workflow_look(status: WorkflowStatus) -> (Icon, PaletteColor) {
+pub fn workflow_look(status: WorkflowStatus) -> (Icon, PaletteColor) {
   match status {
-    WorkflowStatus::Backlog => (Icon::CircleDashed, PaletteColor::TextMuted),
-    WorkflowStatus::Todo => (Icon::Circle, PaletteColor::TextSecondary),
-    WorkflowStatus::InProgress => (Icon::CircleDotDashed, PaletteColor::TextSecondary),
-    WorkflowStatus::InReview => (Icon::Eye, PaletteColor::TextSecondary),
+    WorkflowStatus::Backlog => (Icon::CircleDashed, PaletteColor::MutedForeground),
+    WorkflowStatus::Todo => (Icon::Circle, ExtraColor::TextSecondary.role()),
+    WorkflowStatus::InProgress => (Icon::CircleDotDashed, ExtraColor::TextSecondary.role()),
+    WorkflowStatus::InReview => (Icon::Eye, ExtraColor::TextSecondary.role()),
     WorkflowStatus::Done => (Icon::CircleCheck, PaletteColor::Success),
-    WorkflowStatus::Canceled => (Icon::CircleSlash, PaletteColor::TextMuted),
+    WorkflowStatus::Canceled => (Icon::CircleSlash, PaletteColor::MutedForeground),
   }
 }
 

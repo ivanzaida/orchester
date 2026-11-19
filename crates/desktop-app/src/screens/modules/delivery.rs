@@ -38,7 +38,7 @@ use crate::{
   screens::settings::orchester::moment,
   services::Services,
   team::strip::{Strip, StripTone},
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::{BadgeTone, badge},
@@ -144,7 +144,7 @@ impl Stands {
     match self {
       Self::Accepted => (StripTone::Success, PaletteColor::Success),
       Self::NotPassed | Self::Ceiling => (StripTone::Warning, PaletteColor::Warning),
-      _ => (StripTone::Plain, PaletteColor::TextMuted),
+      _ => (StripTone::Plain, PaletteColor::MutedForeground),
     }
   }
 
@@ -330,10 +330,14 @@ fn title(ctx: &Ctx, view: &DeliveryView, stands: Stands) -> Vec<Element> {
     mono(
       "module-delivery-branch",
       view.own.branch.as_str(),
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
-    icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted).into(),
-    mono("module-delivery-into", &into(ctx, view), PaletteColor::TextSecondary),
+    icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::MutedForeground).into(),
+    mono(
+      "module-delivery-into",
+      &into(ctx, view),
+      ExtraColor::TextSecondary.role(),
+    ),
   ];
   if let Some((key, tone)) = state {
     parts.push(badge("module-delivery-state", tone, &ctx.t(key)).into());

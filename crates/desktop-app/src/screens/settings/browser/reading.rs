@@ -72,7 +72,7 @@ fn program_group(ctx: &mut Ctx) -> Element {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .child(icon(Icon::Copy, IconSize::Md, PaletteColor::TextMuted));
+    .child(icon(Icon::Copy, IconSize::Md, PaletteColor::MutedForeground));
   let folder = Row::new()
     .width(Dimension::Px(PROFILES_VALUE))
     .flex_shrink(0.0)

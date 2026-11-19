@@ -19,7 +19,7 @@ use orchester_workspace::{accounts::CliProgram, background, display, messages::M
 use super::words::{cli_key, t, ta};
 use crate::{
   services::{Services, accounts::OnThisComputer},
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -77,12 +77,12 @@ pub(super) fn line(
     .describe("state", if program.runs() { "found" } else { "not-found" });
   let line = match (&program.version, &program.path) {
     (Some(version), Some(path)) => line
-      .child(icon(Icon::Terminal, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(Icon::Terminal, IconSize::Sm, PaletteColor::MutedForeground))
       .child(
         Text::new(&format!("{} {version}", cli.program()))
           .id(format!("{id}-version"))
           .variant(ExtraTypography::MonoKey.role())
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
       .child(
@@ -95,12 +95,12 @@ pub(super) fn line(
       )
       .child(button("accounts.program.change")),
     (_, path) => line
-      .child(icon(Icon::TriangleAlert, IconSize::Sm, PaletteColor::Danger))
+      .child(icon(Icon::TriangleAlert, IconSize::Sm, PaletteColor::Destructive))
       .child(
         Text::new(&missing(ctx, program, path.as_deref()))
           .id(format!("{id}-missing"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::Danger)
+          .color(PaletteColor::Destructive)
           .flex(1.0)
           .min_width(Dimension::Px(0.0)),
       )

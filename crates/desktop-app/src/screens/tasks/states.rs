@@ -30,7 +30,7 @@ use crate::{
   project::ProjectFeed,
   routes::TaskListTab,
   shell::needs_you::PanelOpen,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, TasksSpacing},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, TasksSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -212,7 +212,7 @@ fn tile(glyph: Icon, side: f32) -> Row {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(glyph, IconSize::Xl, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Xl, ExtraColor::TextSecondary.role()))
 }

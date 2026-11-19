@@ -29,7 +29,7 @@ use super::words::{t, ta};
 use crate::{
   screens::project_settings::kit::FormField,
   services::Services,
-  theme::{IconSize, ProjectSettingsText},
+  theme::{ExtraColor, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     dialog::Dialog,
@@ -172,7 +172,7 @@ impl Servers {
       Icon::Scale
     };
     SettingRow::new(id, server.name().as_str().to_owned())
-      .lead(row_tile(icon(glyph, IconSize::Md, PaletteColor::TextSecondary)))
+      .lead(row_tile(icon(glyph, IconSize::Md, ExtraColor::TextSecondary.role())))
       .hint(line)
       .control(end)
       .render(ctx)
@@ -212,12 +212,12 @@ impl Servers {
 
 /// How the server's last check went, as its row says it: the colors of its dot and word, and the word's key.
 fn state(server: &DecisionConnection) -> ((PaletteColor, PaletteColor), &'static str) {
-  let quiet = (PaletteColor::TextMuted, PaletteColor::TextSecondary);
+  let quiet = (PaletteColor::MutedForeground, ExtraColor::TextSecondary.role());
   let warns = (PaletteColor::Warning, PaletteColor::Warning);
   match server.last_check().map(|check| &check.result) {
     None => (quiet, "accounts.api.decision.state.notChecked"),
     Some(DecisionCheckResult::Connected | DecisionCheckResult::ModelGone { .. }) => (
-      (PaletteColor::Success, PaletteColor::TextSecondary),
+      (PaletteColor::Success, ExtraColor::TextSecondary.role()),
       "accounts.api.decision.state.connected",
     ),
     Some(DecisionCheckResult::KeyRefused) => (warns, "accounts.api.decision.state.keyRefused"),

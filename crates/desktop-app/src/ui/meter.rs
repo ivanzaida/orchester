@@ -10,7 +10,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-use crate::theme::ExtraRadius;
+use crate::theme::{ExtraColor, ExtraRadius};
 
 /// The track's height (`wtAQI`).
 const HEIGHT: f32 = 4.0;
@@ -38,11 +38,11 @@ pub fn meter(id: &str, (used, of): (u64, u64), tone: MeterTone) -> Element {
     (used as f32 / of as f32 * 100.0).min(100.0)
   };
   let fill = match tone {
-    MeterTone::Plain => PaletteColor::TextSecondary,
+    MeterTone::Plain => ExtraColor::TextSecondary.role(),
     MeterTone::Reached => PaletteColor::Warning,
     MeterTone::Progress => PaletteColor::Info,
-    MeterTone::Quiet => PaletteColor::TextMuted,
-    MeterTone::Full => PaletteColor::Danger,
+    MeterTone::Quiet => PaletteColor::MutedForeground,
+    MeterTone::Full => PaletteColor::Destructive,
   };
   Row::new()
     .id(id.to_owned())

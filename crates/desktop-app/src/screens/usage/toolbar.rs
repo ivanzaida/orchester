@@ -108,7 +108,7 @@ impl Component for UsageToolbar {
     let readback = Text::new(&readback(ctx, &props))
       .id("usage-readback")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap();
     let buttons: Vec<FilterButton> = self
       .menus(&props)

@@ -103,7 +103,7 @@ fn footer(ctx: &Ctx) -> Row {
     .padding(ExtraSpacing::Tight.role())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("secrets.footer"))
         .id("secrets-handling")
@@ -136,7 +136,7 @@ pub(super) fn reading(ctx: &mut Ctx, view: &View) -> Element {
           .mono_label()
           .label_reading(*name)
           .hint_reading(*used)
-          .lead(icon(Icon::KeyRound, IconSize::Md, PaletteColor::TextMuted));
+          .lead(icon(Icon::KeyRound, IconSize::Md, PaletteColor::MutedForeground));
         let row = if *set > 0.0 {
           row.control(skeleton::line(ctx, ExtraTypography::Note.role(), *set))
         } else {
@@ -335,11 +335,15 @@ impl Component for SecretRow {
       .height(Dimension::Px(ControlHeight::Sm.value()))
       .align_items(Alignment::Center)
       .justify(Justify::Center)
-      .child(icon(Icon::Ellipsis, IconSize::Md, PaletteColor::TextMuted));
+      .child(icon(Icon::Ellipsis, IconSize::Md, PaletteColor::MutedForeground));
     SettingRow::new(format!("secret-row-{id}"), secret.name().as_str())
       .item()
       .mono_label()
-      .lead(icon(words::glyph(secret.kind()), IconSize::Md, PaletteColor::TextMuted))
+      .lead(icon(
+        words::glyph(secret.kind()),
+        IconSize::Md,
+        PaletteColor::MutedForeground,
+      ))
       .hint(props.used.clone())
       .controls(masked.map(Element::from))
       .control(more)

@@ -59,17 +59,17 @@ impl From<FilterButton> for Element {
   fn from(button: FilterButton) -> Self {
     let (fill, stroke, text, chevron) = if button.active {
       (
-        PaletteColor::AccentMuted,
-        PaletteColor::BorderStrong,
-        PaletteColor::TextPrimary,
-        PaletteColor::TextSecondary,
+        PaletteColor::Highlight,
+        PaletteColor::Input,
+        PaletteColor::Foreground,
+        ExtraColor::TextSecondary.role(),
       )
     } else {
       (
-        PaletteColor::SurfaceInput,
+        ExtraColor::InputSurface.role(),
         PaletteColor::Border,
-        PaletteColor::TextSecondary,
-        PaletteColor::TextMuted,
+        ExtraColor::TextSecondary.role(),
+        PaletteColor::MutedForeground,
       )
     };
     let open = button.open.clone();
@@ -82,7 +82,7 @@ impl From<FilterButton> for Element {
       .background(fill)
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Md)
-      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)))
+      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Input)))
       .describe("a11y_name", button.label.clone())
       .describe("active", if button.active { "true" } else { "false" })
       .child(
@@ -127,16 +127,16 @@ impl From<FilterToggle> for Element {
   fn from(toggle: FilterToggle) -> Self {
     let (fill, stroke, text, glyph) = if toggle.on {
       (
-        PaletteColor::AccentMuted,
-        PaletteColor::BorderStrong,
-        PaletteColor::TextPrimary,
-        Some(icon(Icon::X, IconSize::Base, PaletteColor::TextSecondary)),
+        PaletteColor::Highlight,
+        PaletteColor::Input,
+        PaletteColor::Foreground,
+        Some(icon(Icon::X, IconSize::Base, ExtraColor::TextSecondary.role())),
       )
     } else {
       (
-        PaletteColor::SurfaceInput,
+        ExtraColor::InputSurface.role(),
         PaletteColor::Border,
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
         None,
       )
     };
@@ -153,7 +153,7 @@ impl From<FilterToggle> for Element {
       .background(fill)
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Md)
-      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)))
+      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Input)))
       .describe("a11y_name", toggle.label.clone())
       .describe("active", if toggle.on { "true" } else { "false" })
       .child(
@@ -201,7 +201,7 @@ impl From<FilterChip> for Element {
       .describe("a11y_name", label)
       .rounded(ExtraRadius::Full.role())
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground));
     Row::new()
       .id(chip.id.clone())
       .height(Dimension::Px(ControlHeight::Sm.value()))
@@ -212,7 +212,7 @@ impl From<FilterChip> for Element {
       )
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Full.role())
       .child(Text::new(&chip.facet).variant(ExtraTypography::Note.role()).nowrap())
@@ -235,8 +235,8 @@ pub fn filter_menu_panel(id: &str, width: f32) -> Column {
     .padding(ExtraSpacing::Snug.role())
     .spacing(ExtraSpacing::Tight.role())
     .rounded(RadiusSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .box_shadow(ShadowStyle::Lg)
 }
 
@@ -257,7 +257,7 @@ pub fn filter_option(
     } else {
       TypographyStyle::Description
     })
-    .color(PaletteColor::TextPrimary)
+    .color(PaletteColor::Foreground)
     .nowrap()
     .flex(1.0)
     .min_width(Dimension::Px(0.0));
@@ -284,7 +284,7 @@ pub fn filter_option_explained(
       Text::new(label)
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
     .child(
       Text::new(detail)
@@ -309,11 +309,11 @@ pub fn filter_group(id: impl Into<Arc<str>>, glyph: Icon, label: &str) -> Elemen
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(label)
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

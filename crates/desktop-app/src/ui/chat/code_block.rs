@@ -5,10 +5,10 @@
 //! 8 at their sides, the `hover` fill under the pointer, always shown and the pointer's only (never a Tab stop, no
 //! focus ring, as every toolbar's button: `ui::pressable`). A press puts the code on the clipboard without
 //! its fence or its language; then for 2 s it says *Copied* by a `check` in `success` on the `hover` fill, or
-//! *Couldn't copy* by a `triangle-alert`, both in `danger`. The code is lurq's Markdown code, Geist Mono 12/1.5 in
+//! *Couldn't copy* by a `triangle-alert`, both in `danger`. The code is one text in `Mono`, Geist Mono 12/1.5 in
 //! `text_primary`, 8 over and under it and 12 at its sides; its lines never wrap and scroll sideways inside the box,
-//! and a search's places are filled behind them ([`super::found`]). lurq 0.54 draws no token colors for it: its text
-//! takes no colored runs from an app, and its Markdown colors Rust only, in colors of its own.
+//! and a search's places are filled behind them ([`super::found`]). It draws no token colors: its text //! takes no
+//! colored runs from an app, and its Markdown colors Rust only, in colors of its own.
 
 use std::sync::Arc;
 
@@ -16,12 +16,13 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Timeout},
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Markdown, MarkdownProps, Row, Text},
+  components::{Button, Column, Row, Text},
   core::Signal,
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  ui::{ScrollArea, ScrollAreaOrientation},
 };
 
 use super::{
@@ -30,7 +31,7 @@ use super::{
   found::Found,
 };
 use crate::{
-  theme::{ExtraColor, ExtraSpacing, IconSize, code_lines},
+  theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     clipboard::Clipboard,
     icon::{Icon, icon},
@@ -140,14 +141,14 @@ impl CodeBlockView {
   fn copy(&self, ctx: &mut Ctx, props: &CodeBlockProps) -> Button {
     let copied = self.copied.get();
     let (glyph, glyph_color, key) = match copied {
-      Copied::Not => (Icon::Copy, PaletteColor::TextSecondary, "common.copy"),
+      Copied::Not => (Icon::Copy, ExtraColor::TextSecondary.role(), "common.copy"),
       Copied::Done => (Icon::Check, PaletteColor::Success, "ui.copied"),
-      Copied::Failed => (Icon::TriangleAlert, PaletteColor::Danger, "ui.copyFailed"),
+      Copied::Failed => (Icon::TriangleAlert, PaletteColor::Destructive, "ui.copyFailed"),
     };
     let words_color = match copied {
-      Copied::Not => PaletteColor::TextSecondary,
-      Copied::Done => PaletteColor::TextPrimary,
-      Copied::Failed => PaletteColor::Danger,
+      Copied::Not => ExtraColor::TextSecondary.role(),
+      Copied::Done => PaletteColor::Foreground,
+      Copied::Failed => PaletteColor::Destructive,
     };
     let words = ctx.t(key);
     let (state, reset) = (self.copied.clone(), self.reset.clone());
@@ -185,35 +186,32 @@ impl CodeBlockView {
   }
 }
 
-/// The code's lines as lurq's Markdown draws a code block, without a box of its own: one selectable text that never
-/// wraps and scrolls sideways, what a search found in it filled behind it.
+/// The code's lines in `TypographyStyle::Mono`, 8 over and under them and 12 at their sides: one selectable text that
+/// never wraps and scrolls sideways, what a search found in it filled behind it.
 fn lines(ctx: &mut Ctx, props: &CodeBlockProps) -> Element {
-  let style = {
-    let theme = ctx.theme();
-    FormTextRole {
-      typography: TypographyStyle::Body,
-      color: PaletteColor::TextPrimary,
-    }
-    .resolve(&theme.typography(), &theme.palette())
-  };
-  let theme = code_lines(&ctx.theme().markdown());
-  let markdown = MarkdownProps::styled(fenced(&props.code), style)
-    .theme(theme)
-    .width(Dimension::Pct(100.0))
-    .selectable(true);
   let lines_id = format!("{}-lines", props.id);
-  let Some(found) = &props.found else {
-    return Markdown::mount(ctx, markdown).id(lines_id);
-  };
-  let highlights = found.highlights(ctx, &markdown.rendered_text());
-  let places = highlights.len();
-  let words = Markdown::mount(ctx, markdown.highlights(highlights)).id(lines_id);
-  found.classed(words, places)
-}
-
-/// `code` as a fenced block without a language, its fence longer than any run of backticks in it.
-fn fenced(code: &str) -> String {
-  let longest = code.split(|ch| ch != '`').map(str::len).max().unwrap_or_default();
-  let fence = "`".repeat(longest.max(2) + 1);
-  format!("{fence}\n{code}\n{fence}")
+  let mut words = Text::new(&props.code)
+    .id(format!("{lines_id}-text"))
+    .variant(TypographyStyle::Mono)
+    .nowrap()
+    .selectable(true);
+  let mut places = 0;
+  if let Some(found) = &props.found {
+    let highlights = found.highlights(ctx, &props.code);
+    places = highlights.len();
+    words = words.highlights(highlights);
+  }
+  let room = Column::new()
+    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+    .child(words);
+  let area: Element = ScrollArea::new()
+    .id(lines_id)
+    .orientation(ScrollAreaOrientation::Horizontal)
+    .fill_width(true)
+    .child(room)
+    .into();
+  match &props.found {
+    Some(found) => found.classed(area, places),
+    None => area,
+  }
 }

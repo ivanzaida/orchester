@@ -28,7 +28,7 @@ use crate::{
     clock::{Clock, clock},
     status_bar::dot,
   },
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
 };
 
 /// A card's width (`tKtTc`).
@@ -170,7 +170,7 @@ pub fn facts_card(ctx: &mut Ctx, card: &FactsCard) -> Element {
         .with_children(side.as_ref().map(|side| {
           Text::new(side)
             .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .nowrap()
         })),
     );
@@ -181,7 +181,7 @@ pub fn facts_card(ctx: &mut Ctx, card: &FactsCard) -> Element {
       FactValue::Words(words) => Text::new(words)
         .id(format!("{id}-value"))
         .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .width(Dimension::Pct(100.0))
         .into(),
       FactValue::Clock(time) => clock(ctx, &format!("{id}-value"), *time),
@@ -194,7 +194,7 @@ pub fn facts_card(ctx: &mut Ctx, card: &FactsCard) -> Element {
         .child(
           Text::new(&fact.label)
             .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .width(Dimension::Px(LABEL_WIDTH)),
         )
         .child(Row::new().flex(1.0).child(value)),
@@ -210,7 +210,7 @@ pub fn facts_card(ctx: &mut Ctx, card: &FactsCard) -> Element {
           Text::new(note)
             .id(format!("{}-note", card.id))
             .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .width(Dimension::Pct(100.0)),
         )
     }))

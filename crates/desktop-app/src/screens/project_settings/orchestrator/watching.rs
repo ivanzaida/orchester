@@ -31,7 +31,7 @@ use super::super::{
 use crate::{
   queries::{self, Session, project},
   services::Services,
-  theme::{ExtraSpacing, ProjectSettingsText},
+  theme::{ExtraColor, ExtraSpacing, ProjectSettingsText},
   ui::{
     field::{FieldInput, field_error},
     icon::Icon,
@@ -218,9 +218,9 @@ impl Watching {
       .id(format!("{NO_PROGRESS}-unit"))
       .variant(ProjectSettingsText::Value.role())
       .color(if on && read {
-        PaletteColor::TextSecondary
+        ExtraColor::TextSecondary.role()
       } else {
-        PaletteColor::TextMuted
+        PaletteColor::MutedForeground
       })
       .nowrap();
     let control = Row::new()

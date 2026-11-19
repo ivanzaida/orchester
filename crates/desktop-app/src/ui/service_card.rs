@@ -35,7 +35,7 @@ pub fn frame(id: impl Into<String>, tone: PaletteColor) -> Column {
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, tone))
     .rounded(RadiusSize::Lg)
 }
@@ -128,7 +128,7 @@ fn tail_line(id: &str, at: usize, line: &TailLine) -> Element {
     .flex(1.0)
     .min_width(Dimension::Px(0.0));
   let text = if line.danger {
-    text.color(PaletteColor::Danger)
+    text.color(PaletteColor::Destructive)
   } else {
     text
   };
@@ -161,7 +161,7 @@ pub enum Slot {
 impl Slot {
   const fn fill(self) -> PaletteColor {
     match self {
-      Self::Held => PaletteColor::Accent,
+      Self::Held => PaletteColor::Primary,
       Self::Taken => PaletteColor::Warning,
       Self::Free => PaletteColor::Border,
     }

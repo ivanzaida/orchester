@@ -329,16 +329,16 @@ impl ItemView {
       (Some(Unchanged { change, reason }), _) => {
         let reason = message_text(ctx, &reason);
         let said = ctx.t_args(change.refused_key(), [("reason", &*reason)]);
-        (said, PaletteColor::Danger, false)
+        (said, PaletteColor::Destructive, false)
       }
       (None, Some(matched)) => (
         matched.meta(ctx, &when(ctx, listing, today)),
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
         false,
       ),
       (None, None) => match meta::leads(ctx, listing, leads, today) {
-        Some(leads) => (leads, PaletteColor::TextMuted, true),
-        None => (meta::meta(ctx, listing, today), PaletteColor::TextMuted, false),
+        Some(leads) => (leads, PaletteColor::MutedForeground, true),
+        None => (meta::meta(ctx, listing, today), PaletteColor::MutedForeground, false),
       },
     };
     let id = listing.chat.id();
@@ -346,9 +346,9 @@ impl ItemView {
       .id(format!("orchestrator-history-title-{id}"))
       .variant(OrchestratorText::Emphasis.role())
       .color(if current {
-        PaletteColor::TextPrimary
+        PaletteColor::Foreground
       } else {
-        PaletteColor::TextSecondary
+        ExtraColor::TextSecondary.role()
       })
       .width(Dimension::Pct(100.0))
       .nowrap()

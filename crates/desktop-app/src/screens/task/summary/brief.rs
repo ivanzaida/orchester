@@ -17,7 +17,7 @@ use orchester_core::task::TaskDetails;
 
 use super::section_head;
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, TaskSpacing, TaskText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, TaskSpacing, TaskText},
   ui::{
     chat::links,
     markdown::{LinkHandler, MarkdownView},
@@ -31,7 +31,7 @@ pub fn brief(ctx: &mut Ctx, details: &TaskDetails, (version, fallback): (Element
     muted("task-brief-text", &ctx.t("summary.noBrief"))
   } else {
     MarkdownView::new("task-brief-text", details.brief.as_str(), links(ctx))
-      .style(TaskText::Brief.role(), PaletteColor::TextSecondary)
+      .style(TaskText::Brief.role(), ExtraColor::TextSecondary.role())
       .blank_line_between_blocks()
       .render(ctx)
   };
@@ -78,7 +78,7 @@ pub fn criteria(ctx: &mut Ctx, details: &TaskDetails) -> Element {
 /// "01" and the criterion's words, as inline Markdown (`Criterion 1` `JDHDx`).
 fn criterion(ctx: &mut Ctx, number: usize, text: &str, on_link: &LinkHandler) -> Element {
   let text = MarkdownView::new(format!("task-criterion-{number}-text"), text, on_link.clone())
-    .style(TypographyStyle::Body, PaletteColor::TextPrimary)
+    .style(TypographyStyle::Body, PaletteColor::Foreground)
     .render(ctx);
   Row::new()
     .id(format!("task-criterion-{number}"))
@@ -101,7 +101,7 @@ fn muted(id: &str, text: &str) -> Element {
   Text::new(text)
     .id(id.to_owned())
     .variant(TypographyStyle::Body)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
     .into()
 }

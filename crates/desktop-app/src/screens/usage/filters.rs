@@ -230,11 +230,11 @@ fn empty_line(ctx: &Ctx, id: &str, facet: Facet, none: bool) -> Element {
     .padding(Padding::all(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t(key))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }

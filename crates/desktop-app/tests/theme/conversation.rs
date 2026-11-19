@@ -11,8 +11,8 @@ fn theme_conversation_approval_row_follows_the_design() {
     let app = themed(mode);
     let theme = app.theme();
     for (role, line_height, color) in [
-      (ConversationText::ApprovalLead, 1.3, PaletteColor::TextSecondary),
-      (ConversationText::ApprovalDetail, 1.4, PaletteColor::TextMuted),
+      (ConversationText::ApprovalLead, 1.3, ExtraColor::TextSecondary.role()),
+      (ConversationText::ApprovalDetail, 1.4, PaletteColor::MutedForeground),
     ] {
       let style = theme.typography_style(role.role());
       assert_eq!(

@@ -22,7 +22,7 @@ use super::{
   icon::{Icon, icon},
   tooltip::Truncated,
 };
-use crate::theme::{ControlHeight, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 /// A badge's dot (`Vydkx`).
 const DOT_SIZE: f32 = 6.0;
@@ -95,14 +95,14 @@ impl From<TagChip> for Element {
       .id(chip.id.clone())
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Full.role())
       .describe("tag", chip.name.clone())
       .with_children(
         chip
           .glyph
-          .map(|glyph| icon(glyph, IconSize::Xs, PaletteColor::TextSecondary)),
+          .map(|glyph| icon(glyph, IconSize::Xs, ExtraColor::TextSecondary.role())),
       )
       .child(
         Text::new(&chip.name)
@@ -131,7 +131,7 @@ impl From<TagChip> for Element {
         event.stop_propagation();
         action();
       })
-      .child(icon(Icon::X, IconSize::Xs, PaletteColor::TextMuted));
+      .child(icon(Icon::X, IconSize::Xs, PaletteColor::MutedForeground));
     row.padding(padding.right(SpacingSize::Xs)).child(cross).into()
   }
 }
@@ -148,13 +148,13 @@ pub enum BadgeTone {
 }
 
 impl BadgeTone {
-  const fn colors(self) -> (PaletteColor, PaletteColor) {
+  fn colors(self) -> (PaletteColor, PaletteColor) {
     match self {
       Self::Success => (PaletteColor::Success, PaletteColor::SuccessMuted),
       Self::Info => (PaletteColor::Info, PaletteColor::InfoMuted),
       Self::Warning => (PaletteColor::Warning, PaletteColor::WarningMuted),
-      Self::Danger => (PaletteColor::Danger, PaletteColor::DangerMuted),
-      Self::Neutral => (PaletteColor::TextSecondary, PaletteColor::AccentMuted),
+      Self::Danger => (PaletteColor::Destructive, PaletteColor::DestructiveMuted),
+      Self::Neutral => (ExtraColor::TextSecondary.role(), PaletteColor::Highlight),
     }
   }
 }

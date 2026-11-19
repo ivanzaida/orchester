@@ -90,7 +90,7 @@ pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> 
         .color(if warn {
           PaletteColor::Warning
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         })
         .flex_shrink(0.0)
         .nowrap();
@@ -213,17 +213,17 @@ fn row(
       .child(
         Text::new(&ctx.t("orchestrator.watch.unwatch.added"))
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
-      .child(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary))
+      .child(icon(Icon::Check, IconSize::Md, PaletteColor::Foreground))
   });
   let row = line()
     .id(format!("{}-unwatch-{}", shown.id, choice.key))
     .describe("a11y_name", choice.label.clone())
     .describe("focused", focused.to_string())
     .describe("added", added.is_some().to_string())
-    .child(icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(choice.icon, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(matched_label(&choice.label, shown.filter, false))
     .child(
       Text::new(meta)

@@ -43,8 +43,8 @@ pub fn menu_panel(id: &str) -> Column {
     .padding(SpacingSize::Xs)
     .spacing(ExtraSpacing::Tight.role())
     .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .box_shadow(ShadowStyle::Md)
 }
 
@@ -92,7 +92,7 @@ pub fn foot(ctx: &Ctx, id: &str, words: &str) -> Element {
           Text::new(words)
             .id(id.to_owned())
             .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .width(Dimension::Pct(100.0)),
         ),
     )
@@ -290,7 +290,7 @@ impl MenuItem {
       TypographyStyle::Description
     };
     let label = Truncated::new(format!("{}-label", self.id), self.label.clone(), style)
-      .color(self.content_color(PaletteColor::TextPrimary))
+      .color(self.content_color(PaletteColor::Foreground))
       .render(ctx);
     let detail = detail.map(|detail| {
       let detail = Text::new(detail).id(format!("{}-detail", self.id));
@@ -298,7 +298,7 @@ impl MenuItem {
         // On the label's line the detail gives way first: it is cut, the label stays whole.
         detail
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap()
@@ -339,7 +339,7 @@ impl MenuItem {
 
   /// The color of the row's icon or label, `color` unless the row destroys.
   fn content_color(&self, color: PaletteColor) -> PaletteColor {
-    if self.danger { PaletteColor::Danger } else { color }
+    if self.danger { PaletteColor::Destructive } else { color }
   }
 
   fn trailing(&self) -> Option<Element> {
@@ -352,8 +352,8 @@ impl MenuItem {
           .nowrap()
           .into()
       }),
-      (Choice::Unavailable(_), ..) => Some(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).into()),
-      (_, true, _) => Some(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary).into()),
+      (Choice::Unavailable(_), ..) => Some(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground).into()),
+      (_, true, _) => Some(icon(Icon::Check, IconSize::Md, PaletteColor::Foreground).into()),
       (_, false, Some(keys)) => Some(
         Text::new(keys)
           .variant(ExtraTypography::MonoNote.role())
@@ -387,14 +387,19 @@ impl MenuItem {
       .spacing(SpacingSize::Sm)
       .align_items(if stacked { Alignment::Start } else { Alignment::Center })
       .with_children(self.icon.map(|glyph| {
-        icon(glyph, IconSize::Md, self.content_color(PaletteColor::TextSecondary)).id(format!("{}-icon", self.id))
+        icon(
+          glyph,
+          IconSize::Md,
+          self.content_color(ExtraColor::TextSecondary.role()),
+        )
+        .id(format!("{}-icon", self.id))
       }))
       .child(self.text(ctx, detail.as_deref()))
       .with_children(self.trailing())
       .with_children(
         self
           .submenu
-          .then(|| icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted)),
+          .then(|| icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::MutedForeground)),
       );
     let surface = |row: Row| {
       Button::empty()

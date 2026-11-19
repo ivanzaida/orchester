@@ -230,14 +230,14 @@ fn meter(ctx: &Ctx, disk: &Disk, kept: Option<u64>) -> Element {
   let bar = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(METER))
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Sm)
     .clip()
     .child(
       Row::new()
         .width(Dimension::Pct(pct(used - own)))
         .height(Dimension::Pct(100.0))
-        .background(PaletteColor::BorderStrong),
+        .background(PaletteColor::Input),
     )
     .child(
       Row::new()

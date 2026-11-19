@@ -106,7 +106,7 @@ impl ProposalRow {
     let mut text = said(ctx, id, &proposal.proposed);
     text.push(delivery_line(
       &format!("{id}-state"),
-      (glyph, PaletteColor::TextMuted),
+      (glyph, PaletteColor::MutedForeground),
       &words,
     ));
     // The text, the buttons and the notes are the card's sections, as far apart as the timeline's cards draw theirs
@@ -197,7 +197,7 @@ impl ProposalRow {
       notes.push(
         tinted_note(
           format!("{id}-error"),
-          (Icon::CircleAlert, PaletteColor::Danger),
+          (Icon::CircleAlert, PaletteColor::Destructive),
           &message_text(ctx, &error),
         )
         .into(),
@@ -248,7 +248,7 @@ fn settled(id: &str, words: &str) -> Column {
       .id(format!("{id}-settled"))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Waypoints, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(Icon::Waypoints, IconSize::Sm, PaletteColor::MutedForeground))
       .child(Text::new(words).variant(TypographyStyle::Caption)),
   )
 }

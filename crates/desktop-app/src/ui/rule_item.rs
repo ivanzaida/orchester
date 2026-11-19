@@ -84,7 +84,7 @@ impl From<RuleItem> for Element {
             if item.state == RuleState::Published {
               PaletteColor::Success
             } else {
-              PaletteColor::TextMuted
+              PaletteColor::MutedForeground
             },
           ))
           .child(Text::new(&item.version).variant(TypographyStyle::Caption)),

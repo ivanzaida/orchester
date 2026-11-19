@@ -25,7 +25,7 @@ use super::{
   rows::{Look, Stage, conflict_row},
 };
 use crate::{
-  theme::{DeliveryText, ExtraSpacing, ExtraTypography, TaskText},
+  theme::{DeliveryText, ExtraColor, ExtraSpacing, ExtraTypography, TaskText},
   ui::{
     card::{CardSurface, card},
     chat::links,
@@ -88,10 +88,12 @@ pub(super) fn conflicting(ctx: &Ctx, files: &[String], resolution: Option<&Resol
   let rows = files.iter().enumerate().map(|(index, path)| {
     let state = resolution.and_then(|resolution| resolution.files.iter().find(|file| file.path == *path));
     let (look, said) = match state.map(|file| file.state) {
-      Some(FileState::Resolved | FileState::ResolvedWithMarkers) => (Look::DONE, ctx.t("delivery.task.file.resolved")),
-      Some(FileState::Undecided(_)) => (Look::CONFLICTED, ctx.t("delivery.task.file.undecided")),
-      Some(FileState::Markers) => (Look::CONFLICTED, ctx.t("delivery.task.file.markers")),
-      None => (Look::CONFLICTED, ctx.t("delivery.task.file.notResolved")),
+      Some(FileState::Resolved | FileState::ResolvedWithMarkers) => {
+        (Look::done(), ctx.t("delivery.task.file.resolved"))
+      }
+      Some(FileState::Undecided(_)) => (Look::conflicted(), ctx.t("delivery.task.file.undecided")),
+      Some(FileState::Markers) => (Look::conflicted(), ctx.t("delivery.task.file.markers")),
+      None => (Look::conflicted(), ctx.t("delivery.task.file.notResolved")),
     };
     let look = Look {
       color: if look.glyph == Icon::GitCompareArrows {
@@ -157,7 +159,7 @@ fn integrator_words(ctx: &mut Ctx, view: &View<'_>, integrator: &str) -> Option<
     .map(|invocation| clock(invocation.started_at));
   let figure = at.map(|at| ctx.t_args("delivery.task.failed.wordsAt", [("time", at)]));
   let said = MarkdownView::new("task-delivery-integrator-words-text", said.trim(), links(ctx))
-    .style(ExtraTypography::Prose.role(), PaletteColor::TextSecondary)
+    .style(ExtraTypography::Prose.role(), ExtraColor::TextSecondary.role())
     .render(ctx);
   let quote = card("task-delivery-integrator-words", CardSurface::Outline)
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
@@ -172,7 +174,7 @@ fn integrator_words(ctx: &mut Ctx, view: &View<'_>, integrator: &str) -> Option<
     .with_children(figure.map(|figure| {
       Text::new(&figure)
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
     }));
   Some(
     Column::new()

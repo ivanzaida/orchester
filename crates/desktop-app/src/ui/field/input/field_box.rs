@@ -8,7 +8,7 @@ use lurq::{
     component::Component,
     ctx::Ctx,
     events::{TextInputEvent, mouse_event::MouseEvent},
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, Text, TextInput, TextOverflow},
   core::Signal,
@@ -19,7 +19,7 @@ use orchester_core::tokens::regroup;
 
 use super::{COMPACT_AREA_HEIGHT, FieldInput, Lines, TEXT_AREA_MAX_LINES, UnitLook};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize, SecretsText, text_area_scrollbar},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, SecretsText, TextRole, text_area_scrollbar},
   ui::{
     field::field_error,
     icon::{Icon, icon},
@@ -30,7 +30,7 @@ use crate::{
 fn affix(text: &str) -> Text {
   Text::new(text)
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .nowrap()
 }
 
@@ -56,11 +56,11 @@ impl Component for FieldBox {
     };
     let refused = props.error.is_some() || props.invalid;
     let stroke = if refused {
-      PaletteColor::Danger
+      PaletteColor::Destructive
     } else if self.focused.get() {
-      PaletteColor::BorderFocus
+      PaletteColor::Ring
     } else if props.strong {
-      PaletteColor::BorderStrong
+      PaletteColor::Input
     } else {
       PaletteColor::Border
     };
@@ -68,9 +68,9 @@ impl Component for FieldBox {
       frame
         .width(props.width)
         .background(if props.locked {
-          PaletteColor::SurfacePanel
+          PaletteColor::Canvas
         } else {
-          PaletteColor::SurfaceInput
+          ExtraColor::InputSurface.role()
         })
         .border(Border::inside(BorderSize::Sm, stroke.clone()))
         .rounded(RadiusSize::Md)
@@ -91,7 +91,7 @@ impl Component for FieldBox {
         props
           .leading
           .filter(|_| !props.leading_while_empty || props.value.get().is_empty())
-          .map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextMuted).id(format!("{}-icon", props.id))),
+          .map(|glyph| icon(glyph, IconSize::Base, PaletteColor::MutedForeground).id(format!("{}-icon", props.id))),
       )
       .with_children(props.prefix.as_deref().map(affix))
       .child(input)
@@ -108,7 +108,7 @@ impl Component for FieldBox {
         icon(
           glyph,
           if props.masked { IconSize::Base } else { IconSize::Md },
-          PaletteColor::TextMuted,
+          PaletteColor::MutedForeground,
         )
         .id(format!("{}-trailing", props.id))
       })),
@@ -143,13 +143,13 @@ impl FieldBox {
   fn input(&self, ctx: &Ctx, props: &FieldInput) -> TextInput {
     let theme = ctx.theme();
     let scrollbar = theme.scrollbar().clone();
-    let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
+    let resolve = |typography, color| TextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
     let value = value_style(props);
     let (gained, lost) = (self.focused.clone(), self.focused.clone());
     let color = if props.locked {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     } else {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     };
     let shown = resolve(value, color);
     let tracking = shown.letter_spacing;
@@ -157,11 +157,11 @@ impl FieldBox {
       // A mono field's placeholder reads in its own type (`The worktree` in `M20DGB`).
       .placeholder_style(resolve(
         props.placeholder_style.unwrap_or(value),
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ))
       // The input takes the role's tracking only on its own, after the styles (a two-factor code's 2, `JQkW2`).
       .letter_spacing(tracking)
-      .caret_color(PaletteColor::TextPrimary)
+      .caret_color(PaletteColor::Foreground)
       .id(props.id.to_string())
       .describe("a11y_name", props.name.clone())
       .width(Dimension::Pct(100.0))
@@ -246,14 +246,16 @@ fn with_foot(id: &str, input: Element, foot: &str) -> Column {
 fn unit_text(props: &FieldInput) -> Option<Row> {
   let (id, unit, look) = (&props.id, props.unit.as_deref()?, props.unit_look);
   let (style, color) = match look {
-    UnitLook::Quiet => (TypographyStyle::Description, PaletteColor::TextMuted),
-    UnitLook::Count | UnitLook::Busy => (ExtraTypography::Note.role(), PaletteColor::TextMuted),
-    UnitLook::Refused => (ExtraTypography::Note.role(), PaletteColor::Danger),
+    UnitLook::Quiet => (TypographyStyle::Description, PaletteColor::MutedForeground),
+    UnitLook::Count | UnitLook::Busy => (ExtraTypography::Note.role(), PaletteColor::MutedForeground),
+    UnitLook::Refused => (ExtraTypography::Note.role(), PaletteColor::Destructive),
   };
   let row = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .with_children((look == UnitLook::Busy).then(|| icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextMuted)))
+    .with_children(
+      (look == UnitLook::Busy).then(|| icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::MutedForeground)),
+    )
     .child(
       Text::new(unit)
         .id(format!("{id}-unit"))
@@ -274,8 +276,8 @@ fn cut_value(props: &FieldInput) -> Text {
     TypographyStyle::Description
   });
   let (text, color) = match props.placeholder.as_deref().filter(|_| value.is_empty()) {
-    Some(placeholder) => (placeholder.to_owned(), PaletteColor::TextMuted),
-    None => (value, PaletteColor::TextSecondary),
+    Some(placeholder) => (placeholder.to_owned(), PaletteColor::MutedForeground),
+    None => (value, ExtraColor::TextSecondary.role()),
   };
   Text::new(&text)
     .id(props.id.to_string())
@@ -307,7 +309,7 @@ fn clear_button(props: &FieldInput) -> Option<Button> {
         event.stop_propagation();
         value.set(String::new());
       })
-      .child(icon(Icon::X, IconSize::Base, PaletteColor::TextMuted)),
+      .child(icon(Icon::X, IconSize::Base, PaletteColor::MutedForeground)),
   )
 }
 

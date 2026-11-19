@@ -61,8 +61,8 @@ impl Tone {
     match self {
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),
-      Self::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger),
-      Self::Neutral => (PaletteColor::AccentMuted, PaletteColor::TextSecondary),
+      Self::Danger => (PaletteColor::DestructiveMuted, PaletteColor::Destructive),
+      Self::Neutral => (PaletteColor::Highlight, ExtraColor::TextSecondary.role()),
     }
   }
 }
@@ -213,8 +213,8 @@ impl Dialog {
     let dialog = Column::new()
       .id(id.to_string())
       .width(Dimension::Px(width))
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .rounded(RadiusSize::Lg)
       .box_shadow(ShadowStyle::Lg)
       .clip()
@@ -267,11 +267,11 @@ impl Dialog {
         .align_items(Alignment::Center)
         .rounded(RadiusSize::Md)
         .background(ExtraColor::Hover.role())
-        .child(icon(Icon::Hand, IconSize::Base, PaletteColor::TextSecondary))
+        .child(icon(Icon::Hand, IconSize::Base, ExtraColor::TextSecondary.role()))
         .child(
           Text::new(words)
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .flex(1.0)
             .min_width(Dimension::Px(0.0)),
         )
@@ -409,7 +409,7 @@ fn note_start(id: &str, note: FooterNote) -> Element {
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .describe("role", "unavailable-reason")
-      .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+      .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground).flex_shrink(0.0))
       .child(
         Text::new(&reason)
           .id(format!("{id}-unavailable-text"))
@@ -447,7 +447,7 @@ pub fn line(id: impl Into<String>, glyph: Icon, words: &str) -> Row {
       Row::new()
         .height(Dimension::Px(LINE_GLYPH_BOX))
         .align_items(Alignment::Center)
-        .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted)),
+        .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground)),
     )
     .child(
       Text::new(words)

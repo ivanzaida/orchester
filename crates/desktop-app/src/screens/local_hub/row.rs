@@ -18,7 +18,7 @@ use super::{
 use crate::{
   routes::{HubFilter, ProjectPage, Route},
   screens::hub::agent_row::{AgentRow, agent_row, line, tag_chip},
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{agent_mark::AgentMark, icon::icon},
 };
 
@@ -45,7 +45,7 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     group: Some(entry.group),
     kind: format!("{:?}", entry.kind),
     mark: mark(ctx, entry, unsaved),
-    name: (&entry.name, PaletteColor::TextPrimary),
+    name: (&entry.name, PaletteColor::Foreground),
     line: line(&id, &said.text, said.color).into(),
     tag: tag(ctx, entry, shown.filter, &id),
     version: version(entry, shown.filter),
@@ -55,18 +55,18 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
 /// The glyph at a row's start: a profile's CLI's own mark, else the glyph of what it is, in the color of how it stands.
 fn mark(ctx: &Ctx, entry: &Entry, unsaved: Option<Unsaved>) -> Element {
   if entry.archived.is_some() {
-    return icon(entry.glyph(), IconSize::Lg, PaletteColor::TextMuted).into();
+    return icon(entry.glyph(), IconSize::Lg, PaletteColor::MutedForeground).into();
   }
   if let Some(cli) = entry.cli {
     return AgentMark::of(cli).render(ctx, IconSize::Lg);
   }
   let color = match (unsaved, entry.group) {
-    (Some(Unsaved::Refused), _) => PaletteColor::Danger,
+    (Some(Unsaved::Refused), _) => PaletteColor::Destructive,
     (Some(Unsaved::Edited), _) | (None, Group::NeedsYouHere) => PaletteColor::Warning,
-    (None, Group::OffHere) => PaletteColor::TextMuted,
+    (None, Group::OffHere) => PaletteColor::MutedForeground,
     (None, Group::Ready) => match entry.kind {
       ResourceKind::McpServer | ResourceKind::Tool => PaletteColor::Success,
-      _ => PaletteColor::TextSecondary,
+      _ => ExtraColor::TextSecondary.role(),
     },
   };
   icon(entry.glyph(), IconSize::Lg, color).into()

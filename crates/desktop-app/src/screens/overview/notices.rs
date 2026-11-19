@@ -92,7 +92,7 @@ fn runner_card(title: &str, body: &str, actions: [ActionButton; 2]) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Lg)
     .child(
@@ -100,7 +100,7 @@ fn runner_card(title: &str, body: &str, actions: [ActionButton; 2]) -> Element {
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Loose.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger).id(format!("{id}-icon")))
+        .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Destructive).id(format!("{id}-icon")))
         .child(
           Text::new(title)
             .id(format!("{id}-title"))

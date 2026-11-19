@@ -5,7 +5,7 @@
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{SpacingSize, TypographyStyle},
   },
   components::{Row, Spacer, Text},
   core::{ElementRef, Signal},
@@ -13,7 +13,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 
-use crate::ui::field::FieldInput;
+use crate::{theme::ExtraColor, ui::field::FieldInput};
 
 const ROW_HEIGHT: f32 = 32.0;
 const SEARCH_WIDTH: f32 = 240.0;
@@ -49,6 +49,6 @@ pub(super) fn lead(ctx: &Ctx) -> Element {
   Text::new(&ctx.t("review.lead"))
     .id("review-lead")
     .variant(TypographyStyle::Body)
-    .color(PaletteColor::TextSecondary)
+    .color(ExtraColor::TextSecondary.role())
     .into()
 }

@@ -297,7 +297,7 @@ fn markdown_with_a_blank_line_between_paragraphs_keeps_one_line_of_its_body_betw
   let mut kit = Kit::show(|ctx| {
     let view = |id: &str, text: &str| {
       MarkdownView::new(id, text, Arc::new(|_: &str, _: &lurq::app::events::MouseEvent| {}))
-        .style(TaskText::Brief.role(), PaletteColor::TextPrimary)
+        .style(TaskText::Brief.role(), PaletteColor::Foreground)
         .blank_line_between_blocks()
     };
     Column::new()
@@ -468,7 +468,7 @@ fn framed_cut_text_hangs_its_tooltip_from_the_control_it_names() {
     Truncated::new("name", "Kontur", ExtraTypography::Strong.role())
       .hint("H:/projects/kontur", "Kontur · H:/projects/kontur")
       .mono()
-      .framed(PaletteColor::TextPrimary, |row, _| {
+      .framed(PaletteColor::Foreground, |row, _| {
         row
           .id("control")
           .padding(Padding::horizontal(SpacingSize::Sm))

@@ -27,7 +27,7 @@ pub fn source_box(id: &str, filename: &str, metadata: &str, source: &str) -> Ele
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .child(icon(Icon::FileText, IconSize::Md, PaletteColor::TextMuted))
+        .child(icon(Icon::FileText, IconSize::Md, PaletteColor::MutedForeground))
         .child(Text::new(filename).variant(TypographyStyle::Mono).flex(1.0))
         .child(Text::new(metadata).variant(TypographyStyle::Caption)),
     )

@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
   queries::Kept,
-  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     github_mark::github_mark,
     icon::{Icon, icon},
@@ -104,7 +104,7 @@ fn identity(ctx: &mut Ctx, props: &TabProps) -> Element {
   let folder = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Folder, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Folder, IconSize::Base, PaletteColor::MutedForeground))
     .child(mono_value("settings-project-folder", &folder));
   let rows = [
     SettingRow::new("settings-name", ctx.t("project_settings.nameLabel"))
@@ -146,12 +146,12 @@ fn bones(ctx: &mut Ctx) -> lurq::components::Column {
       .hint(ctx.t("project_settings.folderHint"))
       .control(marked(
         ctx,
-        icon(Icon::Folder, IconSize::Base, PaletteColor::TextMuted).into(),
+        icon(Icon::Folder, IconSize::Base, PaletteColor::MutedForeground).into(),
         120.0,
       )),
   ]
   .map(|row| row.render(ctx));
-  let github = github_mark(ctx, IconSize::Base, PaletteColor::TextSecondary);
+  let github = github_mark(ctx, IconSize::Base, ExtraColor::TextSecondary.role());
   let repository = [
     SettingRow::new("settings-github-repo-reading", ctx.t("project_settings.githubRepo"))
       .info(ctx.t("project_settings.githubRepoDetail"))

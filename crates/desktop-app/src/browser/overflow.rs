@@ -153,11 +153,11 @@ impl Component for Overflow {
     .spacing(SpacingSize::Xs)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(Icon::ChevronDown, IconSize::Sm, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&hidden.to_string())
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .with_children(strongest.map(|indicator| inline_dot(indicator, "browser-overflow-dot".to_owned())));
@@ -249,7 +249,7 @@ impl Overflow {
           event.stop_propagation();
           commands.send(BrowserCommand::CloseTab { tab: closed.clone() });
         })
-        .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted))
+        .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground))
     });
     let label = label(ctx, tab);
     let (open, hooks, picked) = (self.open.clone(), showing.person.clone(), tab.id.clone());
@@ -276,11 +276,11 @@ impl Overflow {
         }
       });
     })
-    .child(tab_icon(tab, PaletteColor::TextMuted, &id))
+    .child(tab_icon(tab, PaletteColor::MutedForeground, &id))
     .child(
       Text::new(&label)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex(1.0)

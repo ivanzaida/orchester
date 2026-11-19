@@ -105,7 +105,7 @@ impl Link {
           Text::new(&username)
             .id("sharing-not-member-username")
             .variant(OrchesterText::Address.role())
-            .color(PaletteColor::TextPrimary),
+            .color(PaletteColor::Foreground),
         )
         .child(
           ActionButton::new("sharing-not-member-copy", ButtonKind::Ghost, ctx.t("common.copy"))
@@ -142,7 +142,7 @@ impl Link {
       .width(Dimension::Pct(100.0))
       .padding(ExtraSpacing::Inset.role())
       .spacing(SpacingSize::Sm)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Tile.role())
       .child(owners)

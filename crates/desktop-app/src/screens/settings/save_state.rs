@@ -123,9 +123,17 @@ fn summarize(saves: &BTreeMap<&'static str, Outcome>) -> Summary {
 /// *✓ All changes saved* in 12 `text_muted` after a 13 icon, 6 apart (`d5Ig1H`).
 pub fn label(ctx: &Ctx, summary: Summary) -> Element {
   let (glyph, key, tone) = match summary {
-    Summary::Saved => (Icon::Check, "settings.saveState.saved", PaletteColor::TextMuted),
-    Summary::Saving => (Icon::LoaderCircle, "settings.saveState.saving", PaletteColor::TextMuted),
-    Summary::Failed => (Icon::CircleAlert, "settings.saveState.failed", PaletteColor::Danger),
+    Summary::Saved => (Icon::Check, "settings.saveState.saved", PaletteColor::MutedForeground),
+    Summary::Saving => (
+      Icon::LoaderCircle,
+      "settings.saveState.saving",
+      PaletteColor::MutedForeground,
+    ),
+    Summary::Failed => (
+      Icon::CircleAlert,
+      "settings.saveState.failed",
+      PaletteColor::Destructive,
+    ),
   };
   Row::new()
     .id("settings-save-state")

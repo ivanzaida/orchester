@@ -195,7 +195,7 @@ fn bones(ctx: &mut Ctx) -> Element {
   let local = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Monitor, IconSize::Base, PaletteColor::MutedForeground))
     .child(skeleton::line(ctx, ProjectSettingsText::Value.role(), WHERE_BONE));
   let local = SettingRow::new("sharing-task-list-reading", ctx.t("sharing.share.localProject"))
     .hint_reading(LOCAL_HINT_BONE)

@@ -117,7 +117,7 @@ pub(super) fn history(ctx: &Ctx, page: &AttemptPage, last: &RecordedAttempt, bas
       conflicts::files_list(
         files
           .iter()
-          .map(|file| (file.as_str(), then.clone(), PaletteColor::TextMuted)),
+          .map(|file| (file.as_str(), then.clone(), PaletteColor::MutedForeground)),
       ),
     ));
   }

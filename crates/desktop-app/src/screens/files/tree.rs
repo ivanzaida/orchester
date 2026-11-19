@@ -300,17 +300,17 @@ impl Component for RowView {
     };
     let (glyph_color, name) = if shown {
       (
-        PaletteColor::TextPrimary,
+        PaletteColor::Foreground,
         Text::new(&row.name).variant(TypographyStyle::Label),
       )
     } else if chevron.is_some() {
       (
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
         Text::new(&row.name).variant(ExtraTypography::Property.role()),
       )
     } else {
       (
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
         Text::new(&row.name).variant(ExtraTypography::Property.role()),
       )
     };
@@ -325,7 +325,7 @@ impl Component for RowView {
       ))
     });
     let chevron: Element = match chevron {
-      Some(chevron) => icon(chevron, IconSize::Sm, PaletteColor::TextMuted).into(),
+      Some(chevron) => icon(chevron, IconSize::Sm, PaletteColor::MutedForeground).into(),
       None => Row::new().width(Dimension::Px(CHEVRON_ROOM)).into(),
     };
     let kind = match row.kind {

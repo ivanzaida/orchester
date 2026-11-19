@@ -120,7 +120,7 @@ impl Card {
       Text::new(&note)
         .id(format!("{}-note", self.id))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     });
     let line = Row::new()
@@ -240,7 +240,7 @@ pub fn state(id: &str, (mark, title, detail): (Icon, &str, &str), action: Option
     .child(
       Text::new(&glyph(mark))
         .variant(UsageText::StateGlyph.role())
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .child(
       Text::new(title)

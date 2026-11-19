@@ -58,7 +58,7 @@ pub(super) fn section(ctx: &Ctx, run: &RunView, accounts: &Accounts) -> Element 
       .color(if at_limit {
         PaletteColor::Warning
       } else {
-        PaletteColor::TextPrimary
+        PaletteColor::Foreground
       })
       .flex(1.0);
     shown += 1;

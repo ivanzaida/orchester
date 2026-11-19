@@ -52,7 +52,7 @@ impl LinkPress {
         (true, false) => OpenIn::BackgroundTab,
         (false, _) => OpenIn::ActiveTab,
       }),
-      MouseButton::Right | MouseButton::Other(_) => None,
+      MouseButton::Right | MouseButton::Back | MouseButton::Forward | MouseButton::Other(_) => None,
     }
   }
 }

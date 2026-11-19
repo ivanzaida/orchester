@@ -8,7 +8,7 @@
 use lurq::{
   app::{
     ctx::{Ctx, FutureState},
-    theme::{PaletteColor, SpacingSize},
+    theme::SpacingSize,
   },
   components::{Column, Row},
   core::Signal,
@@ -29,7 +29,7 @@ use super::{
   words::{counted, day, shown_address},
 };
 use crate::{
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -47,7 +47,11 @@ pub(super) fn signed_out(ctx: &mut Ctx) -> Element {
     .row(
       SettingRow::new("orchester-invites-sign-in", ctx.t("cloud.invites.signIn"))
         .hint(ctx.t("cloud.invites.signInHint"))
-        .lead(row_tile(icon(Icon::Mail, IconSize::Md, PaletteColor::TextSecondary)))
+        .lead(row_tile(icon(
+          Icon::Mail,
+          IconSize::Md,
+          ExtraColor::TextSecondary.role(),
+        )))
         .render(ctx),
     )
     .into()
@@ -77,7 +81,11 @@ pub(super) fn waiting(
       group = group.row(
         SettingRow::new("orchester-invites-none", ctx.t("cloud.invites.none"))
           .hint(ctx.t("cloud.invites.noneHint"))
-          .lead(row_tile(icon(Icon::Mail, IconSize::Md, PaletteColor::TextSecondary)))
+          .lead(row_tile(icon(
+            Icon::Mail,
+            IconSize::Md,
+            ExtraColor::TextSecondary.role(),
+          )))
           .render(ctx),
       );
     }
@@ -245,7 +253,11 @@ fn card(
   let declining = answers.declining.get().0 == Some(invite.id);
   let need = two_factor::need((invite.id, invite.needs_two_factor), status, answers);
   let mut row = SettingRow::new(format!("{id}-entry"), title(ctx, invite))
-    .lead(row_tile(icon(Icon::Mail, IconSize::Md, PaletteColor::TextSecondary)))
+    .lead(row_tile(icon(
+      Icon::Mail,
+      IconSize::Md,
+      ExtraColor::TextSecondary.role(),
+    )))
     .hint(dates.to_string())
     .info(shown_address(&address).to_owned());
   if !accepting && !declining && need == Need::Accept {

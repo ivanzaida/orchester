@@ -10,7 +10,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// The ceilings' form and the mode's menu (`Ceilings form` `Ea9jV`, `Mode menu` `ZHAjU`).
 pub const CEILINGS_FORM_WIDTH: f32 = 440.0;
@@ -46,10 +49,10 @@ impl LeadingText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Way => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Meaning => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
-      Self::Ceiling => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::Unit => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::Way => style(11.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Meaning => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.muted_foreground),
+      Self::Ceiling => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::Unit => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
     }
   }
 }

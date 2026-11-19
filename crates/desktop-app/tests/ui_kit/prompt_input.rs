@@ -5,14 +5,13 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{FormTextRole, PaletteColor},
   },
   components::{Column, InputEditError, InputToken, InputTokens},
   core::Signal,
   node::{Element, dimension::Dimension},
 };
 use orchester_app::{
-  theme::instructions,
+  theme::{ExtraColor, TextRole, instructions},
   ui::{
     button::{ActionButton, ButtonKind},
     prompt_input::{EditFeedback, PromptInput},
@@ -56,9 +55,9 @@ impl Component for Host {
       .map(|reference| InputToken::new(reference.range, instructions::token_style(false)))
       .collect();
     let tokens = InputTokens::new(&raw, tokens).expect("valid domain ranges");
-    let style = FormTextRole {
+    let style = TextRole {
       typography: instructions::prompt_text(),
-      color: PaletteColor::TextSecondary,
+      color: ExtraColor::TextSecondary.role(),
     }
     .resolve(&ctx.theme().typography(), &ctx.theme().palette());
     let locked = props.locked.get();

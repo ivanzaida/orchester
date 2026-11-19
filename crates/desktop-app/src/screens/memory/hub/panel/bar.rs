@@ -101,7 +101,7 @@ pub(super) fn bar(ctx: &Ctx, state: &MemoryState, record: &Memory) -> Element {
   bar_ending(
     "memory-panel-actions",
     buttons.into_iter().map(Element::from).collect(),
-    note.map(|key| (ctx.t(key).to_string(), lurq::app::theme::PaletteColor::TextMuted)),
+    note.map(|key| (ctx.t(key).to_string(), lurq::app::theme::PaletteColor::MutedForeground)),
     delete,
   )
 }

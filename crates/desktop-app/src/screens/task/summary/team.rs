@@ -22,7 +22,7 @@ use crate::{
     lock,
     pages::{TeamClaim, TeamPerson},
   },
-  theme::{ExtraSpacing, IconSize, TaskSpacing},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TaskSpacing},
   ui::icon::{Icon, icon},
 };
 
@@ -75,7 +75,7 @@ pub fn module_row(ctx: &Ctx, task: &TaskContext) -> Option<Element> {
   let module = task.team.as_ref()?.module.as_ref()?;
   let name = glyphed(
     "task-property-module",
-    (Icon::Target, PaletteColor::TextSecondary),
+    (Icon::Target, ExtraColor::TextSecondary.role()),
     module.module.details().name().as_str(),
   );
   Some(property(
@@ -90,7 +90,7 @@ pub fn merges_row(ctx: &Ctx, task: &TaskContext) -> Option<Element> {
   let module = task.team.as_ref()?.module.as_ref()?;
   let branch = glyphed(
     "task-property-merges",
-    (Icon::GitMerge, PaletteColor::TextSecondary),
+    (Icon::GitMerge, ExtraColor::TextSecondary.role()),
     &module.branch,
   );
   Some(property(
@@ -106,7 +106,7 @@ fn assignee(ctx: &Ctx, assignee: Option<&TeamPerson>) -> Element {
   match assignee {
     Some(person) => glyphed(
       id,
-      (Icon::User, PaletteColor::TextSecondary),
+      (Icon::User, ExtraColor::TextSecondary.role()),
       &person_words(ctx, person),
     ),
     None => value(id, &ctx.t("summary.team.properties.notAssigned"), Look::Muted).into(),
@@ -144,7 +144,7 @@ fn claim(ctx: &Ctx, claim: Option<&TeamClaim>, unrenewed: bool) -> Element {
     ),
     (true, false) => glyphed(
       id,
-      (Icon::MonitorSmartphone, PaletteColor::TextSecondary),
+      (Icon::MonitorSmartphone, ExtraColor::TextSecondary.role()),
       &ctx.t("summary.team.properties.elsewhere"),
     ),
     (false, _) => glyphed(

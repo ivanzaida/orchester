@@ -53,10 +53,10 @@ const AGE_TICK: Duration = Duration::from_secs(1);
 pub fn change_letter(ctx: &Ctx, change: &FileChange) -> (Arc<str>, PaletteColor) {
   let (key, color) = match change {
     FileChange::Added => ("changes.type.added", PaletteColor::Success),
-    FileChange::Deleted => ("changes.type.deleted", PaletteColor::Danger),
-    FileChange::Modified => ("changes.type.modified", PaletteColor::TextSecondary),
-    FileChange::Renamed { .. } => ("changes.type.renamed", PaletteColor::TextSecondary),
-    FileChange::Copied { .. } => ("changes.type.copied", PaletteColor::TextSecondary),
+    FileChange::Deleted => ("changes.type.deleted", PaletteColor::Destructive),
+    FileChange::Modified => ("changes.type.modified", ExtraColor::TextSecondary.role()),
+    FileChange::Renamed { .. } => ("changes.type.renamed", ExtraColor::TextSecondary.role()),
+    FileChange::Copied { .. } => ("changes.type.copied", ExtraColor::TextSecondary.role()),
   };
   (ctx.t(key), color)
 }
@@ -101,7 +101,7 @@ impl FileSummary {
     }
     [
       (self.additions, "changes.added", PaletteColor::Success),
-      (self.deletions, "changes.removed", PaletteColor::Danger),
+      (self.deletions, "changes.removed", PaletteColor::Destructive),
     ]
     .into_iter()
     .filter(|(count, ..)| *count > 0)

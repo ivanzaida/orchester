@@ -27,7 +27,7 @@ use crate::{
   routes::{OrchesterPanel, OrchesterView, Route},
   screens::settings::frame,
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -58,12 +58,12 @@ pub(super) fn head(ctx: &mut Ctx, panel: &ServerPanel, (entry, runs): (&ServerEn
     .child(
       Text::new(&separator)
         .variant(lurq::app::theme::TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .child(
       Text::new(&runs.unwrap_or_else(|| entry.address.authority()))
         .variant(lurq::app::theme::TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     );
   let reachable = entry
@@ -76,7 +76,7 @@ pub(super) fn head(ctx: &mut Ctx, panel: &ServerPanel, (entry, runs): (&ServerEn
   if entry.in_use() {
     actions.push(more(ctx, panel));
   }
-  let tile = head_tile(icon(Icon::Server, IconSize::Md, PaletteColor::TextSecondary));
+  let tile = head_tile(icon(Icon::Server, IconSize::Md, ExtraColor::TextSecondary.role()));
   frame::head(
     "orchester-server-header",
     Some(tile.into()),

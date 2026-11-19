@@ -17,7 +17,7 @@ use orchester_workspace::close::{PersonWait, Stage, WaitingTask, waiting_for_per
 use crate::{
   navigation::Navigation,
   project::Projects,
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize, LifecycleText, StartupText},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, LifecycleText, StartupText},
   ui::{
     icon::{Icon, glyph, icon},
     loader,
@@ -34,19 +34,19 @@ pub(super) fn head(ctx: &Ctx, (stage, git_only): (Stage, bool), elapsed: Option<
     // Only git's operations hold the close: no agent is at work.
     Stage::Confirm if git_only => (
       Icon::Power,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "lifecycle.close.confirm.gitTitle",
       "lifecycle.close.confirm.gitDescription",
     ),
     Stage::Confirm => (
       Icon::Power,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "lifecycle.close.confirm.title",
       "lifecycle.close.confirm.description",
     ),
     Stage::Waiting => (
       Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "lifecycle.close.waiting.title",
       "lifecycle.close.waiting.description",
     ),
@@ -70,7 +70,7 @@ pub(super) fn head(ctx: &Ctx, (stage, git_only): (Stage, bool), elapsed: Option<
     .height(Dimension::Px(TILE_SIZE))
     .flex_shrink(0.0)
     .rounded(RadiusSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
@@ -116,7 +116,7 @@ fn elapsed_line(ctx: &Ctx, elapsed: Duration) -> Element {
   Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Timer, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Timer, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .id("closing-elapsed")
@@ -174,12 +174,12 @@ pub(super) fn note(id: &str, words: &str) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
-    .child(icon(Icon::Info, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Md, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(id)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0),
     )
     .into()
@@ -212,14 +212,14 @@ fn choice(ctx: &Ctx, glyph_icon: Icon, title: &str, detail: &str) -> Column {
     .flex(1.0)
     .padding(SpacingSize::Lg)
     .spacing(ExtraSpacing::Snug.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Lg)
     .child(
       Row::new()
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(icon(glyph_icon, IconSize::Nav, PaletteColor::TextSecondary))
+        .child(icon(glyph_icon, IconSize::Nav, ExtraColor::TextSecondary.role()))
         .child(Text::new(&ctx.t(title)).variant(LifecycleText::ChoiceTitle.role())),
     )
     .child(
@@ -238,10 +238,10 @@ pub(super) fn progress(words: &str) -> Element {
     .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::LoaderCircle, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(Text::new(words).variant(TypographyStyle::Button).nowrap())
     .into()
 }

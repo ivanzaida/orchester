@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextText {
@@ -60,12 +63,12 @@ impl ContextText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Share | Self::Model => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::Full => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.danger),
-      Self::Title => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Tokens => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::Note => style(11.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
-      Self::Compacting => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::Share | Self::Model => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground)),
+      Self::Full => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.destructive),
+      Self::Title => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Tokens => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::Note => style(11.0, FontWeight::Normal, 1.45, 0.0, palette.muted_foreground),
+      Self::Compacting => style(11.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
     }
   }
 }

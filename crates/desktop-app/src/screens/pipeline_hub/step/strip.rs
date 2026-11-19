@@ -201,7 +201,7 @@ impl Component for Strip {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(STRIP_HEIGHT))
       .flex_shrink(0.0)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border_inside(BorderSize::Sm, PaletteColor::Border)
       .rounded(RadiusSize::Sm)
       .clip()
@@ -229,7 +229,7 @@ impl Strip {
       .height(Dimension::Px(STRIP_HEIGHT));
     for (index, piece) in props.pieces.iter().enumerate() {
       if index > 0 && !matches!(piece, Piece::Gate) {
-        row = row.child(icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted));
+        row = row.child(icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::MutedForeground));
       }
       row = match piece {
         Piece::Chip(chip) => row.child(self.chip(props, &navigation, chip)),
@@ -300,7 +300,7 @@ impl Strip {
       .align_items(Alignment::Center)
       .rounded(chip_radius())
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary));
+      .child(icon(glyph, IconSize::Md, ExtraColor::TextSecondary.role()));
     let hairline = Border::inside(BorderSize::Sm, PaletteColor::Border);
     let (left, panel) = match edge {
       Edge::Before => (1.0, Row::new().border_right(hairline)),
@@ -309,7 +309,7 @@ impl Strip {
     panel
       .id(format!("{id}-panel"))
       .absolute(left, 1.0, Dimension::Px(PANEL), Dimension::Px(STRIP_HEIGHT - 2.0))
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .justify(Justify::Center)
       .align_items(Alignment::Center)
       .child(button)
@@ -348,7 +348,7 @@ impl Strip {
       button
         .ref_element(self.measured.current.clone())
         .background(ExtraColor::Hover.role())
-        .border_inside(BorderSize::Sm, PaletteColor::Accent)
+        .border_inside(BorderSize::Sm, PaletteColor::Primary)
         .into()
     } else {
       button

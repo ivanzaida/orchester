@@ -49,7 +49,7 @@ pub(super) fn section(id: &str, (heading, none): (&str, &str), rows: Vec<Line>, 
   let list = Column::new()
     .id(format!("{id}-list"))
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .clip()

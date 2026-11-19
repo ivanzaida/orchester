@@ -201,7 +201,7 @@ fn head(text: &str) -> Element {
     .child(
       Text::new(text)
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }

@@ -36,7 +36,7 @@ use crate::{
     TaskList, TaskView,
   },
   shell::clock::{Clock, clock},
-  theme::ExtraSpacing,
+  theme::{ExtraColor, ExtraSpacing},
   ui::{icon::Icon, message::message_text, pressable::Press},
 };
 
@@ -74,8 +74,8 @@ fn failure(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatc
   let text = event_text(ctx, event, project);
   let row = raised("status-activity", state)
     .padding(before_time())
-    .child(glyph(glyph_icon, PaletteColor::TextPrimary))
-    .child(cut(ctx, "status-activity-text", &text, PaletteColor::TextPrimary));
+    .child(glyph(glyph_icon, PaletteColor::Foreground))
+    .child(cut(ctx, "status-activity-text", &text, PaletteColor::Foreground));
   let mut items = vec![row.into(), time(event)];
   let id = event.id();
   if let Some(open) = opening(event.target(), project) {
@@ -107,7 +107,7 @@ fn failure(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatc
         Press::run(move || dispatch(BarAction::Resolve(id))),
       )
       .describe("a11y_name", ctx.t("shell.status.dismiss"))
-      .child(glyph(Icon::X, PaletteColor::TextSecondary))
+      .child(glyph(Icon::X, ExtraColor::TextSecondary.role()))
       .into(),
     );
   }
@@ -131,7 +131,12 @@ pub fn read_failure(ctx: &mut Ctx, failure: &ReadFailure, dispatch: &Dispatch) -
   let row = raised("status-activity", state)
     .padding(Padding::horizontal(SpacingSize::Sm).right(SpacingSize::Xs))
     .child(glyph(Icon::TriangleAlert, PaletteColor::Warning))
-    .child(cut(ctx, "status-activity-text", &text, PaletteColor::TextSecondary))
+    .child(cut(
+      ctx,
+      "status-activity-text",
+      &text,
+      ExtraColor::TextSecondary.role(),
+    ))
     .child(again);
   vec![row.into()]
 }
@@ -143,7 +148,7 @@ fn raised(id: &str, state: &'static str) -> Row {
     .flex_shrink(1.0)
     .shrink_order(give_way::ACTIVITY)
     .shrink_limit(ShrinkLimit::Content)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Md)
 }
 
@@ -158,8 +163,8 @@ fn running(ctx: &mut Ctx, newest: &Operation, project: Option<&ProjectFacts>) ->
     .flex_shrink(1.0)
     .shrink_order(give_way::ACTIVITY)
     .shrink_limit(ShrinkLimit::Content)
-    .child(glyph(Icon::LoaderCircle, PaletteColor::TextMuted))
-    .child(cut(ctx, "status-activity-text", &text, PaletteColor::TextMuted));
+    .child(glyph(Icon::LoaderCircle, PaletteColor::MutedForeground))
+    .child(cut(ctx, "status-activity-text", &text, PaletteColor::MutedForeground));
   let since = clock(ctx, "status-activity-elapsed-text", Clock::Since(newest.started()));
   vec![row.into(), time_part("status-activity-elapsed", since)]
 }
@@ -177,8 +182,8 @@ fn latest(ctx: &mut Ctx, event: &Event, project: Option<&ProjectFacts>, dispatch
     .min_width(lurq::node::dimension::Dimension::Px(0.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(glyph(glyph_icon, PaletteColor::TextMuted))
-    .child(cut(ctx, "status-activity-text", &text, PaletteColor::TextMuted));
+    .child(glyph(glyph_icon, PaletteColor::MutedForeground))
+    .child(cut(ctx, "status-activity-text", &text, PaletteColor::MutedForeground));
   let row: Element = match opening(event.target(), project) {
     Some(open) => pressed("status-activity", open.press(dispatch, None))
       .padding(before_time())
@@ -211,7 +216,7 @@ fn time(event: &Event) -> Element {
     "status-activity-time",
     label(
       &format!("· {}", display::clock_time(event.at())),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
   )
 }

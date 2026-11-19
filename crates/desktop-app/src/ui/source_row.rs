@@ -23,7 +23,7 @@ use super::{
   icon_button::IconButton,
   tooltip::Truncated,
 };
-use crate::theme::{ExtraSpacing, ExtraTypography, IconSize, SourcesText};
+use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, SourcesText};
 
 type Handler = Arc<dyn Fn() + Send + Sync>;
 
@@ -139,7 +139,11 @@ impl SourceRow {
       .child(
         Column::new()
           .padding(Padding::new().top(ExtraSpacing::Tight.role()))
-          .child(icon(kind_icon(self.kind), IconSize::Md, PaletteColor::TextSecondary)),
+          .child(icon(
+            kind_icon(self.kind),
+            IconSize::Md,
+            ExtraColor::TextSecondary.role(),
+          )),
       )
       .child(text)
       .with_children(status)
@@ -158,7 +162,11 @@ impl SourceRow {
       .child(
         Column::new()
           .padding(Padding::new().top(ExtraSpacing::Hair.role()))
-          .child(icon(kind_icon(self.kind), IconSize::Base, PaletteColor::TextSecondary)),
+          .child(icon(
+            kind_icon(self.kind),
+            IconSize::Base,
+            ExtraColor::TextSecondary.role(),
+          )),
       )
       .child(
         Column::new()
@@ -197,19 +205,19 @@ fn status(ctx: &Ctx, id: &str, state: State) -> Column {
     State::Available => (
       Icon::CircleCheck,
       PaletteColor::Success,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "ui.source.available",
     ),
     State::Missing => (
       Icon::FileX,
-      PaletteColor::Danger,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
+      PaletteColor::Destructive,
       "ui.source.missing",
     ),
     State::Unreadable => (
       Icon::Ban,
-      PaletteColor::Danger,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
+      PaletteColor::Destructive,
       "ui.source.unreadable",
     ),
   };
@@ -248,7 +256,7 @@ fn trailing(ctx: &mut Ctx, id: &str, trailing: Trailing) -> Option<Element> {
         .render(ctx),
     ),
     Trailing::Lock => Some(
-      icon(Icon::Lock, IconSize::Base, PaletteColor::TextMuted)
+      icon(Icon::Lock, IconSize::Base, PaletteColor::MutedForeground)
         .id(format!("{id}-lock"))
         .into(),
     ),

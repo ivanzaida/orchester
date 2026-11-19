@@ -6,13 +6,18 @@
 
 use std::sync::Arc;
 
+#[expect(
+  deprecated,
+  reason = "`ui::Picture` draws its own skeleton and error line; the attachment shows its own placeholder and error view"
+)]
+use lurq::components::Image;
 use lurq::{
   app::{
     ctx::Ctx,
     events::mouse_event::MouseEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Image, Row, Text, TextOverflow},
+  components::{Button, Column, Row, Text, TextOverflow},
   images::{ImageKey, ImageSource},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -83,7 +88,7 @@ impl AttachmentChip {
 
   pub fn render(self, ctx: &Ctx) -> Element {
     let stroke = if self.opened {
-      PaletteColor::BorderFocus
+      PaletteColor::Ring
     } else {
       PaletteColor::Border
     };
@@ -94,7 +99,7 @@ impl AttachmentChip {
         Text::new(&self.name)
           .id(format!("{}-name", self.id))
           .variant(TypographyStyle::FieldLabel)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .nowrap()
           .text_overflow(TextOverflow::Elipsis),
       )
@@ -131,7 +136,7 @@ impl AttachmentChip {
       .max_width(Dimension::Px(super::CHIP_WIDTH))
       .flex_shrink(1.0)
       .padding(Padding::all(SpacingSize::Xs).right(SpacingSize::Sm))
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Md)
       .child(face)
@@ -140,6 +145,10 @@ impl AttachmentChip {
 
   /// An image's thumbnail, or the tile with the kind's icon, which also stands for a thumbnail while it decodes or
   /// when it cannot.
+  #[expect(
+    deprecated,
+    reason = "`ui::Picture` draws its own skeleton and error line; the attachment shows its own placeholder and error view"
+  )]
   fn tile(&self) -> Element {
     let media = self.media;
     let glyph = move || {
@@ -148,9 +157,9 @@ impl AttachmentChip {
         .flex_shrink(0.0)
         .align_items(Alignment::Center)
         .justify(Justify::Center)
-        .background(PaletteColor::SurfaceInput)
+        .background(ExtraColor::InputSurface.role())
         .rounded(RadiusSize::Sm)
-        .child(icon(kind_icon(media), IconSize::Md, PaletteColor::TextMuted))
+        .child(icon(kind_icon(media), IconSize::Md, PaletteColor::MutedForeground))
     };
     let Some((source, key)) = self.thumbnail.clone() else {
       return glyph().into();
@@ -181,6 +190,10 @@ fn cross(chip: &str, label: Arc<str>, remove: Action) -> Element {
       event.stop_propagation();
       remove();
     })
-    .child(icon(crate::ui::icon::Icon::X, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(
+      crate::ui::icon::Icon::X,
+      IconSize::Sm,
+      PaletteColor::MutedForeground,
+    ))
     .into()
 }

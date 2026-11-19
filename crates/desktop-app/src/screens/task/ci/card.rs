@@ -54,7 +54,7 @@ const ID: &str = "task-ci";
 pub fn card(ctx: &mut Ctx, task: &TaskContext, (run, shown): (&RunView, &ShownCi)) -> Element {
   let look = shown.look(&run.ci_fixes);
   let stroke = match look {
-    Look::Failed => PaletteColor::Danger,
+    Look::Failed => PaletteColor::Destructive,
     Look::Passed => PaletteColor::Success,
     Look::Running | Look::Fixing | Look::NoChecks | Look::Unknown => PaletteColor::Border,
   };
@@ -92,7 +92,7 @@ pub fn card(ctx: &mut Ctx, task: &TaskContext, (run, shown): (&RunView, &ShownCi
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
     .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
     .child(head(ctx, shown))
@@ -117,7 +117,11 @@ fn head(ctx: &mut Ctx, shown: &ShownCi) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::GitPullRequest, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(
+      Icon::GitPullRequest,
+      IconSize::Md,
+      ExtraColor::TextSecondary.role(),
+    ))
     .child(
       Text::new(&ctx.t_args("ci.title", [("number", shown.number().to_string())]))
         .id(format!("{ID}-title"))
@@ -128,7 +132,7 @@ fn head(ctx: &mut Ctx, shown: &ShownCi) -> Element {
       Text::new(&branches)
         .id(format!("{ID}-branches"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
@@ -280,7 +284,7 @@ pub fn fix_button(ctx: &mut Ctx, fix_for: &FixFor<'_>, shown: &ShownCi) -> (Elem
       .into()
   };
   if state.is_pending() {
-    return (button.loading().into(), hint(&sends, PaletteColor::TextMuted));
+    return (button.loading().into(), hint(&sends, PaletteColor::MutedForeground));
   }
   let failed = state.error.as_ref().filter(|_| state.is_rejected());
   let read = match (&shown.offer, shown.read()) {
@@ -288,9 +292,9 @@ pub fn fix_button(ctx: &mut Ctx, fix_for: &FixFor<'_>, shown: &ShownCi) -> (Elem
       let reason = message_text(ctx, reason);
       let disabled: Element = button.disabled().into();
       let disabled = Tooltip::new(format!("{id}-fix-why"), reason.clone()).wrap(ctx, disabled);
-      return (disabled, hint(&reason, PaletteColor::TextMuted));
+      return (disabled, hint(&reason, PaletteColor::MutedForeground));
     }
-    (FixOffer::Available, None) => return (button.disabled().into(), hint(&sends, PaletteColor::TextMuted)),
+    (FixOffer::Available, None) => return (button.disabled().into(), hint(&sends, PaletteColor::MutedForeground)),
     (FixOffer::Available, Some(read)) => read.clone(),
   };
   let request = FixRequest {
@@ -313,10 +317,10 @@ pub fn fix_button(ctx: &mut Ctx, fix_for: &FixFor<'_>, shown: &ShownCi) -> (Elem
       let reason = message_text(ctx, error);
       hint(
         &ctx.t_args("ci.errors.fixFailed", [("reason", reason.to_string())]),
-        PaletteColor::Danger,
+        PaletteColor::Destructive,
       )
     }
-    None => hint(&sends, PaletteColor::TextMuted),
+    None => hint(&sends, PaletteColor::MutedForeground),
   };
   (button.into(), hint)
 }

@@ -334,6 +334,6 @@ fn too_many(ctx: &Ctx, scope: Scope, kind: ListKind, count: usize) -> Option<Sub
   };
   Some(Sub {
     words,
-    color: PaletteColor::Danger,
+    color: PaletteColor::Destructive,
   })
 }

@@ -64,13 +64,13 @@ fn slug(ctx: &Ctx, details: &Details<'_>) -> Row {
   let sub = match details.taken_by {
     Some(entry) => Sub {
       words: ctx.t_args("pipeline_new.details.slugTaken", [("name", entry.name.to_string())]),
-      color: PaletteColor::Danger,
+      color: PaletteColor::Destructive,
     },
     None => Sub::quiet(ctx.t("pipeline_new.details.slugSub")),
   };
   let value = match details.slug {
     Some(slug) => rows::mono("pipeline-new-slug", slug),
-    None => rows::mono("pipeline-new-slug", &ctx.t("pipeline_new.details.noSlug")).color(PaletteColor::TextMuted),
+    None => rows::mono("pipeline-new-slug", &ctx.t("pipeline_new.details.noSlug")).color(PaletteColor::MutedForeground),
   };
   let open = details.taken_by.map(|entry| {
     // An archived pipeline is listed only under Archived.

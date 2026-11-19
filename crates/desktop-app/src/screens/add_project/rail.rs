@@ -93,8 +93,8 @@ pub(super) fn rail(ctx: &mut Ctx) -> Element {
 /// with why under its label (`Step 2` `asMZR`).
 fn step(id: &str, label: &str, unavailable: Option<&str>) -> Row {
   let (glyph, mark, style) = match unavailable {
-    None => (Icon::CircleDot, PaletteColor::TextPrimary, ProjectsText::Step),
-    Some(_) => (Icon::Lock, PaletteColor::TextMuted, ProjectsText::StepLocked),
+    None => (Icon::CircleDot, PaletteColor::Foreground, ProjectsText::Step),
+    Some(_) => (Icon::Lock, PaletteColor::MutedForeground, ProjectsText::StepLocked),
   };
   let glyph_size = if unavailable.is_some() {
     IconSize::Base

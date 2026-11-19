@@ -44,7 +44,7 @@ use crate::{
     pages::{TeamModule, team_module_list},
     view,
   },
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OverviewText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     failure::{Failure, LastFailure},
     icon::{Icon, icon},
@@ -220,7 +220,10 @@ impl Component for DeliverySection {
           name: &module.name,
           done: &done,
           percent,
-          forecast: &module.forecast.as_ref().map_or_else(String::new, |known| forecast(ctx, known)),
+          forecast: &module
+            .forecast
+            .as_ref()
+            .map_or_else(String::new, |known| forecast(ctx, known)),
         };
         item.render()
       }))
@@ -244,7 +247,7 @@ impl Item<'_> {
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Target, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Target, IconSize::Base, PaletteColor::MutedForeground))
       .child(
         Text::new(self.name)
           .variant(OverviewText::Line.role())
@@ -266,7 +269,7 @@ impl Item<'_> {
         Column::new()
           .width(Dimension::Pct(percent))
           .height(Dimension::Pct(100.0))
-          .background(PaletteColor::TextSecondary)
+          .background(ExtraColor::TextSecondary.role())
           .rounded(ExtraRadius::Meter.role()),
       );
     Column::new()
@@ -301,11 +304,11 @@ fn queued(ctx: &Ctx, forecast: &Forecast) -> Row {
     Outlook::NotEnoughHistory => "".into(),
   };
   line("overview-delivery-queued", SIDE_LINE_HEIGHT, SpacingSize::Sm)
-    .child(icon(Icon::ListOrdered, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ListOrdered, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .variant(OverviewText::Line.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .flex(1.0),
     )

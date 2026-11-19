@@ -8,7 +8,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GroupText {
@@ -55,11 +58,11 @@ impl GroupText {
   fn style(self, palette: &ThemePalette) -> TextStyle {
     let accent = palette.get(super::ExtraColor::AccentText.role());
     match self {
-      Self::Title => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
-      Self::Hint => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
-      Self::MonoLabel => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
-      Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::MonoValue => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
+      Self::Title => style(12.0, FontWeight::SemiBold, 1.3, 0.0, text_secondary(palette)),
+      Self::Hint => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
+      Self::MonoLabel => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.foreground)),
+      Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::MonoValue => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
       Self::Tag => style(10.5, FontWeight::Medium, 1.3, 0.0, accent),
     }
   }

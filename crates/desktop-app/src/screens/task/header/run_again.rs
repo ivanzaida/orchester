@@ -349,7 +349,7 @@ pub fn confirmation(ctx: &mut Ctx, confirm: &Confirmation) -> Element {
       Text::new(&message_text(ctx, error))
         .id(format!("task-run-again-refusal-{index}"))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .width(Dimension::Pct(100.0))
     }))
     .child(actions(ctx, confirm, pending))

@@ -191,7 +191,7 @@ impl NotificationsSection {
       .child(
         Text::new(&ctx.t("settings.notifications.quiet.to"))
           .variant(lurq::app::theme::TypographyStyle::Description)
-          .color(lurq::app::theme::PaletteColor::TextMuted),
+          .color(lurq::app::theme::PaletteColor::MutedForeground),
       )
       .child(select(
         "settings-notify-quiet-end",

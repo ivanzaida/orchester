@@ -97,8 +97,8 @@ impl Question {
 impl From<Question> for Element {
   fn from(question: Question) -> Self {
     let (fill, stroke) = match question.weight {
-      Weight::Loses => (PaletteColor::DangerMuted, PaletteColor::Danger),
-      Weight::Neutral => (PaletteColor::SurfaceRaised, PaletteColor::Border),
+      Weight::Loses => (PaletteColor::DestructiveMuted, PaletteColor::Destructive),
+      Weight::Neutral => (PaletteColor::Card, PaletteColor::Border),
     };
     let lines = question.lines.into_iter().enumerate().map(|(index, (glyph, text))| {
       Row::new()
@@ -106,7 +106,7 @@ impl From<Question> for Element {
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+        .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
         .child(
           Text::new(&text)
             .variant(ExtraTypography::Prose.role())
@@ -145,7 +145,7 @@ impl From<Question> for Element {
         Text::new(&failure)
           .id(format!("{}-failure", question.id))
           .variant(ExtraTypography::Note.role())
-          .color(PaletteColor::Danger)
+          .color(PaletteColor::Destructive)
           .width(Dimension::Pct(100.0))
       }))
       .child(

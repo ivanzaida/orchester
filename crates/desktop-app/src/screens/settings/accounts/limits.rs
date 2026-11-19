@@ -25,7 +25,7 @@ use super::{
 use crate::{
   queries::{Session, app},
   services::plan_limits,
-  theme::ExtraSpacing,
+  theme::{ExtraColor, ExtraSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -170,7 +170,7 @@ fn window_row(ctx: &mut Ctx, window: &LimitWindow, reading: &LimitReading, now: 
   let (tone, color, hint) = if reached {
     (MeterTone::Reached, PaletteColor::Warning, HintTone::Warning)
   } else {
-    (MeterTone::Plain, PaletteColor::TextSecondary, HintTone::Muted)
+    (MeterTone::Plain, ExtraColor::TextSecondary.role(), HintTone::Muted)
   };
   let gauge = Column::new()
     .id(format!("{id}-gauge"))

@@ -96,7 +96,7 @@ impl NumberField {
         Text::new(error)
           .id(format!("{}-note", self.id))
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::Danger)
+          .color(PaletteColor::Destructive)
           .describe("role", "field-error"),
       ),
       None if self.read_back.is_empty() => None,

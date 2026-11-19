@@ -92,9 +92,9 @@ impl Component for LineView {
     let LineProps { line, width, select } = ctx.props::<LineProps>().clone();
     let index = line.index;
     let number_color = if line.selected {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     };
     let number = Button::empty()
       .id(format!("files-line-number-{}", index + 1))
@@ -124,8 +124,8 @@ impl Component for LineView {
       .with_children(line.cut.then(|| cut_marker(ctx, &line.found)));
     if line.selected {
       row
-        .background(PaletteColor::AccentMuted)
-        .border_left(Border::inside(BorderSize::Md, PaletteColor::Accent))
+        .background(PaletteColor::Highlight)
+        .border_left(Border::inside(BorderSize::Md, PaletteColor::Primary))
     } else {
       row
     }
@@ -139,12 +139,12 @@ fn cut_marker(ctx: &Ctx, found: &[Found]) -> Element {
   let beyond: Vec<&Found> = found.iter().filter(|place| place.start >= MAX_SHOWN_CHARS).collect();
   let current = beyond.iter().any(|place| place.current);
   let (key, background, color, kind) = match (beyond.is_empty(), current) {
-    (true, _) => ("files.lineCut", PaletteColor::SurfaceRaised, None, "cut"),
+    (true, _) => ("files.lineCut", PaletteColor::Card, None, "cut"),
     (false, false) => ("files.lineCutFound", PaletteColor::WarningMuted, None, "found"),
     (false, true) => (
       "files.lineCutFound",
       PaletteColor::Warning,
-      Some(PaletteColor::TextInverse),
+      Some(PaletteColor::PrimaryForeground),
       "current",
     ),
   };
@@ -160,7 +160,7 @@ fn cut_marker(ctx: &Ctx, found: &[Found]) -> Element {
     .child(icon(
       Icon::Scissors,
       IconSize::Xs,
-      color.clone().unwrap_or(PaletteColor::TextMuted),
+      color.clone().unwrap_or(PaletteColor::MutedForeground),
     ))
     .child(match color {
       Some(color) => words.color(color),
@@ -204,7 +204,7 @@ fn piece(text: &str, token: &Token, place: Option<&Found>) -> Element {
     None => shown.color(token_color(token.kind)).into(),
     Some(place) => {
       let (background, color) = if place.current {
-        (PaletteColor::Warning, PaletteColor::TextInverse)
+        (PaletteColor::Warning, PaletteColor::PrimaryForeground)
       } else {
         (PaletteColor::WarningMuted, token_color(token.kind))
       };

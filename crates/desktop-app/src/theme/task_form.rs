@@ -12,7 +12,10 @@ use lurq::{
   },
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// The Sources popover's scrollbar runs in the popover's 12 at its end, 4 in from its edge, clear of the rows and their
 /// ↗ links (`Sources popover` `B56QE` draws none).
@@ -75,13 +78,13 @@ impl TaskFormText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(24.0, FontWeight::SemiBold, 1.3, -0.4, palette.text_primary),
-      Self::Outcome => style(14.0, FontWeight::Normal, 1.6, 0.0, palette.text_secondary),
-      Self::Criterion => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::CriteriaHint => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::OptionMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::OptionMono => mono(style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
-      Self::Note => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::Title => style(24.0, FontWeight::SemiBold, 1.3, -0.4, palette.foreground),
+      Self::Outcome => style(14.0, FontWeight::Normal, 1.6, 0.0, text_secondary(palette)),
+      Self::Criterion => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::CriteriaHint => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::OptionMeta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::OptionMono => mono(style(12.5, FontWeight::Medium, 1.3, 0.0, palette.foreground)),
+      Self::Note => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
     }
   }
 }

@@ -94,10 +94,10 @@ pub(super) fn line(
       .padding_right(ExtraSpacing::Snug.role())
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ComposerRadius::Context.role())
-      .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary))
+      .child(icon(glyph, IconSize::Base, ExtraColor::TextSecondary.role()))
       .child(
         Text::new(&words)
           .id("composer-context-text")
@@ -200,6 +200,6 @@ fn leave_button(ctx: &mut Ctx, leave: Press) -> Element {
     .rounded(lurq::app::theme::RadiusSize::Md)
     .cursor(CursorIcon::Pointer)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::X, IconSize::Nav, PaletteColor::TextSecondary));
+    .child(icon(Icon::X, IconSize::Nav, ExtraColor::TextSecondary.role()));
   Tooltip::new("composer-leave", words).wrap(ctx, button)
 }

@@ -107,8 +107,8 @@ fn day(ctx: &Ctx, props: &PickerProps, (calendar, day): (Calendar, NaiveDate), r
   let ours = calendar.in_month(day);
   let color = match (mark, ours) {
     (Mark::Chosen, _) => ExtraColor::OnAccent.role(),
-    (_, true) => PaletteColor::TextPrimary,
-    (_, false) => PaletteColor::TextMuted,
+    (_, true) => PaletteColor::Foreground,
+    (_, false) => PaletteColor::MutedForeground,
   };
   let strong = matches!(mark, Mark::Chosen) || props.today == day;
   let typography = if strong {
@@ -142,13 +142,13 @@ fn day(ctx: &Ctx, props: &PickerProps, (calendar, day): (Calendar, NaiveDate), r
     .describe("month", if ours { "this" } else { "around" })
     .child(label);
   cell = match mark {
-    Mark::Chosen => cell.background(PaletteColor::Accent),
-    Mark::Other => cell.background(PaletteColor::AccentMuted),
-    Mark::Today => cell.border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)),
+    Mark::Chosen => cell.background(PaletteColor::Primary),
+    Mark::Other => cell.background(PaletteColor::Highlight),
+    Mark::Today => cell.border(Border::inside(BorderSize::Sm, PaletteColor::Input)),
     Mark::Plain => cell,
   };
   if props.today == day && mark != Mark::Today {
-    cell = cell.border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong));
+    cell = cell.border(Border::inside(BorderSize::Sm, PaletteColor::Input));
   }
   if ringed {
     cell = cell

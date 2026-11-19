@@ -48,10 +48,10 @@ pub fn auto_approving(
     items.push(
       item("status-auto-approving-stop")
         .describe("state", "busy")
-        .child(glyph(Icon::LoaderCircle, PaletteColor::TextMuted))
+        .child(glyph(Icon::LoaderCircle, PaletteColor::MutedForeground))
         .child(label(
           &ctx.t("shell.status.approvals.stopping"),
-          PaletteColor::TextMuted,
+          PaletteColor::MutedForeground,
         ))
         .into(),
     );
@@ -74,12 +74,12 @@ pub fn auto_approving(
         .flex_shrink(1.0)
         .shrink_order(give_way::ACTIVITY)
         .shrink_limit(ShrinkLimit::Content)
-        .child(glyph(Icon::CircleAlert, PaletteColor::TextPrimary))
+        .child(glyph(Icon::CircleAlert, PaletteColor::Foreground))
         .child(cut(
           ctx,
           "status-auto-approving-error-text",
           &text,
-          PaletteColor::TextPrimary,
+          PaletteColor::Foreground,
         ))
         .into(),
     );

@@ -13,32 +13,32 @@ fn test_results_roles_follow_the_tests_card() {
       TestsText::Name,
       (12.5, FontWeight::Medium),
       "Geist Mono",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       TestsText::FlakyName,
       (12.5, FontWeight::Normal),
       "Geist Mono",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       TestsText::Detail,
       (12.0, FontWeight::Normal),
       "Geist Mono",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     // A message's line (`VolEf`) and the headings over the card's rows (`XjDnk`).
     (
       TestsText::Message,
       (11.5, FontWeight::Normal),
       "Geist Mono",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       TestsText::Heading,
       (12.0, FontWeight::SemiBold),
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
   ] {
     let style = theme.typography_style(role.role());

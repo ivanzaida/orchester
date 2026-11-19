@@ -78,8 +78,8 @@ pub fn item(ctx: &Ctx, tabs: usize, dispatch: &Dispatch) -> Option<Element> {
       .flex_shrink(1.0)
       .shrink_order(give_way::BROWSER)
       .shrink_limit(ShrinkLimit::Content)
-      .child(glyph(Icon::Globe, PaletteColor::TextMuted))
-      .child(dropping(&words, PaletteColor::TextMuted).id("status-browser-text"))
+      .child(glyph(Icon::Globe, PaletteColor::MutedForeground))
+      .child(dropping(&words, PaletteColor::MutedForeground).id("status-browser-text"))
       .into(),
   )
 }

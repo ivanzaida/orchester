@@ -237,11 +237,11 @@ impl CardView {
 fn frame(props: &CardProps, look: CardLook, parts: Column) -> Column {
   let (fill, stroke) = match () {
     () if look.lifted => (None, PaletteColor::Border),
-    () if look.waiting => (Some(PaletteColor::SurfacePanel), PaletteColor::BorderFocus),
-    () if look.selected => (Some(PaletteColor::AccentMuted), PaletteColor::Accent),
-    () if look.focused => (Some(PaletteColor::SurfacePanel), PaletteColor::BorderFocus),
+    () if look.waiting => (Some(PaletteColor::Canvas), PaletteColor::Ring),
+    () if look.selected => (Some(PaletteColor::Highlight), PaletteColor::Primary),
+    () if look.focused => (Some(PaletteColor::Canvas), PaletteColor::Ring),
     () if props.card.highlighted => (Some(PaletteColor::InfoMuted), PaletteColor::Border),
-    () => (Some(PaletteColor::SurfacePanel), PaletteColor::Border),
+    () => (Some(PaletteColor::Canvas), PaletteColor::Border),
   };
   let pending = if props.pending { "-pending" } else { "" };
   let frame = Column::new()
@@ -249,7 +249,7 @@ fn frame(props: &CardProps, look: CardLook, parts: Column) -> Column {
     .width(Dimension::Pct(100.0))
     .rounded(RadiusSize::Md)
     .border(Border::inside(BorderSize::Sm, stroke))
-    .hovered_style(Style::new().border_inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .hovered_style(Style::new().border_inside(BorderSize::Sm, PaletteColor::Input))
     .child(parts.opacity(if look.lifted { 0.0 } else { 1.0 }));
   let frame = match fill {
     Some(fill) => frame.background(fill),
@@ -269,8 +269,8 @@ pub fn lifted_frame(parts: Column) -> Column {
     .id("tasks-board-lifted")
     .width(Dimension::Pct(100.0))
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .box_shadow(lurq::app::theme::ShadowStyle::Md)
     .child(parts)
 }
