@@ -1041,11 +1041,24 @@ every `ui::icon::Icon` of the app's `lucide` font in `theme/` and make `ui::icon
 **Done when** every kit icon renders through `lurq::ui::Icon` at its size and color, `ui_kit` and `theme` tests pass,
 and a design verification of three screens shows no change. Every K step below needs it.
 
+K1 is done on `claude/lurq-063` (`theme/icons.rs`): the set holds every app icon under its design name and 30 of
+lurq's names mapped to the app's glyph. `ui::icon::icon` still builds a `Text` (851 call sites chain its builder);
+it draws what `lurq::ui::Icon` would.
+
 ### K2 · The look-only primitives (UI)
 
 Move, one commit each, the first list's `kbd`, `avatar`, `card`, `detail_row`, `meter`, `chip`, `callout`, `loader`,
-`typing`, with their recipes in `theme/`. **Done when** each renders its `lurq::ui` component, its kit tests pass, and
-a design verification of a screen that uses it shows no blocking or major mismatch.
+`typing`, with their recipes in `theme/kit/`. **Done when** each renders its `lurq::ui` component, its kit tests pass,
+and a design verification of a screen that uses it shows no blocking or major mismatch.
+
+State on 2026-11-19 (`claude/lurq-063`): `kbd` is `ui::Kbd` (`theme/kit/kbd.rs`, `ui_kit kbd_`), design verification
+not run yet. The others wait for lurq (K4, items 8–12): `avatar` (lurq builds the letters from a name; giving it the
+initials made its accessible name "A L"), `card` (170 call sites chain `Column`'s builder on it; lurq's `Card` is an
+`Element` with its content two levels down), `detail_row`, `meter`, `chip`'s badges and `callout` (no ids on the
+parts the tests and the MCP tree read: a `DataList` term, a `Progress` fill, a `Badge` dot and label, a `Callout`
+title and body; no `describe` on `Callout`), `chip`'s tag (its remove is a Tab stop), `loader` and `typing` (lurq's
+spin and dots move every frame and keep moving under reduced motion; the kit's turn in 24 steps a second and stay
+still).
 
 ### K3 · Form controls (UI)
 
@@ -1071,6 +1084,18 @@ From the survey, in the order they unblock the most call sites:
 7. A status label (icon and toned words, no fill, turning icon); `RadioCard` with content, mark, reason and waiting
    state; `CodeBlock` with a failed copy and a copy that differs from the shown text; `Calendar` footer; `Tag` with
    two labels; `BreadcrumbStep` state; SVG icons in the icon set.
+8. Ids on a component's parts (`id` of the component, then `<id>-<part>`, or a way to name a part), so the kit's
+   element ids, which tests and the MCP tree read, survive: `DataList` terms, `Progress` fill, `Badge` dot and label,
+   `Callout` title, body and icon.
+9. `describe` on a component's root (`Callout`, `Badge`, `Progress` …), for the state the MCP tree reads.
+10. `Avatar` given its letters, not only a name to take them from.
+11. `Tag`'s remove button that is not a Tab stop (with item 1).
+12. Spin and `Spinner` with a stepped cadence (a pose a step, so no frame between), and still under reduced motion.
+13. `Card` (and the other surfaces) usable as a layout builder: the app's padding, spacing and position on the
+    surface itself.
+
+These are lurq's API: lurq's `AGENTS.md` keeps Ivan's decisions in `design/decisions.md` before work starts, so each
+item is decided there first.
 
 ### K5 · Follow-ups of the lurq 0.63 move (UI)
 
@@ -1078,7 +1103,8 @@ From the survey, in the order they unblock the most call sites:
   `#[expect(deprecated)]`: `ui::Picture` draws its own skeleton and error line where the attachments draw their own
   placeholder and error, and loads as a component where the browser page shows a live frame. Move them when
   `Picture` takes an app's placeholder and error view, or when the design takes Picture's.
-- Design verification of the 0.63 move as a whole: scroll bars (lurq's new lane), Markdown code blocks and quotes in
+- Design verification of the 0.63 move as a whole (not run on 2026-11-19: the Pencil app was not running, so the
+  verifier had no design screenshots): scroll bars (lurq's new lane), Markdown code blocks and quotes in
   plans and briefs (`ui::CodeBlock` with a header and Copy, `ui::Blockquote`), headings in Markdown, the chat's code
   block lines.
 - The headless tests `ui_kit decision_card_draws_its_words_question_answers_with_keys_and_meta_line` and
