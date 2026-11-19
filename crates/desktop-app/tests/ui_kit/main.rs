@@ -17,6 +17,7 @@ mod failure;
 mod fields;
 mod harness;
 mod icons;
+mod kbd;
 mod labels;
 mod loader;
 mod markdown_code_scroll;
