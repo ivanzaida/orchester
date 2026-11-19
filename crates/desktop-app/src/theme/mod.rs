@@ -33,6 +33,7 @@ mod flow;
 mod fonts;
 mod groups;
 mod hub;
+mod icons;
 pub mod instructions;
 mod leading;
 mod lifecycle;
@@ -227,6 +228,7 @@ pub fn install(app: &mut App, mode: Mode) {
   watching::install(theme);
   leading::install(theme);
   markdown::install(theme);
+  icons::install(theme);
   theme.set_shadows(shadow::shadows());
   // The caret of lurq 0.62, 1 wide and as high as the text: the design's fields draw no other.
   theme.set_caret(ThemeCaret::legacy());

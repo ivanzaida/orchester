@@ -23,6 +23,8 @@ mod dialog;
 mod flow;
 #[path = "theme/hub.rs"]
 mod hub;
+#[path = "theme/icons.rs"]
+mod icons;
 #[path = "theme/instructions.rs"]
 mod instructions;
 #[path = "theme/leading.rs"]
