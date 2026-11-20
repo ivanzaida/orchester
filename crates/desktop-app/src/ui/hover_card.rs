@@ -2,21 +2,20 @@
 //! `R2dWD6` in `e2DPHR`, the health dot's and the runner's cards `oagTL`, `ediuF` in `Status bar · redesign`): a
 //! popover's panel (`ui::popover`) that shows above its anchor, its end at the anchor's end (or its start at the
 //! anchor's start), once the pointer rested on the anchor as long as a tooltip waits, and goes when the pointer leaves.
-//! It lets the pointer through. [`card`] lays out what a card of words says: a title, a state with its dot, what it
+//! It lets the pointer through: lurq's `ui::HoverCard` with `pass_through`. [`card`] lays out what a card of words says: a title, a state with its dot, what it
 //! means and a hint; [`facts_card`] a card of facts: a state line, then a label and a value on each line.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
-    component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, Timeout},
+    ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, Spacer, Text},
-  core::{ElementRef, Signal},
+  components::{Column, Placement, Row, Spacer, Text},
   layout::{Alignment, layout_kind::ShrinkLimit},
-  node::{Element, HitTestBehavior, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::HoverCard,
 };
 
 use super::{
@@ -217,78 +216,37 @@ pub fn facts_card(ctx: &mut Ctx, card: &FactsCard) -> Element {
     .into()
 }
 
-/// `anchor` with `card` while the pointer rests on it.
+/// `anchor` with `card` while the pointer rests on it: lurq's `ui::HoverCard` that the pointer passes through, over its
+/// anchor, 6 clear of it, after a tooltip's wait (`theme::kit::hover_card`).
 pub fn hover_card(ctx: &mut Ctx, anchor: impl Into<Element>, card: impl Into<Card>) -> Element {
   let card = card.into();
-  let key = format!("hover-card-{}", card.id());
-  ctx.mount_keyed_with::<HoverCard>(&key, card, vec![anchor.into()])
-}
-
-impl DevtoolsInspectable for Card {}
-
-struct HoverCard {
-  shown: Signal<bool>,
-  timer: Timeout,
-  anchor: ElementRef,
-}
-
-impl Component for HoverCard {
-  type Props = Card;
-
-  fn create(ctx: &mut Ctx) -> Self {
-    let shown = ctx.signal(false);
-    let show = shown.clone();
-    Self {
-      shown,
-      timer: ctx.create_timeout(TOOLTIP_DELAY, move || show.set(true)),
-      anchor: ctx.element_ref(),
-    }
+  let mut row = Row::new().align_items(Alignment::Center).child(anchor);
+  if let Card::Facts(FactsCard {
+    gives_way: Some(order), ..
+  }) = &card
+  {
+    row = row
+      .flex_shrink(1.0)
+      .shrink_order(*order)
+      .shrink_limit(ShrinkLimit::Content);
   }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let card = ctx.props::<Card>().clone();
-    let (rest, leave, hide) = (self.timer.clone(), self.timer.clone(), self.shown.clone());
-    let mut anchor = Row::new()
-      .ref_element(self.anchor.clone())
-      .align_items(Alignment::Center)
-      .on_mouse_enter(move || rest.restart())
-      .on_mouse_leave(move || {
-        leave.cancel();
-        hide.set(false);
-      })
-      .with_children(ctx.children().iter().cloned());
-    if let Card::Facts(FactsCard {
-      gives_way: Some(order), ..
-    }) = &card
-    {
-      anchor = anchor
-        .flex_shrink(1.0)
-        .shrink_order(*order)
-        .shrink_limit(ShrinkLimit::Content);
-    }
-    if !self.shown.get() {
-      return anchor;
-    }
-    let (panel, placement) = match &card {
-      Card::Words(words) => (self::card(words), Placement::TopEnd),
-      Card::Facts(facts) => (
-        facts_card(ctx, facts),
-        if facts.from_start {
-          Placement::TopStart
-        } else {
-          Placement::TopEnd
-        },
-      ),
-    };
-    anchor.child(
-      Popup::new(self.anchor.clone(), panel)
-        .open_when(true)
-        .placement(placement)
-        // Over its anchor, lurq counts the offset away from it.
-        .offset(0.0, ExtraSpacing::Snug.value())
-        .hit_test(HitTestBehavior::None)
-        .dismiss_on_outside_click(false)
-        .dismiss_on_escape(false),
-    )
-  }
+  let (panel, placement) = match &card {
+    Card::Words(words) => (self::card(words), Placement::TopEnd),
+    Card::Facts(facts) => (
+      facts_card(ctx, facts),
+      if facts.from_start {
+        Placement::TopStart
+      } else {
+        Placement::TopEnd
+      },
+    ),
+  };
+  HoverCard::new()
+    .child(panel)
+    .placement(placement)
+    .offset(ExtraSpacing::Snug.value())
+    .open_delay(TOOLTIP_DELAY)
+    .pass_through(true)
+    .key(format!("hover-card-{}", card.id()))
+    .mount(ctx, row)
 }

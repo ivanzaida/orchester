@@ -5,6 +5,7 @@ pub mod avatar;
 mod button;
 pub mod callout;
 pub mod chip;
+mod hover_card;
 mod icon_button;
 mod kbd;
 pub mod meter;
@@ -21,6 +22,7 @@ pub(super) fn install(theme: &Theme) {
   button::install(theme);
   callout::install(theme);
   chip::install(theme);
+  hover_card::install(theme);
   icon_button::install(theme);
   kbd::install(theme);
   meter::install(theme);
