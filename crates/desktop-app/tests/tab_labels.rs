@@ -78,6 +78,43 @@ fn tab_labels_mark_a_project_that_needs_you() {
   );
 }
 
+/// The list of every open tab says a tab's page, its project quiet after it, and the project's mark, an element of
+/// its own beside the tab's.
+#[test]
+fn tab_labels_list_rows_say_the_page_then_the_project_and_its_mark() {
+  let mut window = seeded_window(None);
+  let navigation = window.navigation();
+  // Enough tabs that some leave the strip for the list's button.
+  for _ in 0..12 {
+    navigation.open_tab();
+    navigation.go(Route::Settings);
+  }
+  window.pass();
+  // Ctrl+Shift+A (Cmd+Shift+A on macOS) opens the list at any time.
+  let (ctrl, meta) = (!cfg!(target_os = "macos"), cfg!(target_os = "macos"));
+  window
+    .tree
+    .key_down_with_meta("a".to_owned(), "KeyA".to_owned(), true, ctrl, false, meta);
+  window
+    .tree
+    .key_up_with_meta("a".to_owned(), "KeyA".to_owned(), true, ctrl, false, meta);
+  window.until("the list of every tab", |window| {
+    window.texts("tab-strip-panel").is_some()
+  });
+  assert_eq!(
+    window.texts("tab-1-item"),
+    Some(vec!["Overview".to_owned(), "Kontur".to_owned(), "6".to_owned()]),
+    "the page, the project after it, then the ✋ and its count"
+  );
+  assert_eq!(window.text("tab-1-item-attention-count"), "6");
+  assert_eq!(window.text("tab-1-attention-count"), "6", "the tab keeps its own mark");
+  assert_eq!(
+    window.texts("tab-2-item"),
+    Some(vec!["Settings".to_owned()]),
+    "no project, no detail and no mark"
+  );
+}
+
 #[test]
 fn tab_labels_pill_stays_at_zero_and_opens_the_needs_you_panel() {
   let mut window = Window::open();

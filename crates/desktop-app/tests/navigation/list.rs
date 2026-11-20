@@ -117,7 +117,11 @@ fn the_list_holds_every_tab_in_order_marking_the_current_and_hidden_ones() {
   }
   let kontur = row(tabs(&navigation)[1]);
   window.until("Kontur's name", |window| window.text(&kontur).contains("Kontur"));
-  assert_eq!(window.text(&kontur), "Kontur · Overview", "the tab's label");
+  assert_eq!(
+    window.texts(&kontur),
+    Some(vec!["Overview".to_owned(), "Kontur".to_owned()]),
+    "the tab's page, then its project"
+  );
 }
 
 #[test]

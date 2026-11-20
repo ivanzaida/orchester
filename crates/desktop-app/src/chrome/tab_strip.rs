@@ -13,10 +13,10 @@
 //!
 //! Each tab is as wide as what it shows up to its cap (`tab_fit`); the tabs that do not fit go into the menu of the
 //! button after the last tab that shows, which counts them and opens the list of every open tab (`Tab list` `pB0VB`:
-//! search above eight tabs, a close button on each row, Ctrl+Shift+A, Cmd+Shift+A on macOS, to open and close it). The
-//! tabs, *New tab* and that button are for the pointer only, never a Tab stop: the Tab that comes with Alt+Tab back
-//! into the window must not land on them, where Space would open a tab. The window's own shortcuts
-//! (`navigation::shortcuts`) switch, open and close tabs.
+//! search above eight tabs, a row's page with its project quiet after it and the project's mark, a close button on each
+//! row, Ctrl+Shift+A, Cmd+Shift+A on macOS, to open and close it). The tabs, *New tab* and that button are for the
+//! pointer only, never a Tab stop: the Tab that comes with Alt+Tab back into the window must not land on them, where
+//! Space would open a tab. The window's own shortcuts (`navigation::shortcuts`) switch, open and close tabs.
 
 use lurq::{
   app::{
@@ -32,7 +32,7 @@ use lurq::{
 
 use super::{
   tab_fit::{self, DOT_WIDTH, LABEL_MAX_WIDTH, LABEL_MIN_WIDTH, Slot},
-  tab_label::{attention, label, mark_width, tab_icon, unsaved},
+  tab_label::{attention, in_project, label, mark_width, page, project_name, tab_icon, unsaved},
 };
 use crate::{
   navigation::{
@@ -75,15 +75,20 @@ pub struct TabStripProps {
 
 impl DevtoolsInspectable for TabStripProps {}
 
-/// What one tab shows, as the strip sizes and draws it.
+/// What one tab shows, as the strip sizes and draws it, and what its row in the list of every tab says.
 struct Shown<'a> {
   tab: &'a Tab,
   label: String,
+  /// Its page, which its row says in place of the label, and its project's name after it.
+  page: String,
+  project: Option<String>,
   active: bool,
   closable: bool,
   icon_only: bool,
   unsaved: bool,
   mark: Option<Element>,
+  /// The same mark in its row, an element of its own.
+  row_mark: Option<Element>,
   /// The room its unsaved dot and its mark take.
   marks: f32,
 }
@@ -158,7 +163,16 @@ fn tab(shown: Shown, cap: Option<f32>) -> WindowTab<TabId> {
     .describe("route", route.screen().name())
     .closable(shown.closable)
     .close_button(shown.active)
-    .dirty(shown.unsaved);
+    .dirty(shown.unsaved)
+    .list_label(&shown.page);
+  let tab = match &shown.project {
+    Some(project) => tab.list_detail(project),
+    None => tab,
+  };
+  let tab = match shown.row_mark {
+    Some(mark) => tab.list_trailing(mark),
+    None => tab,
+  };
   if shown.icon_only {
     return tab.icon(Icon::Folders.name()).icon_only(true);
   }
@@ -203,14 +217,19 @@ fn shown<'a>(ctx: &mut Ctx, projects: &Projects, tabs: &TabSet, tab: &'a Tab) ->
   let active = tab.id() == tabs.active().id();
   let unsaved = unsaved(projects, tab.route());
   let dot = if unsaved { DOT_WIDTH } else { 0.0 };
+  let page = page(ctx, projects, tab.route());
+  let project = project_name(projects, tab.route());
   Shown {
     tab,
-    label: label(ctx, projects, tab.route()),
+    label: in_project(ctx, page.clone(), project.as_deref()),
+    page,
+    project,
     active,
     closable: tabs.can_close(tab.id()),
     icon_only: icon_only(tab, active),
     unsaved,
     mark: attention(ctx, projects, tab, format!("tab-{}-attention", tab.id())),
+    row_mark: attention(ctx, projects, tab, format!("tab-{}-item-attention", tab.id())),
     marks: dot + mark_width(projects, tab),
   }
 }

@@ -14,11 +14,11 @@
 //! The list of every open tab that button opens (`Tab list` `pB0VB`) is 320 wide on `surface_raised`, radius 10,
 //! `border_strong` inside, padding 6, its search field 6 above its rows, which are 2 apart. A row (`Tab list row`
 //! `uCIaF`, `zDB5B`) is 28 high, radius 4, 8 before and 4 after its content, 8 apart: a 14 icon in `text_secondary`,
-//! its label 12 `text_primary`, a 12 `eye-off` in `text_muted` while the tab is not in the strip, a 14 check in
-//! `text_primary` on the current tab and a 20 close slot whose 12 x in `text_muted` shows under the pointer, `pressed`
-//! under it. The current row is `accent_muted`, its label 500 and its icon `text_primary`; a hovered row takes
-//! `hover`, the keyboard's row `hover` inside a 1 `border_focus` stroke (`a1i6Ws`). Where nothing matches, 12
-//! `text_muted`, 8 by 10 (`Jmopb`).
+//! its page 12 `text_primary` and its project 12 `text_muted` filling the row, a 12 `eye-off` in `text_muted` while the
+//! tab is not in the strip, a 14 check in `text_primary` on the current tab and a 20 close slot whose 12 x in
+//! `text_muted` shows under the pointer, `pressed` under it. The current row is `accent_muted`, its label 500 and its
+//! icon `text_primary`; a hovered row takes `hover`, the keyboard's row `hover` inside a 1 `border_focus` stroke
+//! (`a1i6Ws`). Where nothing matches, 12 `text_muted`, 8 by 10 (`Jmopb`).
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, Theme, TypographyStyle},
@@ -262,6 +262,11 @@ fn rows(rules: Recipe) -> Recipe {
     })
     .state(State::Selected, Part::ItemLabel, |style| {
       style.typography(TypographyStyle::Label)
+    })
+    .base(Part::ItemDetail, |style| {
+      style
+        .typography(TypographyStyle::Description)
+        .foreground(PaletteColor::MutedForeground)
     })
     .base(Part::ItemHidden, |style| {
       style

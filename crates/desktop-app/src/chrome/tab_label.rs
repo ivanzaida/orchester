@@ -109,21 +109,23 @@ pub fn unsaved(projects: &Projects, route: &Route) -> bool {
 /// (`Kontur · KON-12`).
 pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   let screen = page(ctx, projects, route);
-  match project_name(projects, route) {
+  in_project(ctx, screen, project_name(projects, route).as_deref())
+}
+
+/// `page` after `project`'s name, where it has one.
+pub fn in_project(ctx: &mut Ctx, page: String, project: Option<&str>) -> String {
+  match project {
     Some(name) => ctx
-      .t_args(
-        "shell.tabs.inProject",
-        [("project", name.as_str()), ("label", screen.as_str())],
-      )
+      .t_args("shell.tabs.inProject", [("project", name), ("label", page.as_str())])
       .to_string(),
-    None => screen,
+    None => page,
   }
 }
 
 /// The page a tab shows: its screen's name, a task by its key and its Edit task as `Edit <key>`
 /// (`Qp1B0`), a pipeline by its name, a file by its name (`Orchester · plan_limits.rs` in `o1Uea4`); Memory, a
 /// filter of the Agents hub, as the hub (`Kontur · Agents` in Y1 `tsfxN`).
-fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
+pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   match route {
     Route::Project(_, ProjectPage::Task(key, _) | ProjectPage::KeptTask(key, _)) => key.to_string(),
     Route::Project(_, ProjectPage::NewPipeline | ProjectPage::CopyPipeline(_)) => ctx.t("pipeline_hub.new").to_string(),
@@ -159,7 +161,7 @@ pub fn tab_icon(route: &Route) -> Icon {
 }
 
 /// The name of the project `route` is in, once it is known to be in the list.
-fn project_name(projects: &Projects, route: &Route) -> Option<String> {
+pub fn project_name(projects: &Projects, route: &Route) -> Option<String> {
   route
     .project()
     .and_then(|project| projects.name(project))
