@@ -3,6 +3,7 @@
 
 pub mod avatar;
 mod button;
+pub mod calendar;
 pub mod callout;
 pub mod card;
 pub mod chip;
@@ -30,6 +31,7 @@ use lurq::app::theme::Theme;
 pub(super) fn install(theme: &Theme) {
   avatar::install(theme);
   button::install(theme);
+  calendar::install(theme);
   callout::install(theme);
   card::install(theme);
   detail_row::install(theme);

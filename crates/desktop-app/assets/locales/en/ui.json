@@ -178,8 +178,6 @@
       "hintUnknown": "Compact still works: the agent writes a summary and continues from it."
     },
     "datePicker": {
-      "monthYear": "{{month}} {{year}}",
-      "day": "{{month}} {{day}}, {{year}}",
       "previousMonth": "Previous month",
       "nextMonth": "Next month",
       "today": "Today",
