@@ -1,4 +1,4 @@
-//! Callout (`Callout · …` in Settings › Orchester, *Connect a server* and Project settings › Sharing: `naoei`,
+//! Callout, lurq's `ui::Callout` in the theme's recipe (`theme::kit::callout`) (`Callout · …` in Settings › Orchester, *Connect a server* and Project settings › Sharing: `naoei`,
 //! `Gbag9`, `wwtNM`, `tCSh6`): a 16 icon, a title in 13/600 `text_primary` with its explanation 4 under it in 12.5
 //! `text_secondary`, 12 apart; radius 10, 14 over and under and 16 at its sides, on its tone's fill with no stroke
 //! (the design names a tone stroke without a thickness, which draws none). Information is `info_muted` with an
@@ -11,14 +11,15 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{PaletteColor, RadiusSize, SpacingSize},
-  components::{Column, Row, Text},
+  app::theme::{PaletteColor, SpacingSize},
+  components::{Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
+  ui::Styled,
 };
 
-use super::icon::{Icon, icon};
-use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
+use super::icon::Icon;
+use crate::theme::{ExtraSpacing, ExtraTypography, kit::callout as variant};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CalloutTone {
@@ -32,22 +33,11 @@ pub enum CalloutTone {
 impl CalloutTone {
   const fn name(self) -> &'static str {
     match self {
-      Self::Info => "info",
-      Self::Neutral => "neutral",
-      Self::Warning => "warning",
-      Self::Danger => "danger",
-      Self::Success => "success",
-    }
-  }
-
-  /// The fill and the icon's color.
-  fn colors(self) -> (PaletteColor, PaletteColor) {
-    match self {
-      Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),
-      Self::Neutral => (ExtraColor::Hover.role(), PaletteColor::MutedForeground),
-      Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
-      Self::Danger => (PaletteColor::DestructiveMuted, PaletteColor::Destructive),
-      Self::Success => (PaletteColor::SuccessMuted, PaletteColor::Success),
+      Self::Info => variant::INFO,
+      Self::Neutral => variant::NEUTRAL,
+      Self::Warning => variant::WARNING,
+      Self::Danger => variant::DANGER,
+      Self::Success => variant::SUCCESS,
     }
   }
 
@@ -120,7 +110,7 @@ impl Callout {
 
 impl From<Callout> for Element {
   fn from(callout: Callout) -> Self {
-    let (fill, mark) = callout.tone.colors();
+    let id = &callout.id;
     let actions = (!callout.actions.is_empty()).then(|| {
       Row::new()
         .spacing(SpacingSize::Sm)
@@ -128,43 +118,28 @@ impl From<Callout> for Element {
         .padding(Padding::new().top(ExtraSpacing::Snug.role()))
         .with_children(callout.actions)
     });
-    let text = Column::new()
-      .id(format!("{}-text", callout.id))
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .spacing(SpacingSize::Xs)
-      .child(
-        Text::new(&callout.title)
-          .id(format!("{}-title", callout.id))
-          .variant(ExtraTypography::FormSection.role())
-          .width(Dimension::Pct(100.0)),
-      )
-      .with_children(callout.body.as_deref().map(|body| {
-        Text::new(body)
-          .id(format!("{}-body", callout.id))
-          .variant(ExtraTypography::Lead.role())
-          .width(Dimension::Pct(100.0))
-      }))
-      .with_children(callout.note.as_deref().map(|note| {
-        Text::new(note)
-          .id(format!("{}-note", callout.id))
-          .variant(ExtraTypography::Lead.role())
-          .color(PaletteColor::MutedForeground)
-          .width(Dimension::Pct(100.0))
-      }))
-      .with_children(callout.details)
-      .with_children(actions);
-    Row::new()
-      .id(callout.id.clone())
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
-      .spacing(SpacingSize::Md)
-      .align_items(Alignment::Start)
-      .background(fill)
-      .rounded(RadiusSize::Lg)
+    // What it says stays the kit's line, under its own id (`<id>-body`), which screens' tests read.
+    let line = |part: &str, words: &str| {
+      Text::new(words)
+        .id(format!("{id}-{part}"))
+        .variant(ExtraTypography::Lead.role())
+        .width(Dimension::Pct(100.0))
+    };
+    lurq::ui::Callout::new("")
+      .title(&callout.title)
+      .variant(callout.tone.name())
+      .icon(callout.icon.name().as_str())
       .describe("tone", callout.tone.name())
-      .child(icon(callout.icon, IconSize::Lg, mark).id(format!("{}-icon", callout.id)))
-      .child(text)
+      .children(callout.body.as_deref().map(|body| line("body", body)))
+      .children(
+        callout
+          .note
+          .as_deref()
+          .map(|note| line("note", note).color(PaletteColor::MutedForeground)),
+      )
+      .children(callout.details)
+      .children(actions)
+      .id(id.clone())
       .into()
   }
 }
