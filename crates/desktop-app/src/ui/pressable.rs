@@ -6,14 +6,18 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::events::mouse_event::MouseEvent,
+  app::events::{MouseButton, mouse_event::MouseEvent},
   components::Button,
   layout::Alignment,
   node::{CursorIcon, Style},
+  ui,
 };
 
 use crate::{
-  navigation::link::{Open, keeps_middle_click, navigates},
+  navigation::{
+    link::{Open, follow, keeps_middle_click, navigates},
+    press::LinkPress,
+  },
   theme::{ExtraRadius, ExtraShadow},
 };
 
@@ -68,10 +72,51 @@ impl Press {
     }
   }
 
+  /// lurq's `button` pressed this way, as [`Self::on`] presses the kit's: an action runs on a click and on a click with
+  /// Ctrl (Cmd on macOS) held, a place opens by a browser's rules, and a middle click is the button's alone.
+  pub fn on_ui(self, button: ui::Button) -> ui::Button {
+    match self {
+      Self::Run(action) => {
+        let aside = action.clone();
+        button
+          .on_click(move |event: MouseEvent| {
+            event.stop_propagation();
+            if !aside_asked(&event) {
+              action();
+            }
+          })
+          .on_open_aside(move |event: MouseEvent| {
+            if event.button != MouseButton::Middle {
+              aside();
+            }
+          })
+      }
+      Self::Open(open) => {
+        let aside = open.clone();
+        button
+          .on_click(move |event: MouseEvent| {
+            if aside_asked(&event) {
+              event.stop_propagation();
+            } else {
+              follow(&open, &event);
+            }
+          })
+          .on_open_aside(move |event: MouseEvent| follow(&aside, &event))
+      }
+    }
+  }
+
   /// [`pressable`] or [`opening`], as this press is.
   pub fn button(self) -> Button {
     self.on(surface())
   }
+}
+
+/// Whether lurq's button hands `event` to its `on_open_aside` handler: a click with the command key held. lurq 0.63.2
+/// calls every `on_click` handler of a button that Enter presses, the one it stopped as well, so a press with the key
+/// held would run twice.
+fn aside_asked(event: &MouseEvent) -> bool {
+  LinkPress::of(event).command
 }
 
 /// `button`, a control in the custom title bar. The bar hands a press that reaches it to the OS to move
