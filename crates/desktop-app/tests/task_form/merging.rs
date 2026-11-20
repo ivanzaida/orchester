@@ -20,7 +20,7 @@ fn shows_on(form: &mut Form) -> bool {
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
   };
-  let (track, knob) = (bounds(format!("{SWITCH}-mark")), bounds(format!("{SWITCH}-knob")));
+  let (track, knob) = (bounds(format!("{SWITCH}-track")), bounds(format!("{SWITCH}-thumb")));
   knob.x - track.x > track.width / 2.0 - knob.width / 2.0
 }
 
@@ -32,7 +32,7 @@ fn until_shows(form: &mut Form, on: bool) {
         .get_element_by_id_mut(&id)
         .and_then(|element| element.bounds())
     };
-    match (probe(format!("{SWITCH}-mark")), probe(format!("{SWITCH}-knob"))) {
+    match (probe(format!("{SWITCH}-track")), probe(format!("{SWITCH}-thumb"))) {
       (Some(track), Some(knob)) => (knob.x - track.x > track.width / 2.0 - knob.width / 2.0) == on,
       _ => false,
     }

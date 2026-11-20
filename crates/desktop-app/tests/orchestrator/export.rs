@@ -40,7 +40,7 @@ fn orchestrator_export_saves_the_chosen_markdown() {
   answered(&mut screen);
   open_dialog(&mut screen);
   assert_eq!(screen.text("orchestrator-export-dialog-title"), "Export conversation");
-  let what = screen.text("orchestrator-export-dialog-what");
+  let what = screen.text("orchestrator-export-dialog-description");
   assert!(
     what.starts_with("Write the brief for KON-31. · 2 messages · "),
     "{what}"

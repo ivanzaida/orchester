@@ -293,7 +293,7 @@ fn leave_question(agents: &mut Agents) -> String {
     agents.text("pipeline-hub-leave-title"),
     "Discard the unsaved changes to Feature delivery?"
   );
-  agents.text("pipeline-hub-leave-what")
+  agents.text("pipeline-hub-leave-description")
 }
 
 #[test]

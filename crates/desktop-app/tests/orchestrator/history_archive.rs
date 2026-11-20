@@ -5,7 +5,10 @@
 //! orchester-app --test orchestrator history_archive`.
 
 use lurq::app::events::with_synthetic_input;
-use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
+use orchester_app::{
+  chrome::TITLE_BAR_HEIGHT,
+  routes::{OrchestratorChat, ProjectPage, Route},
+};
 use orchester_core::id::ChatId;
 
 use super::{
@@ -76,6 +79,11 @@ fn history_delete_asks_in_a_modal_and_the_open_conversation_falls_back_to_new() 
   let (mut screen, older, newer) = opened();
   choose(&mut screen, newer, "delete");
   screen.until("the question", |screen| screen.exists("orchestrator-history-delete"));
+  let veil = screen.bounds("orchestrator-history-delete-veil");
+  assert_eq!(
+    veil.y, TITLE_BAR_HEIGHT,
+    "the scrim starts right under the title bar, which it leaves: {veil:?}"
+  );
   assert_eq!(
     screen.text("orchestrator-history-delete-title"),
     "Delete “Plan the GitHub app permissions”?"

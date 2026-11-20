@@ -25,27 +25,30 @@ fn toggles_are_their_design_size_8_from_their_label_and_ask_for_the_other_value(
     Row::new()
       .spacing(SpacingSize::Lg)
       .child(Toggle::new("check", ToggleKind::Checkbox, false, "Also save").on_change(hear("check")))
-      .child(Toggle::new("radio", ToggleKind::Radio, true, "Selected").on_change(hear("radio")))
+      .child(Toggle::new("radio", ToggleKind::Radio, false, "Not selected").on_change(hear("radio")))
+      .child(Toggle::new("chosen", ToggleKind::Radio, true, "Selected").on_change(hear("chosen")))
       .child(Toggle::new("switch", ToggleKind::Switch, false, "Network").on_change(hear("switch")))
       .child(Toggle::new("on", ToggleKind::Switch, true, "Ask before MCP actions").on_change(hear("on")))
       .child(Toggle::new("fixed", ToggleKind::Checkbox, true, "From the profile"))
       .into()
   });
-  for (id, size) in [
-    ("check", (16.0, 16.0)),
-    ("radio", (16.0, 16.0)),
-    ("switch", (28.0, 16.0)),
+  // The marks are lurq's parts: a checkbox's box, a radio's mark and a switch's track.
+  for (mark, size) in [
+    ("check-box", (16.0, 16.0)),
+    ("radio-mark", (16.0, 16.0)),
+    ("switch-track", (28.0, 16.0)),
   ] {
-    let mark = kit.bounds(&format!("{id}-mark"));
+    let id = mark;
+    let mark = kit.bounds(mark);
     assert_eq!((mark.width, mark.height), size, "{id}");
   }
   assert_close(
-    gap_after(kit.bounds("check-mark"), kit.bounds("check-label")),
+    gap_after(kit.bounds("check-box"), kit.bounds("check-label")),
     8.0,
     "mark to label",
   );
-  let (off, on) = (kit.bounds("switch-mark"), kit.bounds("on-mark"));
-  let (off_knob, on_knob) = (kit.bounds("switch-knob"), kit.bounds("on-knob"));
+  let (off, on) = (kit.bounds("switch-track"), kit.bounds("on-track"));
+  let (off_knob, on_knob) = (kit.bounds("switch-thumb"), kit.bounds("on-thumb"));
   assert_eq!((off_knob.width, off_knob.height), (12.0, 12.0));
   assert_close(off_knob.x - off.x, 2.0, "an off knob at the start");
   assert_close(
@@ -53,13 +56,13 @@ fn toggles_are_their_design_size_8_from_their_label_and_ask_for_the_other_value(
     2.0,
     "an on knob at the end",
   );
-  for id in ["check", "radio", "switch", "on", "fixed"] {
+  for id in ["check", "radio", "chosen", "switch", "on", "fixed"] {
     kit.click(id);
   }
   assert_eq!(
     *asked.lock(),
     [("check", true), ("radio", true), ("switch", true), ("on", false)],
-    "a fixed control cannot be flipped"
+    "a selected radio asks for nothing, and a fixed control cannot be flipped"
   );
 }
 

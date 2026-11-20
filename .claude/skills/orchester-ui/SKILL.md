@@ -57,7 +57,7 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
   unavailable reason. Its own words are in `en/ui.json` (`ui.*`), the shared Copy and Try again in `common.*`; extra roles add `ExtraShadow`, `ControlHeight` and the
   `DISABLED_OPACITY` fader. Tests: `cargo test -p orchester-app --test ui_kit <filter>`;
   every control in its states: `cargo run -p orchester-app --example ui_gallery` (MCP like the app).
-- Grouped rows (`ui::row_group`: `RowGroup`, `GroupRow`, `tag`, `note`; roles `GroupText`) draw a titled group of rows
+- Grouped rows (roles `GroupText`; `ui::row_group` keeps only their `tag` and `note`, the rows themselves went unused) draw a titled group of rows
   in one outline (`Pipelines · redesign` `evQ4U` in the new `orchester.pen`, the Pipelines page before the hub, which
   is gone; no screen draws them today): a row's label and hint, and at its end its control, its value or a chevron to a
   page; a radio row leads with `toggle::radio_mark`. Their notices are `ui::notice::Notice::flat` (no stroke, a 14 icon,

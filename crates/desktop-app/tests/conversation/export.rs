@@ -47,7 +47,7 @@ fn conversation_export_saves_the_whole_run_with_its_steps() {
   window.until("the dialog", |window| {
     window.tree.get_element_by_id("task-export-dialog").is_some()
   });
-  let what = window.text("task-export-dialog-what");
+  let what = window.text("task-export-dialog-description");
   assert!(what.starts_with(&format!("{key} · {TITLE} · run ")), "{what}");
   assert!(what.contains(" steps · ") && what.ends_with(" messages"), "{what}");
   let name = window.text("task-export-dialog-file-name");

@@ -52,7 +52,7 @@ fn project_settings_estimates_show_the_projects_value_not_the_application_settin
   page.db().set_estimates_story_points(true).expect("on for the project");
   page.outside(orchester_workspace::tasks::outside::Outside::Estimates);
   page.tab("general", "settings-project-name");
-  page.tab("runs", &format!("{SWITCH}-mark"));
+  page.tab("runs", &format!("{SWITCH}-track"));
   page.until("the project's value shown", |p| p.switch_on(SWITCH));
   assert!(
     !AppDb::open(&page.window.data.database())

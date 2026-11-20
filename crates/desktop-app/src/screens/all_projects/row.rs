@@ -332,7 +332,7 @@ fn where_cell(ctx: &mut Ctx, listed: &ListedProject, place: Option<&Place>) -> R
     }
     Some(Place::Shared { team: Some(team) }) => {
       let words = ctx.t_args("projects.where.shared", [("team", team.as_str())]);
-      cut_badge(ctx, &badge_id, BadgeTone::Info, &words).into()
+      cut_badge(&badge_id, BadgeTone::Info, &words).into()
     }
     Some(Place::Shared { team: None }) => {
       badge(&badge_id, BadgeTone::Info, &ctx.t("projects.where.sharedUnknown")).into()
