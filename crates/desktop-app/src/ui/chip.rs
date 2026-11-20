@@ -1,28 +1,22 @@
-//! Chips. A tag (`Chip` `jI8af`) is its name in 11/500 `text_secondary` on a `surface_raised` pill
-//! inside a `border` stroke, 2 over and under it and 8 at its sides; a removable one ends in an 11
-//! `text_muted` cross, 4 after the name and 4 from its end (`Chip/removable` `qj3Ss`); one that says what something is
-//! leads with an 11 `text_secondary` glyph, 4 before the name (`Chip · Decision` `HWxlV` in Y1 `tsfxN`). A badge
-//! (`Badge` `Fm7lc`) is a 6 dot and a word in 11/500 in its tone, 6 apart, on the tone's muted fill, 3 over and
-//! under them and 8 at their sides (`Saved` in `success`, `New` in `info`); a cut one keeps to its room.
+//! Chips: lurq's `ui::Tag` and `ui::Badge` in the theme's recipes (`theme::kit::chip`, which says how they look). A
+//! tag (`Chip` `jI8af`) is a name, removable or led by a glyph; a badge (`Badge` `Fm7lc`) a dot or a glyph and a word
+//! in its tone (`Saved` in `success`, `New` in `info`); a cut one keeps to its room.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    events::mouse_event::MouseEvent,
-    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Button, Row, Text},
+  components::Row,
   layout::Alignment,
-  node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
+  ui::{Badge, BadgePart, Styled, Tag},
 };
 
-use super::{
-  icon::{Icon, icon},
-  tooltip::Truncated,
-};
-use crate::theme::{ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
+use super::{icon::Icon, tooltip::Truncated};
+use crate::theme::{ExtraColor, ExtraRadius, ExtraSpacing, kit::chip as variant};
 
 /// A badge's dot (`Vydkx`).
 const DOT_SIZE: f32 = 6.0;
@@ -90,49 +84,19 @@ impl TagChip {
 
 impl From<TagChip> for Element {
   fn from(chip: TagChip) -> Self {
-    let padding = Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Tight.role());
-    let mut row = Row::new()
-      .id(chip.id.clone())
-      .spacing(SpacingSize::Xs)
-      .align_items(Alignment::Center)
-      .background(PaletteColor::Card)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(ExtraRadius::Full.role())
+    let mut tag = Tag::new(&chip.name)
+      .state(variant::MONO, chip.mono)
+      .state(variant::FIELD, chip.pill)
       .describe("tag", chip.name.clone())
-      .with_children(
-        chip
-          .glyph
-          .map(|glyph| icon(glyph, IconSize::Xs, ExtraColor::TextSecondary.role())),
-      )
-      .child(
-        Text::new(&chip.name)
-          .id(format!("{}-label", chip.id))
-          .variant(if chip.mono {
-            ExtraTypography::MonoLabel.role()
-          } else {
-            TypographyStyle::FieldLabel
-          })
-          .nowrap(),
-      );
-    if chip.pill {
-      row = row.height(Dimension::Px(ControlHeight::Sm.value()));
+      .id(chip.id);
+    if let Some(glyph) = chip.glyph {
+      tag = tag.icon(glyph.name());
     }
-    let Some(Remove { label, action }) = chip.remove else {
-      return row.padding(padding).into();
-    };
-    // A press removes the tag only: it does not also press a row or a picker around it.
-    let cross = Button::empty()
-      .id(format!("{}-remove", chip.id))
-      .align_items(Alignment::Center)
-      .focusable(false)
-      .cursor(CursorIcon::Pointer)
-      .describe("a11y_name", label)
-      .on_click(move |event: MouseEvent| {
-        event.stop_propagation();
-        action();
-      })
-      .child(icon(Icon::X, IconSize::Xs, PaletteColor::MutedForeground));
-    row.padding(padding.right(SpacingSize::Xs)).child(cross).into()
+    if let Some(Remove { label, action }) = chip.remove {
+      // Pointer-only, as the kit's other controls: Tab passes the cross by.
+      tag = tag.remove_label(&label).tab_stop(false).on_remove(move || action());
+    }
+    tag.into()
   }
 }
 
@@ -148,85 +112,81 @@ pub enum BadgeTone {
 }
 
 impl BadgeTone {
-  fn colors(self) -> (PaletteColor, PaletteColor) {
+  const fn variant(self) -> &'static str {
     match self {
-      Self::Success => (PaletteColor::Success, PaletteColor::SuccessMuted),
-      Self::Info => (PaletteColor::Info, PaletteColor::InfoMuted),
-      Self::Warning => (PaletteColor::Warning, PaletteColor::WarningMuted),
-      Self::Danger => (PaletteColor::Destructive, PaletteColor::DestructiveMuted),
-      Self::Neutral => (ExtraColor::TextSecondary.role(), PaletteColor::Highlight),
+      Self::Success => variant::SUCCESS,
+      Self::Info => variant::INFO,
+      Self::Warning => variant::WARNING,
+      Self::Danger => variant::DANGER,
+      Self::Neutral => variant::NEUTRAL,
+    }
+  }
+
+  fn color(self) -> PaletteColor {
+    match self {
+      Self::Success => PaletteColor::Success,
+      Self::Info => PaletteColor::Info,
+      Self::Warning => PaletteColor::Warning,
+      Self::Danger => PaletteColor::Destructive,
+      Self::Neutral => ExtraColor::TextSecondary.role(),
+    }
+  }
+
+  fn fill(self) -> PaletteColor {
+    match self {
+      Self::Success => PaletteColor::SuccessMuted,
+      Self::Info => PaletteColor::InfoMuted,
+      Self::Warning => PaletteColor::WarningMuted,
+      Self::Danger => PaletteColor::DestructiveMuted,
+      Self::Neutral => PaletteColor::Highlight,
     }
   }
 }
 
-/// A badge saying `word` in `tone`.
-pub fn badge(id: &str, tone: BadgeTone, word: &str) -> Row {
-  badge_in(id, tone, word, TypographyStyle::FieldLabel)
+/// A badge saying `word` in `tone`: its dot is `<id>-dot` and its word `<id>-label`.
+pub fn badge(id: &str, tone: BadgeTone, word: &str) -> Badge {
+  Badge::new(word).variant(tone.variant()).dot(true).id(id.to_owned())
 }
 
 /// [`badge`] with its word in `style`, e.g. 11/500 where a panel draws it 19 high (`Chip · Active` `cwhcK` in Y2).
-pub fn badge_in(id: &str, tone: BadgeTone, word: &str, style: TypographyStyle) -> Row {
-  let color = tone.colors().0;
-  badge_frame(id, tone).child(
-    Text::new(word)
-      .id(format!("{id}-label"))
-      .variant(style)
-      .color(color)
-      .nowrap(),
-  )
+pub fn badge_in(id: &str, tone: BadgeTone, word: &str, style: TypographyStyle) -> Badge {
+  badge(id, tone, word).style(BadgePart::Label, |part| part.typography(style))
 }
 
 /// A badge saying `word` in `tone` that keeps to the room its row gives it: the word is cut with an ellipsis, and
 /// while it is cut its whole words show in a tooltip. A word the badge does not choose, such as a team's name, may
-/// be any length.
+/// be any length. lurq's `ui::Badge` keeps its word whole, so this one is the kit's own, in the badge's look.
 pub fn cut_badge(ctx: &mut Ctx, id: &str, tone: BadgeTone, word: &str) -> Row {
-  let color = tone.colors().0;
-  badge_frame(id, tone)
-    .flex_shrink(1.0)
-    .min_width(Dimension::Px(0.0))
-    .child(
-      Truncated::new(format!("{id}-label"), word.to_owned(), TypographyStyle::FieldLabel)
-        .color(color)
-        .render(ctx),
-    )
-}
-
-/// A badge's pill, before what it holds.
-fn pill(id: &str, tone: BadgeTone) -> Row {
-  let (_, fill) = tone.colors();
   Row::new()
     .id(id.to_owned())
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Fine.role()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .background(fill)
+    .background(tone.fill())
     .rounded(ExtraRadius::Full.role())
-}
-
-/// A badge's pill and its dot, before its word.
-fn badge_frame(id: &str, tone: BadgeTone) -> Row {
-  pill(id, tone).child(
-    Row::new()
-      .id(format!("{id}-dot"))
-      .width(Dimension::Px(DOT_SIZE))
-      .height(Dimension::Px(DOT_SIZE))
-      .flex_shrink(0.0)
-      .rounded(ExtraRadius::Full.role())
-      .background(tone.colors().0),
-  )
-}
-
-/// A state's badge: a 12 `glyph` (`<id>-glyph`) and `word` (`<id>-label`), 6 apart, in `tone` (`Badge` `sNWem` in T11a
-/// `ujJ6U`).
-pub fn state_badge(id: &str, tone: BadgeTone, glyph: Icon, word: &str) -> Row {
-  let color = tone.colors().0;
-  pill(id, tone)
-    .child(icon(glyph, IconSize::Sm, tone.colors().0).id(format!("{id}-glyph")))
+    .flex_shrink(1.0)
+    .min_width(Dimension::Px(0.0))
     .child(
-      Text::new(word)
-        .id(format!("{id}-label"))
-        .variant(TypographyStyle::FieldLabel)
-        .color(color)
-        .nowrap(),
+      Row::new()
+        .id(format!("{id}-dot"))
+        .width(Dimension::Px(DOT_SIZE))
+        .height(Dimension::Px(DOT_SIZE))
+        .flex_shrink(0.0)
+        .rounded(ExtraRadius::Full.role())
+        .background(tone.color()),
     )
+    .child(
+      Truncated::new(format!("{id}-label"), word.to_owned(), TypographyStyle::FieldLabel)
+        .color(tone.color())
+        .render(ctx),
+    )
+}
+
+/// A state's badge: a 12 `glyph` (`<id>-icon`) and `word` (`<id>-label`), 6 apart, in `tone` (`Badge` `sNWem` in T11a
+/// `ujJ6U`).
+pub fn state_badge(id: &str, tone: BadgeTone, glyph: Icon, word: &str) -> Badge {
+  Badge::new(word)
+    .variant(tone.variant())
+    .icon(glyph.name())
+    .id(id.to_owned())
 }

@@ -16,6 +16,7 @@ use lurq::{
   components::{Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  ui::Badge,
 };
 use orchester_core::service::{Service, UiDriver};
 use orchester_ipc::services::{RunService, RunServiceState};
@@ -110,7 +111,7 @@ fn cell(width: f32) -> Row {
 }
 
 /// The state's badge: Ready in `success`, Starting in `info`, Crashed in `danger`, Stopped neutral.
-fn state_badge(ctx: &Ctx, id: &str, state: RunServiceState) -> Row {
+fn state_badge(ctx: &Ctx, id: &str, state: RunServiceState) -> Badge {
   let tone = match state {
     RunServiceState::Ready => BadgeTone::Success,
     RunServiceState::Starting => BadgeTone::Info,
