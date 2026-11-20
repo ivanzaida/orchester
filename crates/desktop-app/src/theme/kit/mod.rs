@@ -13,6 +13,7 @@ pub mod spinner;
 mod status_label;
 mod trigger;
 mod window_chrome;
+pub mod window_tabs;
 
 use lurq::app::theme::Theme;
 
@@ -29,4 +30,5 @@ pub(super) fn install(theme: &Theme) {
   status_label::install(theme);
   trigger::install(theme);
   window_chrome::install(theme);
+  window_tabs::install(theme);
 }

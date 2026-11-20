@@ -42,6 +42,13 @@ pub(super) fn install(theme: &Theme) {
           .underline(Border::inside(0.0, PaletteColor::Border))
           .gap(BAR_GAP)
       })
+      // A bar with tabs is as high as one without, and has no line under its tabs.
+      .when(
+        Selector::new().state(WindowChromeState::Tabs),
+        WindowChromePart::Bar,
+        |style| style.height(TITLE_BAR_HEIGHT),
+      )
+      .base(WindowChromePart::Line, |style| style.height(0.0))
       .when(on(WindowPlatform::Windows), WindowChromePart::Bar, |style| {
         style.padding_start(0.0)
       })

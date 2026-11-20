@@ -1,7 +1,9 @@
 //! The tab strip when more tabs are open than fit (`oHEGQ`, `YAOSy`): the tabs that do not fit leave the
-//! strip for the tab list, whose button counts them; it, the new-tab button and the drag area stay before
-//! the window controls, and the active tab always shows.
+//! strip for the menu of the button after the tabs, which counts them (lurq's window tabs in their list mode, ids
+//! by its part rule: `tab-strip-more`, its count `tab-strip-more_label`, *New tab* `tab-strip-add`); it, *New tab*
+//! and the drag area stay before the window controls, and the active tab always shows.
 
+use lurq::app::events::MouseButton;
 use orchester_app::{
   chrome::{BAR_GAP, END_RESERVE},
   navigation::Navigation,
@@ -19,9 +21,19 @@ pub fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
     .unwrap_or_else(|| panic!("{id} is laid out"))
 }
 
+/// Whether the element `id` is laid out: a tab that left the strip, and the button while none did, take no room.
 pub fn shown(window: &mut Window, id: &str) -> bool {
-  window.tree.get_element_by_id(id).is_some()
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .is_some_and(|bounds| bounds.width > 0.5)
 }
+
+/// The button of the tabs that left the strip, *New tab*, and the button's count.
+const MORE: &str = "tab-strip-more";
+const NEW_TAB: &str = "tab-strip-add";
+const COUNT: &str = "tab-strip-more_label";
 
 /// A window `width` wide with `count` labelled tabs after the first, at All projects, the last active.
 pub fn window_with(width: u32, count: usize) -> (Window, Navigation) {
@@ -94,7 +106,7 @@ pub fn whole(window: &mut Window, id: &str) -> bool {
 }
 
 #[test]
-fn a_few_tabs_show_without_the_tab_list() {
+fn a_few_tabs_show_without_the_button_of_hidden_tabs() {
   let mut window = Window::open();
   let navigation = window.navigation();
   for _ in 0..3 {
@@ -102,7 +114,7 @@ fn a_few_tabs_show_without_the_tab_list() {
     navigation.go(super::project(ProjectPage::Secrets(Default::default())));
   }
   settle(&mut window);
-  assert!(!shown(&mut window, "tab-list-button"), "no button while every tab fits");
+  assert!(!shown(&mut window, MORE), "no button while every tab fits");
   for id in tab_ids(&navigation) {
     assert!(whole(&mut window, &id), "{id} shows whole");
   }
@@ -117,7 +129,7 @@ fn many_tabs_leave_the_button_new_tab_and_drag_area_before_the_window_controls()
     "some tabs left the strip: {strip:?}"
   );
   let last = bounds(&mut window, strip.last().expect("a tab shows"));
-  let (button, new_tab) = (bounds(&mut window, "tab-list-button"), bounds(&mut window, "new-tab"));
+  let (button, new_tab) = (bounds(&mut window, MORE), bounds(&mut window, NEW_TAB));
   let end = drag_end(960.0);
   assert!(
     last.x + last.width <= button.x + 0.5,
@@ -141,7 +153,7 @@ fn many_tabs_leave_the_button_new_tab_and_drag_area_before_the_window_controls()
 fn the_button_counts_the_hidden_tabs() {
   let (mut window, navigation) = crowded_window();
   let hidden = tab_ids(&navigation).len() - in_strip(&mut window, &navigation).len();
-  assert_eq!(window.text("tab-list-count"), hidden.to_string());
+  assert_eq!(window.text(COUNT), hidden.to_string());
 }
 
 #[test]
@@ -157,7 +169,7 @@ fn inactive_tabs_stay_120_wide_and_the_active_one_keeps_its_label() {
     .rev()
     .find(|id| *id != format!("tab-{kontur}"))
     .expect("another tab shows");
-  super::press(&mut window, &other, lurq::app::events::MouseButton::Left);
+  super::press(&mut window, &other, MouseButton::Left);
   navigation.go(super::project(ProjectPage::Instructions(Default::default())));
   navigation.select(kontur);
   let active = active_id(&navigation);
@@ -196,17 +208,14 @@ fn the_active_tab_always_shows_in_the_strip() {
 #[test]
 fn resizing_the_window_recomputes_which_tabs_show() {
   let (mut window, navigation) = crowded_window();
-  assert!(shown(&mut window, "tab-list-button"));
+  assert!(shown(&mut window, MORE));
   window.tree.resize(3000, 640);
   settle(&mut window);
-  assert!(!shown(&mut window, "tab-list-button"), "every tab fits a wide window");
+  assert!(!shown(&mut window, MORE), "every tab fits a wide window");
   assert_eq!(in_strip(&mut window, &navigation), tab_ids(&navigation));
   window.tree.resize(960, 640);
   settle(&mut window);
-  assert!(
-    shown(&mut window, "tab-list-button"),
-    "and leaves again when it narrows"
-  );
+  assert!(shown(&mut window, MORE), "and leaves again when it narrows");
   assert!(shown(&mut window, &active_id(&navigation)));
 }
 
@@ -215,7 +224,7 @@ fn a_short_active_label_leaves_no_room_for_another_tab_unused() {
   let (mut window, navigation) = crowded_window();
   settle(&mut window);
   let shown_tabs = in_strip(&mut window, &navigation);
-  let new_tab = bounds(&mut window, "new-tab");
+  let new_tab = bounds(&mut window, NEW_TAB);
   let end = drag_end(960.0);
   // After New tab: the 48 of drag area.
   let left = end - (new_tab.x + new_tab.width) - 48.0;
@@ -223,4 +232,55 @@ fn a_short_active_label_leaves_no_room_for_another_tab_unused() {
     left < 120.0 + 2.0,
     "the {left} left over would hold another 120 wide tab beside {shown_tabs:?}"
   );
+}
+
+#[test]
+fn choosing_a_hidden_tab_in_the_menu_brings_it_into_the_strip() {
+  let (mut window, navigation) = crowded_window();
+  let hidden = navigation
+    .tabs_now()
+    .tabs()
+    .iter()
+    .map(|tab| tab.id())
+    .find(|id| !shown(&mut window, &format!("tab-{id}")))
+    .expect("a tab is hidden");
+  super::press(&mut window, MORE, MouseButton::Left);
+  settle(&mut window);
+  super::press(&mut window, &format!("tab-{hidden}-item"), MouseButton::Left);
+  settle(&mut window);
+  assert_eq!(navigation.tabs_now().active().id(), hidden, "the chosen tab is active");
+  assert!(whole(&mut window, &format!("tab-{hidden}")), "it shows in the strip");
+}
+
+/// The Tab that comes with Alt+Tab back into the window must not land on a tab, *New tab* or the button, where
+/// Space would open or switch a tab.
+#[test]
+fn the_strip_is_never_a_tab_stop() {
+  let (mut window, navigation) = crowded_window();
+  let strip: Vec<String> = tab_ids(&navigation)
+    .into_iter()
+    .chain([MORE.to_owned(), NEW_TAB.to_owned()])
+    .collect();
+  let focused = |window: &Window| {
+    window
+      .tree
+      .focused_element()
+      .and_then(|element| element.id().map(str::to_owned))
+  };
+  for _ in 0..40 {
+    window
+      .tree
+      .key_down("Tab".to_owned(), "Tab".to_owned(), false, false, false);
+    window
+      .tree
+      .key_up("Tab".to_owned(), "Tab".to_owned(), false, false, false);
+    settle(&mut window);
+    let at = focused(&window);
+    assert!(
+      !at.as_ref().is_some_and(|id| strip.contains(id)),
+      "Tab stopped on {at:?}"
+    );
+  }
+  super::press(&mut window, NEW_TAB, MouseButton::Left);
+  assert_ne!(focused(&window).as_deref(), Some(NEW_TAB), "nor after a press");
 }

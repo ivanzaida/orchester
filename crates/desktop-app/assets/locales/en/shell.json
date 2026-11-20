@@ -30,17 +30,9 @@
       "browserNoProject": "Open a project first: the Browser window shows one project's pages."
     },
     "tabs": {
-      "close": "Close tab",
-      "list": "All open tabs",
-      "more": {
-        "one": "{{count}} more tab",
-        "other": "{{count}} more tabs"
-      },
-      "listKeys": "Ctrl Shift A",
-      "listKeysMac": "⌘ ⇧ A",
-      "search": "Search {{count}} open tabs",
-      "clearSearch": "Clear search",
-      "noMatch": "No open tab matches “{{query}}”",
+      "strip": "Open tabs",
+      "close": "Close",
+      "hidden": "Show the hidden tabs",
       "inProject": "{{project}} · {{label}}",
       "attention": "{{project}} · {{waiting}}",
       "runnerOffline": "runner offline",

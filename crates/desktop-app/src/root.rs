@@ -28,12 +28,7 @@ use crate::{
   browser::{AutoOpen, BrowserLink},
   chrome, hang_reports, lifecycle,
   mcp::{self, McpLink, WindowLink},
-  navigation::{
-    Navigation,
-    accounts::AccountTabs,
-    input::{FirstKeys, window_input},
-    tabs::TabSet,
-  },
+  navigation::{Navigation, accounts::AccountTabs, input::window_input, tabs::TabSet},
   notifications::{Chosen, NotificationPrefs, NotificationsHost},
   open_link::{self, LinkHost},
   project::{Landing, Projects, ProjectsHost},
@@ -145,7 +140,6 @@ struct SessionWindow {
   update_ask: UpdateAsk,
   /// The closing panel's choice the keyboard moved to.
   focus: Signal<Option<lifecycle::Choice>>,
-  first_keys: FirstKeys,
   /// The one handler every Markdown of the window follows its links with.
   links: ChatLinks,
   /// Whose tabs the window shows.
@@ -195,7 +189,6 @@ impl Component for SessionWindow {
       needs_you: PanelOpen::new(ctx.signal(false)),
       update_ask: UpdateAsk::new(ctx.signal(false), ctx.signal(None)),
       focus: ctx.signal(None),
-      first_keys: FirstKeys::default(),
       notifications: NotificationPrefs::new(ctx.signal(Chosen::default())),
       accounts: WindowAccounts::new(ctx.signal(Accounts::default())),
       browser,
@@ -213,7 +206,6 @@ impl Component for SessionWindow {
     ctx.provide(self.navigation.clone());
     ctx.provide(self.links.clone());
     ctx.provide(self.projects.clone());
-    ctx.provide(self.first_keys.clone());
     ctx.provide(self.needs_you.clone());
     ctx.provide(self.update_ask.clone());
     ctx.provide(self.notifications.clone());
@@ -260,7 +252,7 @@ impl Component for SessionWindow {
       .with_children(beat)
       .child(browser)
       .child(framed);
-    window_input(&self.navigation, window.into(), (!closing, self.first_keys.clone()))
+    window_input(&self.navigation, window.into(), !closing)
       .id(WINDOW_ID)
       .on_key_down(lifecycle::keys(&services.close, &self.focus))
   }

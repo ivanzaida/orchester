@@ -4,7 +4,6 @@
 
 mod history;
 mod items;
-mod list;
 mod strip;
 #[path = "../support/mod.rs"]
 mod support;
@@ -268,7 +267,7 @@ fn the_tab_strip_opens_switches_and_closes_tabs_by_pointer() {
   let navigation = window.navigation();
   navigation.go(project(ProjectPage::Secrets(Default::default())));
   window.pass();
-  press(&mut window, "new-tab", MouseButton::Left);
+  press(&mut window, "tab-strip-add", MouseButton::Left);
   assert_eq!(navigation.tabs_now().tabs().len(), 2);
   assert_eq!(navigation.route_now(), Route::AllProjects, "the new tab is active");
   press(&mut window, "tab-1", MouseButton::Left);
