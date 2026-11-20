@@ -3,6 +3,7 @@
 //! the window controls, and the active tab always shows.
 
 use orchester_app::{
+  chrome::{BAR_GAP, END_RESERVE},
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route, TaskList},
 };
@@ -60,14 +61,11 @@ pub fn settle(window: &mut Window) {
   window.pass();
 }
 
-/// Where the window controls begin: the laid-out minimize control on Windows. lurq's macOS traffic
-/// lights carry no ids; there they take the row's last 8 and three 20.
-fn controls_left(window: &mut Window, width: f32) -> f32 {
-  if cfg!(target_os = "macos") {
-    width - 68.0
-  } else {
-    bounds(window, "window-minimize").x
-  }
+/// Where the title bar's room that drags the window ends, at the latest, in a window `width` wide whose *N need you*
+/// pill does not show: before the gap to the pill's place and the bar's end (the Windows controls; on macOS, whose
+/// lights are at the bar's start, its last gaps).
+fn drag_end(width: f32) -> f32 {
+  width - END_RESERVE - BAR_GAP
 }
 
 /// The ids of the open tabs, in order.
@@ -120,8 +118,7 @@ fn many_tabs_leave_the_button_new_tab_and_drag_area_before_the_window_controls()
   );
   let last = bounds(&mut window, strip.last().expect("a tab shows"));
   let (button, new_tab) = (bounds(&mut window, "tab-list-button"), bounds(&mut window, "new-tab"));
-  let drag = bounds(&mut window, "title-bar-drag");
-  let controls = controls_left(&mut window, 960.0);
+  let end = drag_end(960.0);
   assert!(
     last.x + last.width <= button.x + 0.5,
     "the button follows the last tab: {last:?} {button:?}"
@@ -130,11 +127,10 @@ fn many_tabs_leave_the_button_new_tab_and_drag_area_before_the_window_controls()
     button.x + button.width <= new_tab.x + 0.5,
     "and comes before New tab: {new_tab:?}"
   );
-  assert!(new_tab.x + new_tab.width <= drag.x + 0.5, "New tab shows: {drag:?}");
-  assert!(drag.width >= 48.0 - 0.5, "the drag area keeps 48: {drag:?}");
+  let drag = end - (new_tab.x + new_tab.width);
   assert!(
-    drag.x + drag.width <= controls + 0.5,
-    "the drag area ends before the controls at {controls}: {drag:?}"
+    drag >= 48.0 - 0.5,
+    "the drag area after New tab keeps 48 before {end}: {drag}"
   );
   for id in strip {
     assert!(whole(&mut window, &id), "{id} shows whole");
@@ -220,9 +216,9 @@ fn a_short_active_label_leaves_no_room_for_another_tab_unused() {
   settle(&mut window);
   let shown_tabs = in_strip(&mut window, &navigation);
   let new_tab = bounds(&mut window, "new-tab");
-  let end = controls_left(&mut window, 960.0);
-  // After New tab: the gap, the 48 of drag area and the title bar's own 4 before the controls.
-  let left = end - (new_tab.x + new_tab.width) - 2.0 - 48.0 - 4.0;
+  let end = drag_end(960.0);
+  // After New tab: the 48 of drag area.
+  let left = end - (new_tab.x + new_tab.width) - 48.0;
   assert!(
     left < 120.0 + 2.0,
     "the {left} left over would hold another 120 wide tab beside {shown_tabs:?}"

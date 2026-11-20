@@ -1,14 +1,13 @@
-//! What the title bar shows besides the window controls (`Title bar` `yZzwy`): the app menu and a
-//! divider, then the tabs in the bar's flexible middle, which ends in drag area, and the *N need you* pill
-//! before the window controls (`shell::needs_you`). A startup screen's title bar has the app menu only
-//! (`bcDe3`).
+//! What the title bar shows besides the window controls (`Title bar/Windows` `Wl7Kt`): at its start the app menu and
+//! a divider, then the tabs; the room after them drags the window; at its end the *N need you* pill
+//! (`shell::needs_you`). A startup screen's title bar has the app menu only (`WVRwk`).
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{ChromeTitleBar, Row},
+  components::Row,
   layout::Alignment,
   node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
 };
@@ -19,7 +18,7 @@ use super::{
 };
 use crate::{shell::needs_you::NeedsYouPill, theme::ExtraSpacing};
 
-/// The line between the app menu and the tabs (`Divider` `pE6GJ`).
+/// The line between the app menu and the tabs (`Divider` `dVhLf`).
 const DIVIDER_HEIGHT: f32 = 16.0;
 
 /// What the title bar holds besides the window controls.
@@ -31,21 +30,9 @@ pub enum Bar {
   Menu,
 }
 
-/// `bar` with what `kind` holds, and `lights` (the macOS window controls) at its end; `closing` while the closing
-/// panel holds the window, when the menu and the pill do not react either.
-pub fn content(
-  ctx: &mut Ctx,
-  bar: ChromeTitleBar,
-  (kind, closing): (Bar, bool),
-  lights: Option<Element>,
-) -> ChromeTitleBar {
-  let ends = |bar: ChromeTitleBar, leading: Row| {
-    let bar = bar.leading(leading);
-    match lights.clone() {
-      Some(lights) => bar.trailing(lights),
-      None => bar,
-    }
-  };
+/// The bar's leading part and its trailing one for what `kind` holds; `closing` while the closing panel holds the
+/// window, when the menu and the pill do not react either.
+pub fn content(ctx: &mut Ctx, (kind, closing): (Bar, bool)) -> (Element, Option<Element>) {
   let inert = if closing {
     HitTestBehavior::None
   } else {
@@ -61,19 +48,14 @@ pub fn content(
         .child(ctx.mount_keyed::<AppMenu>("app-menu", ())),
     );
   if kind == Bar::Menu {
-    return ends(bar, menu);
+    return (menu.into(), None);
   }
   let line = ctx.theme().border_size_value(BorderSize::Sm);
   // The tabs leave the pill the room it took when it was laid out last.
   let pill = ctx.element_ref();
-  // The bar's 4 between the pill's room and the window controls (`DL8Xp` in `VnLOT`): the macOS lights are
-  // ours, the Windows controls the bar's own, after its trailing part.
-  let trailing = match lights {
-    Some(_) => Row::new().spacing(SpacingSize::Xs),
-    None => Row::new().padding(Padding::new().right(SpacingSize::Xs)),
-  };
-  bar
-    .leading(
+  let leading = Row::new()
+    .align_items(Alignment::Center)
+    .child(
       menu.child(
         Row::new()
           .width(Dimension::Px(line))
@@ -81,21 +63,15 @@ pub fn content(
           .background(PaletteColor::Border),
       ),
     )
-    .center(ctx.mount_keyed::<TabStrip>(
+    .child(ctx.mount_keyed::<TabStrip>(
       "tab-strip",
       TabStripProps {
         pill: PillRef(pill.clone()),
         closing,
       },
-    ))
-    .trailing(
-      trailing
-        .align_items(Alignment::Center)
-        .child(
-          Row::new()
-            .hit_test(inert)
-            .child(ctx.mount_keyed::<NeedsYouPill>("needs-you", PillRef(pill))),
-        )
-        .with_children(lights),
-    )
+    ));
+  let trailing = Row::new()
+    .hit_test(inert)
+    .child(ctx.mount_keyed::<NeedsYouPill>("needs-you", PillRef(pill)));
+  (leading.into(), Some(trailing.into()))
 }

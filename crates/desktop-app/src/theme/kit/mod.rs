@@ -13,6 +13,7 @@ mod segmented;
 pub mod spinner;
 mod status_label;
 mod trigger;
+mod window_chrome;
 
 use lurq::app::theme::Theme;
 
@@ -28,4 +29,5 @@ pub(super) fn install(theme: &Theme) {
   spinner::install(theme);
   status_label::install(theme);
   trigger::install(theme);
+  window_chrome::install(theme);
 }

@@ -193,9 +193,8 @@ impl Component for BrowserRoot {
     self.keep_ticking(&showing, now);
     self.focus_address(ctx, &showing);
     let body = self.body(ctx, &showing);
-    chrome::secondary(ctx, body, |ctx, bar, lights| {
-      title_bar::content(ctx, bar, lights, &showing)
-    })
+    let leading = title_bar::content(ctx, &showing);
+    chrome::secondary(ctx, body, leading)
   }
 }
 

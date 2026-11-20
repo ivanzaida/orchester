@@ -1,6 +1,8 @@
-//! The custom window chrome (`Title bar` `yZzwy` of `q9mf0k`): the title bar with the app menu and the
-//! tabs, the window controls, and the window's frame. The operating system's title bar and border are not shown; the
-//! empty parts of the title bar drag the window and maximize it on a double-click.
+//! The window's chrome (`Title bar` `U9Nvc4`): lurq's `ui::WindowChrome` with the app menu and the tabs in its title
+//! bar, the window's controls in the platform's order (Windows' at the end, the macOS lights at the start), and the
+//! window's frame. The operating system's title bar and border are not shown; the bar's room the app's parts leave
+//! drags the window and maximizes it on a double-click. The bar's close control and the macOS close light ask the
+//! window to close, as the system's close does, and the window's close handler holds any of them (`lifecycle`).
 
 mod app_menu;
 pub mod tab_fit;
@@ -9,34 +11,46 @@ mod tab_list;
 mod tab_measure;
 mod tab_strip;
 mod title_bar;
-mod traffic_lights;
-
-use std::sync::Arc;
 
 use lurq::{
   app::{
     component::Component,
     ctx::Ctx,
-    events::MouseEvent,
     theme::{BorderSize, PaletteColor},
   },
-  components::{
-    ChromeBorderPolicy, ChromeTitleBar, Row, Text, WindowChrome, WindowChromeMode, WindowChromeProps,
-    WindowControlContent, WindowControlKind, WindowControlStyle, WindowControls,
-  },
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, HitTestBehavior, TextColor, dimension::Dimension},
+  components::{ChromeBorderPolicy, Row, WindowChromeMode},
+  node::{Element, HitTestBehavior, dimension::Dimension},
+  ui::{WindowChrome, WindowControls},
 };
 
 pub use self::{tab_strip::PillRef, title_bar::Bar};
-use crate::{
-  services::Services,
-  theme::{ExtraColor, ExtraRadius, IconSize},
-  ui::icon::{Icon, glyph as icon_glyph},
-};
+use crate::theme::ExtraRadius;
 
 /// `Title bar` height, on Windows and macOS alike: what the content's top is under.
 pub const TITLE_BAR_HEIGHT: f32 = 36.0;
+/// The room between the bar's parts (`Gap` `gwMHL`).
+pub const BAR_GAP: f32 = 8.0;
+/// A Windows control's width (`Minimize` `F195WT`).
+pub const CONTROL_WIDTH: f32 = 46.0;
+
+/// The bar's id: its controls are `window-minimize`, `window-maximize` (named *Restore* while the window is maximized)
+/// and `window-close`, on macOS the lights' places.
+const BAR_ID: &str = "window";
+
+/// The room the bar takes before the app's leading part: none on Windows; on macOS the lights, 12 in, three 12 wide
+/// lights 8 apart, and the gap after them.
+#[cfg(not(target_os = "macos"))]
+pub const LEAD_IN: f32 = 0.0;
+#[cfg(target_os = "macos")]
+pub const LEAD_IN: f32 = 12.0 + 3.0 * 12.0 + 2.0 * BAR_GAP + BAR_GAP;
+
+/// The room the bar takes after the app's leading part besides the room that drags the window and the trailing part:
+/// on Windows the gap and the three controls; on macOS the gaps before and after the drag room (the bar ends at the
+/// app's own part).
+#[cfg(not(target_os = "macos"))]
+pub const END_RESERVE: f32 = BAR_GAP + 3.0 * CONTROL_WIDTH;
+#[cfg(target_os = "macos")]
+pub const END_RESERVE: f32 = 2.0 * BAR_GAP;
 
 /// The window around `screen`, with the tabs in its title bar; `closing` while the closing panel holds
 /// the window.
@@ -45,75 +59,49 @@ pub fn chrome(ctx: &mut Ctx, screen: Element, closing: bool) -> Element {
 }
 
 /// The window around a startup screen: its title bar has the app menu and the window controls only
-/// (`Title bar` `bcDe3` of `N0Lpc`).
+/// (`Title bar` `WVRwk` of `Window/Signed out`).
 pub fn bare(ctx: &mut Ctx, screen: Element) -> Element {
   window(ctx, screen, Bar::Menu, false)
 }
 
 fn window(ctx: &mut Ctx, screen: Element, kind: Bar, closing: bool) -> Element {
-  let close = close(ctx);
-  framed(ctx, screen, close, |ctx, bar, lights| {
-    title_bar::content(ctx, bar, (kind, closing), lights)
-  })
+  let (leading, trailing) = title_bar::content(ctx, (kind, closing));
+  framed(ctx, screen, leading, trailing)
 }
 
-/// A secondary window around `screen` (the Browser window), its title bar's content from `content`, given the bar
-/// with the window controls and on macOS the traffic lights. Its close controls close only this window, as the
-/// system's close does.
-pub fn secondary(
-  ctx: &mut Ctx,
-  screen: Element,
-  content: impl FnOnce(&mut Ctx, ChromeTitleBar, Option<Element>) -> ChromeTitleBar,
-) -> Element {
-  let window = ctx.window();
-  framed(ctx, screen, Arc::new(move || window.request_close()), content)
+/// A secondary window around `screen` (the Browser window), `leading` at the start of its title bar. Its close
+/// controls ask this window to close, as the system's close does.
+pub fn secondary(ctx: &mut Ctx, screen: Element, leading: Element) -> Element {
+  framed(ctx, screen, leading, None)
 }
 
-fn framed(
-  ctx: &mut Ctx,
-  screen: Element,
-  close: Close,
-  content: impl FnOnce(&mut Ctx, ChromeTitleBar, Option<Element>) -> ChromeTitleBar,
-) -> Element {
-  let controls = controls(ctx, &close);
-  let lights = cfg!(target_os = "macos")
-    .then(|| ctx.mount_keyed::<traffic_lights::TrafficLights>("traffic-lights", traffic_lights::LightsProps(close)));
-  let bar = ChromeTitleBar::new()
-    .background(PaletteColor::Background)
-    .border_bottom(None)
-    .controls(controls);
+fn framed(ctx: &mut Ctx, screen: Element, leading: Element, trailing: Option<Element>) -> Element {
   let outline = ctx.mount_keyed::<WindowOutline>("window-outline", ());
-  let title_bar = content(ctx, bar, lights);
-  WindowChrome::new()
-    .props(
-      WindowChromeProps::new()
-        .mode(WindowChromeMode::CustomDesktop)
-        // lurq's border is four straight strips, which the rounded corners would cut; `WindowOutline`
-        // draws the frame instead.
-        .border(ChromeBorderPolicy::Hidden)
-        .windows_height(TITLE_BAR_HEIGHT)
-        .macos_height(TITLE_BAR_HEIGHT),
-    )
-    .title_bar(title_bar)
+  let chrome = WindowChrome::new()
+    .id(BAR_ID)
+    .icon(None)
+    .mode(WindowChromeMode::CustomDesktop)
+    // lurq's border is four straight strips, which the rounded corners would cut; `WindowOutline` draws the frame
+    // instead.
+    .border(ChromeBorderPolicy::Hidden)
+    .controls(controls(ctx))
+    .leading(leading)
     .content(screen)
-    .overlay(outline)
-    .mount(ctx)
+    .overlay(outline);
+  match trailing {
+    Some(trailing) => chrome.trailing(trailing),
+    None => chrome,
+  }
+  .mount(ctx)
 }
 
-/// What the window's own close controls do: ask to close, as the system's close does.
-pub(super) type Close = Arc<dyn Fn() + Send + Sync>;
-
-/// The close of a started session goes to its close flow, which may hold it (`lifecycle`) and closes the
-/// window once it may; a startup screen's window closes as the system asks.
-fn close(ctx: &mut Ctx) -> Close {
-  let window = ctx.window();
-  match ctx.use_context::<Services>() {
-    Some(services) => Arc::new(move || {
-      let window = window.clone();
-      services.close.request(move || window.close());
-    }),
-    None => Arc::new(move || window.request_close()),
-  }
+/// The window's controls, named in the app's words.
+fn controls(ctx: &mut Ctx) -> WindowControls {
+  WindowControls::new()
+    .minimize_label(&ctx.t("shell.window.minimize"))
+    .maximize_label(&ctx.t("shell.window.maximize"))
+    .restore_label(&ctx.t("shell.window.restore"))
+    .close_label(&ctx.t("shell.window.close"))
 }
 
 /// The window's 1px frame (the `border_strong` stroke of the window frames), rounded like the window's
@@ -139,89 +127,4 @@ impl Component for WindowOutline {
       .rounded(ExtraRadius::Window.role())
       .border_inside(BorderSize::Sm, PaletteColor::Input)
   }
-}
-
-/// The Windows controls (`Window controls` `i3Ckir`): lucide glyphs in `text_secondary`, the `hover` and
-/// `pressed` overlays. The design gives the close control no color of its own, so it hovers like the
-/// others. Each control's content fills it and carries an id and a name for agents. lurq's close control
-/// closes the window outright after its handler; the close control's content takes the press first and
-/// asks to close instead, which the window's close flow can hold (`lifecycle`). On macOS lurq's traffic
-/// lights have the same forced close and no content of their own, so the app draws them
-/// ([`traffic_lights`]) and lurq's are hidden.
-fn controls(ctx: &mut Ctx, close: &Close) -> WindowControls {
-  let style = if cfg!(target_os = "macos") {
-    WindowControlStyle::Hidden
-  } else {
-    WindowControlStyle::Windows
-  };
-  let mut controls = WindowControls::new()
-    .style(style)
-    .foreground(ExtraColor::TextSecondary.role())
-    .hover_background(ExtraColor::Hover.role())
-    .active_background(ExtraColor::Pressed.role());
-  for (kind, id, name_key, glyph, size) in [
-    (
-      WindowControlKind::Minimize,
-      "window-minimize",
-      "shell.window.minimize",
-      Icon::Minus,
-      IconSize::Md,
-    ),
-    (
-      WindowControlKind::Maximize,
-      "window-maximize",
-      "shell.window.maximize",
-      Icon::Square,
-      IconSize::Sm,
-    ),
-    (
-      WindowControlKind::Restore,
-      "window-restore",
-      "shell.window.restore",
-      Icon::Copy,
-      IconSize::Sm,
-    ),
-    (
-      WindowControlKind::Close,
-      "window-close",
-      "shell.window.close",
-      Icon::X,
-      IconSize::Md,
-    ),
-  ] {
-    let name = ctx.t(name_key);
-    let press = (kind == WindowControlKind::Close).then(|| close.clone());
-    controls = controls.content(kind, control(id, name, (glyph, size), press));
-  }
-  controls
-}
-
-/// A control's content; the close control's (`close`) asks the window to close.
-fn control(
-  id: &'static str,
-  name: Arc<str>,
-  (glyph, size): (Icon, IconSize),
-  close: Option<Close>,
-) -> WindowControlContent {
-  let glyph = icon_glyph(glyph);
-  WindowControlContent::element(move |color: TextColor| {
-    let content = Row::new()
-      .id(id)
-      .describe("a11y_name", name.clone())
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .align_items(Alignment::Center)
-      .justify(Justify::Center)
-      .child(Text::new(&glyph).variant(size.role()).color(color));
-    match close.clone() {
-      Some(close) => content
-        .on_click(move |event: MouseEvent| {
-          close();
-          event.prevent_default();
-          event.stop_immediate_propagation();
-        })
-        .into(),
-      None => content.into(),
-    }
-  })
 }

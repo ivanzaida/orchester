@@ -6,7 +6,10 @@
 //! before *New tab*. The tabs that stay are the longest run from the left that fits beside the active
 //! one; an active tab out of that run takes the last place after it.
 
-use crate::theme::ExtraSpacing;
+use crate::{
+  chrome::{BAR_GAP, END_RESERVE, LEAD_IN},
+  theme::ExtraSpacing,
+};
 
 /// A tab at the window's home but the active one at All projects (`Tab/Home` `qqzuJ`): the folders icon alone.
 pub const ICON_TAB_WIDTH: f32 = 28.0;
@@ -34,17 +37,13 @@ const BADGE_DIGIT_WIDTH: f32 = 11.5 * 0.62;
 /// 12 chevron and 6 after that; a digit of the count in Geist Mono 11 is 0.6 em.
 const BUTTON_CHROME_WIDTH: f32 = 8.0 + 4.0 + 12.0 + 6.0;
 const COUNT_DIGIT_WIDTH: f32 = 11.0 * 0.6;
-/// The window controls: Windows' three 46 wide; lurq's macOS traffic lights, 8 and three 20 wide.
-#[cfg(not(target_os = "macos"))]
-const CONTROLS_WIDTH: f32 = 3.0 * 46.0;
-#[cfg(target_os = "macos")]
-const CONTROLS_WIDTH: f32 = 8.0 + 3.0 * 20.0;
-/// The *N need you* pill and the room after it as the design draws it (`Trailing` `AqLkT`), for while the
-/// pill shows but has not been laid out yet.
+/// The *N need you* pill and the gap before it as the design draws it (`Needs you` `v2g7Gc`), for while the pill
+/// shows but has not been laid out yet.
 pub const NEEDS_YOU_WIDTH: f32 = 106.0;
-/// What the title bar takes besides the tabs and the *N need you* pill: the app menu and divider (61),
-/// the strip's start (8), *New tab* with its gaps (30), the drag area and the window controls.
-const TITLE_BAR_RESERVE: f32 = 61.0 + 8.0 + 30.0 + MIN_DRAG_WIDTH + CONTROLS_WIDTH;
+/// What the title bar takes besides the tabs and the *N need you* pill: the bar's start ([`LEAD_IN`]: the macOS
+/// lights), the app menu and divider (61), the strip's start (8), *New tab* with its gaps (30), the drag area, the gap
+/// before the pill's place and the bar's end ([`END_RESERVE`]: the Windows controls).
+const TITLE_BAR_RESERVE: f32 = LEAD_IN + 61.0 + 8.0 + 30.0 + MIN_DRAG_WIDTH + BAR_GAP + END_RESERVE;
 
 /// What a tab shows besides its label.
 #[derive(Clone, Copy, Debug, PartialEq)]

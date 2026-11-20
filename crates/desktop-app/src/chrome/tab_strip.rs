@@ -11,7 +11,7 @@
 //! The OS window title is the active tab's label and the app's name. A tab whose task form holds edits
 //! that are not saved ends its label in a 6 `text_secondary` dot (`Dirty` `TfKtF` in `Fd1ai`).
 //!
-//! The strip sits in the title bar's flexible middle and shares its room as `tab_fit` says; the tabs that
+//! The strip follows the app menu at the title bar's start and shares the bar's room as `tab_fit` says; the tabs that
 //! do not fit are only in the tab list (`tab_list`), whose button follows the last tab that shows. The
 //! active tab takes the room it was laid out at (`tab_measure`). *New tab* is for the pointer only, never a Tab
 //! stop: the Tab that comes with Alt+Tab back into the window must not land on it, where Space would open a tab.
@@ -30,7 +30,7 @@ use lurq::{
 };
 
 use super::{
-  tab_fit::{self, DOT_WIDTH, Fit, ICON_TAB_WIDTH, MIN_DRAG_WIDTH, Slot},
+  tab_fit::{self, DOT_WIDTH, Fit, ICON_TAB_WIDTH, Slot},
   tab_label::{attention, close_button, label, mark_width, tab_icon, unsaved},
   tab_list::{TabList, TabListProps},
   tab_measure::{ActiveKey, ActiveWidth, ListHold},
@@ -151,20 +151,11 @@ impl Component for TabStrip {
       .child(strip)
       .with_children(list)
       .child(new_tab(ctx, navigation));
+    // The bar's room after the strip drags the window: `tab_fit` leaves it at least `MIN_DRAG_WIDTH`.
     Row::new()
-      .width(Dimension::Pct(100.0))
       .padding(Padding::new().left(SpacingSize::Sm))
-      .spacing(ExtraSpacing::Tight.role())
       .align_items(Alignment::Center)
       .child(tabs)
-      // The drag area: the 48 that always stay, then whatever the tabs leave.
-      .child(
-        Row::new()
-          .id("title-bar-drag")
-          .width(Dimension::Px(MIN_DRAG_WIDTH))
-          .height(Dimension::Px(TAB_HEIGHT)),
-      )
-      .child(Row::new().flex(1.0))
   }
 }
 
