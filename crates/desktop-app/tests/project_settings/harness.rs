@@ -191,7 +191,7 @@ impl Settings {
         .and_then(|element| element.bounds())
         .unwrap_or_else(|| panic!("{id} is laid out"))
     };
-    let (track, knob) = (bounds(format!("{id}-mark")), bounds(format!("{id}-knob")));
+    let (track, knob) = (bounds(format!("{id}-track")), bounds(format!("{id}-thumb")));
     knob.x - track.x > track.width / 2.0 - knob.width / 2.0
   }
   /// The reviewer's model as auto mode stores it; empty while none is chosen. The page says it in its (i).

@@ -21,7 +21,7 @@ fn on(window: &mut Window) -> bool {
 /// Whether the switch `switch` shows on, once it is drawn: while its setting reads, a bone stands in its place
 /// (ORC-110).
 fn switch_on(window: &mut Window, switch: &str) -> bool {
-  let mark = format!("{switch}-mark");
+  let mark = format!("{switch}-track");
   window.until("the switch drawn", |window| {
     window
       .tree
@@ -35,7 +35,7 @@ fn switch_on(window: &mut Window, switch: &str) -> bool {
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
   };
-  let (track, knob) = (bounds(format!("{switch}-mark")), bounds(format!("{switch}-knob")));
+  let (track, knob) = (bounds(format!("{switch}-track")), bounds(format!("{switch}-thumb")));
   knob.x - track.x > track.width / 2.0 - knob.width / 2.0
 }
 
