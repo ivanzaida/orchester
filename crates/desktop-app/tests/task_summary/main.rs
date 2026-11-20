@@ -391,7 +391,7 @@ fn summary_run_again_confirms_in_place_and_starts_the_next_run() {
   let key = confirming_run_again(&mut page);
   let title = page.text("task-run-again-title");
   assert!(title.starts_with(&format!("Run {key} again as run #")), "{title}");
-  assert_eq!(page.text("task-run-again-starts"), "Implement · its only step");
+  assert_eq!(page.text("task-run-again-starts-value"), "Implement · its only step");
   // Switching tabs keeps it open.
   page.click("task-tab-conversation");
   page.wait("the Conversation tab", |window| {

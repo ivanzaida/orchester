@@ -363,7 +363,7 @@ fn decision_raise_reads_back_the_new_limit_and_asks_the_runner() {
   page.set("raise-limit-input", "");
   page.until_says("raise-limit-input-note", "Enter a token budget.");
   assert!(page.has("raise-limit-tokens-by-step"));
-  assert_eq!(page.text("raise-limit-step-research"), "40k tokens · Explorer");
+  assert_eq!(page.text("raise-limit-step-research-value"), "40k tokens · Explorer");
 }
 
 #[test]

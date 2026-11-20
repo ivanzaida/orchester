@@ -1,18 +1,10 @@
-//! Detail row (`Detail row` `paUqV`): what a value is in 12 `text_muted` in a 108 column, and the value
-//! 12 after it in 12/1.45 `text_primary`, wrapping; 5 over and under them. An identifier's value is in
-//! Geist Mono (`Branch` `YHJhy`).
+//! Detail row (`Detail row` `paUqV`): lurq's `ui::DataList` of one item in the kit's recipe
+//! (`theme::kit::detail_row`): what a value is in 12 `text_muted` in a 108 column, and the value 12 after it in
+//! 12/1.45 `text_primary`, wrapping; 5 over and under them. An identifier's value is in Geist Mono (`Branch` `YHJhy`).
 
-use lurq::{
-  app::theme::{PaletteColor, SpacingSize, TypographyStyle},
-  components::{Row, Text},
-  layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
-};
+use lurq::{layout::Alignment, node::Element, ui::DataList};
 
-use crate::theme::{ExtraSpacing, ExtraTypography};
-
-/// The key column (`rtxjz`).
-const KEY_WIDTH: f32 = 108.0;
+use crate::theme::kit::detail_row::MONO;
 
 /// How a detail's value is set.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -23,34 +15,18 @@ pub enum DetailValue {
   Mono,
 }
 
-/// `key` and its `value`; the value's element id is `id`, the key's `<id>-key`.
-pub fn detail_row(id: &str, key: &str, value: &str, kind: DetailValue) -> Row {
-  let typography = match kind {
-    DetailValue::Text => ExtraTypography::Prose.role(),
-    DetailValue::Mono => TypographyStyle::Mono,
-  };
-  let value = Text::new(value)
-    .id(id.to_owned())
-    .variant(typography)
-    .color(PaletteColor::Foreground)
-    .flex(1.0);
-  detail_row_of(id, key, value)
+/// `key` and its `value`; the row's element id is `id`, the key's `<id>-term` and the value's `<id>-value`.
+pub fn detail_row(id: &str, key: &str, value: &str, kind: DetailValue) -> DataList {
+  list(id).state(MONO, kind == DetailValue::Mono).text(key, value)
 }
 
 /// `key` beside a value of more than one line or style, e.g. a lead line over the value (`Detail ·
-/// Permissions` `Up8y8`); the key's element id is `<id>-key`, and `value` takes the rest of the row.
-pub fn detail_row_of(id: &str, key: &str, value: impl Into<Element>) -> Row {
-  Row::new()
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::vertical(ExtraSpacing::Pair.role()))
-    .spacing(SpacingSize::Md)
-    .align_items(Alignment::Start)
-    .child(
-      Text::new(key)
-        .id(format!("{id}-key"))
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::MutedForeground)
-        .width(Dimension::Px(KEY_WIDTH)),
-    )
-    .child(value)
+/// Permissions` `Up8y8`); the key's element id is `<id>-term`, and `value` takes the rest of the row.
+pub fn detail_row_of(id: &str, key: &str, value: impl Into<Element>) -> DataList {
+  list(id).item(key, value)
+}
+
+/// The key at the top of a value that wraps.
+fn list(id: &str) -> DataList {
+  DataList::new().id(id.to_owned()).align(Alignment::Start)
 }

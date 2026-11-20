@@ -16,6 +16,7 @@ use lurq::{
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
+  ui::DataList,
 };
 use orchester_core::run::{
   Answerer, CameToPerson, NativeCommandAsk, PendingToolApproval, PersonReason, denial_message,
@@ -262,7 +263,7 @@ fn facts(
 
 /// What else a native agent's command asks with (04.H9): the shell its string goes to, or none, and how long it may
 /// run before Orchester stops it.
-fn native_rows(ctx: &Ctx, id: &str, native: NativeCommandAsk) -> [Row; 2] {
+fn native_rows(ctx: &Ctx, id: &str, native: NativeCommandAsk) -> [DataList; 2] {
   let shell = match native.shell {
     Some(shell) => ctx.t_args(
       "cards.approval.shellValue",
