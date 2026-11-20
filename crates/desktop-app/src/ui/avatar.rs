@@ -8,9 +8,8 @@ use lurq::{
   components::{Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{border::Border, dimension::Dimension},
+  ui::Avatar,
 };
-
-use lurq::ui::Avatar;
 
 use super::icon::{Icon, icon};
 use crate::theme::{ExtraColor, IconSize, kit};

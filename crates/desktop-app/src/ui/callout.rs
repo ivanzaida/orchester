@@ -1,12 +1,12 @@
-//! Callout, lurq's `ui::Callout` in the theme's recipe (`theme::kit::callout`) (`Callout · …` in Settings › Orchester, *Connect a server* and Project settings › Sharing: `naoei`,
-//! `Gbag9`, `wwtNM`, `tCSh6`): a 16 icon, a title in 13/600 `text_primary` with its explanation 4 under it in 12.5
-//! `text_secondary`, 12 apart; radius 10, 14 over and under and 16 at its sides, on its tone's fill with no stroke
-//! (the design names a tone stroke without a thickness, which draws none). Information is `info_muted` with an
-//! `info` icon (`Gbag9`), a neutral fact `hover` with a `text_muted` icon (`wwtNM`), a warning `warning_muted`
-//! (`naoei`), a failure `danger_muted` (`fztvy`) and a success `success_muted` (`ICcO5`), each with its tone's icon.
-//! An action goes under the explanation (`Open Orchester Cloud` in `JsrLB`); a quieter line in `text_muted` can follow
-//! it (*… didn't answer · 14:31*, `SWg68` in `i8HD8`), and so can parts of its own (*While signed out* `Qkpc2` in
-//! `ztigw`).
+//! Callout, lurq's `ui::Callout` in the theme's recipe (`theme::kit::callout`) (`Callout · …` in Settings › Orchester,
+//! *Connect a server* and Project settings › Sharing: `naoei`, `Gbag9`, `wwtNM`, `tCSh6`): a 16 icon, a title in 13/600
+//! `text_primary` with its explanation 4 under it in 12.5 `text_secondary`, 12 apart; radius 10, 14 over and under and
+//! 16 at its sides, on its tone's fill with no stroke (the design names a tone stroke without a thickness, which draws
+//! none). Information is `info_muted` with an `info` icon (`Gbag9`), a neutral fact `hover` with a `text_muted` icon
+//! (`wwtNM`), a warning `warning_muted` (`naoei`), a failure `danger_muted` (`fztvy`) and a success `success_muted`
+//! (`ICcO5`), each with its tone's icon. An action goes under the explanation (`Open Orchester Cloud` in `JsrLB`); a
+//! quieter line in `text_muted` can follow it (*… didn't answer · 14:31*, `SWg68` in `i8HD8`), and so can parts of its
+//! own (*While signed out* `Qkpc2` in `ztigw`).
 
 use std::sync::Arc;
 

@@ -8,7 +8,7 @@
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, SpacingSize, Theme, TypographyStyle},
-  node::border::Border,
+  node::{CursorIcon, border::Border},
   ui::{Badge, BadgePart, Length, Recipe, Tag, TagPart, TagState},
 };
 
@@ -50,7 +50,10 @@ fn tag() -> Recipe {
     .base(TagPart::Label, |style| style.typography(TypographyStyle::FieldLabel))
     .base(TagPart::Icon, |style| style.square(icon))
     .base(TagPart::Remove, |style| {
-      style.square(icon).foreground(PaletteColor::MutedForeground)
+      style
+        .square(icon)
+        .foreground(PaletteColor::MutedForeground)
+        .cursor(CursorIcon::Pointer)
     })
     .base(TagPart::RemoveIcon, |style| style.square(icon))
     .state(TagState::Remove, TagPart::Root, |style| {
