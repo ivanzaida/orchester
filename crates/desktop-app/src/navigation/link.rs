@@ -39,7 +39,8 @@ pub fn keeps_middle_click(button: Button) -> Button {
     .on_mouse_click(MouseButton::Middle, |event: MouseEvent| event.stop_propagation())
 }
 
-fn follow(open: &Open, event: &MouseEvent) {
+/// Opens `open`'s place where `event` asks, the press its own.
+pub(crate) fn follow(open: &Open, event: &MouseEvent) {
   event.stop_propagation();
   if let Some(at) = LinkPress::of(event).open_in() {
     open(at);

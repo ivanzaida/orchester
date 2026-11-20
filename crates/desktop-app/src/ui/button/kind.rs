@@ -26,7 +26,7 @@ pub enum ButtonKind {
 }
 
 impl ButtonKind {
-  pub(super) const fn name(self) -> &'static str {
+  pub const fn name(self) -> &'static str {
     match self {
       Self::Primary => "primary",
       Self::Secondary => "secondary",
@@ -38,7 +38,7 @@ impl ButtonKind {
   }
 
   /// The color of the icon and the label.
-  pub(super) fn content(self) -> PaletteColor {
+  pub fn content(self) -> PaletteColor {
     match self {
       Self::Primary => ExtraColor::OnAccent.role(),
       Self::Secondary | Self::Select => PaletteColor::Foreground,
@@ -80,4 +80,66 @@ impl ButtonKind {
         .active_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))),
     }
   }
+}
+
+/// How high a button is, with the room at its sides and the size of its label: a size of the theme's recipe of
+/// lurq's `ui::Button` (`theme::kit::button`), apart from lurq's own sizes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonSize {
+  /// 28 high, 12 at each side.
+  Regular,
+  /// As high as a heading's line (`Hfjkt`).
+  Heading,
+  /// 22 high with a note-size label (`ZdkB0`).
+  Helper,
+  /// 24 high (`PEnj5`).
+  Small,
+  /// 26 high (`SYiTG`).
+  Snug,
+  /// 30 high (`psiyx`).
+  Pinned,
+  /// 36 high with a 13/500 label, 14 at each side, 16 for a primary one (`rDzhV`, `fZDtO`).
+  Large,
+}
+
+impl ButtonSize {
+  pub const ALL: [Self; 7] = [
+    Self::Regular,
+    Self::Heading,
+    Self::Helper,
+    Self::Small,
+    Self::Snug,
+    Self::Pinned,
+    Self::Large,
+  ];
+
+  pub const fn name(self) -> &'static str {
+    match self {
+      Self::Regular => "regular",
+      Self::Heading => "heading",
+      Self::Helper => "helper",
+      Self::Small => "small",
+      Self::Snug => "snug",
+      Self::Pinned => "pinned",
+      Self::Large => "large",
+    }
+  }
+}
+
+/// The states of a button the theme's recipe names, beside lurq's `disabled`, `loading` and `full_width`.
+pub mod state {
+  /// 10 at each side instead of 12 (`SHKod`).
+  pub const TIGHT: &str = "tight";
+  /// Large and not primary, with a primary's room at each side.
+  pub const ROOMY: &str = "roomy";
+  /// Drawn as it is, but it no longer takes a press.
+  pub const SHOWN: &str = "shown";
+  /// Drawn pressed while what it opened shows.
+  pub const HELD: &str = "held";
+  /// The menu it opened shows.
+  pub const MENU_OPEN: &str = "menu_open";
+  /// What it sets applies something now.
+  pub const APPLIED: &str = "applied";
+  /// What it holds is refused.
+  pub const INVALID: &str = "invalid";
 }
