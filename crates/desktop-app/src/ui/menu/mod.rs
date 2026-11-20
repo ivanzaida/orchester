@@ -106,12 +106,7 @@ impl MenuPanel {
   fn fill(self, menu: ui::Menu) -> ui::Menu {
     let mut menu = menu.id(self.id);
     for entry in self.entries {
-      menu = match entry {
-        ui::MenuEntry::Item(item) => menu.item(item),
-        ui::MenuEntry::Separator => menu.separator(),
-        ui::MenuEntry::Heading(heading) => menu.heading(&heading),
-        ui::MenuEntry::Element(element) => menu.child(element),
-      };
+      menu = menu.entry(entry);
     }
     if let Some(rules) = &self.rules {
       menu = menu.rules(rules);
