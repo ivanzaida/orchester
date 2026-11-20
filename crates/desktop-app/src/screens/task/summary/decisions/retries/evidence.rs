@@ -108,7 +108,7 @@ fn report(ctx: &mut Ctx, run: &RunView, failed: &StepKey) -> Option<[Element; 2]
     .style(DecisionText::Report.role(), PaletteColor::Foreground)
     .render(ctx);
   let body = card("task-retry-report", CardSurface::Raised)
-    .spacing(SpacingSize::Sm)
+    .gap(SpacingSize::Sm)
     .child(who)
     .child(text);
   Some([head.into(), body.into()])

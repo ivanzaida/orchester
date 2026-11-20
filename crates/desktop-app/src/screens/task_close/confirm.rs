@@ -97,7 +97,7 @@ fn stop_run(
     stop.on_click(move || closer.run(Request::Close(task.clone(), closing, Stop::Confirmed(Some(run)))))
   };
   card(&format!("{id}-stop"), surface)
-    .spacing(SpacingSize::Md)
+    .gap(SpacingSize::Md)
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -113,7 +113,7 @@ fn stop_run(
             .variant(ExtraTypography::Prose.role()),
         ),
     )
-    .with_children(error)
+    .children(error)
     .child(actions(format!("{id}-stop-actions"), [keep.into(), stop.into()]))
     .into()
 }

@@ -159,7 +159,7 @@ fn files(ctx: &mut Ctx, presses: &Presses, resolution: &Resolution) -> Element {
     .collect();
   let list = card("task-resolving-files", CardSurface::Outline)
     .padding(Padding::symmetric(ExtraSpacing::Snug.role(), ExtraSpacing::Hair.role()))
-    .with_children(rows);
+    .children(rows);
   Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())

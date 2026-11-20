@@ -46,7 +46,7 @@ fn instructions_publication_failure_is_inset_with_retry_below_text_and_retains_d
   assert_eq!(screen.text("instruction-write-error-title"), "v2 was not published");
   assert!(
     screen
-      .text("instruction-write-error-body")
+      .text("instruction-write-error-description")
       .contains("Your draft v2 is kept, and new runs still get v1.")
   );
   assert!(
@@ -57,7 +57,7 @@ fn instructions_publication_failure_is_inset_with_retry_below_text_and_retains_d
   let bar = bounds(&mut screen, "instruction-save");
   let notice = bounds(&mut screen, "instruction-write-error");
   let title = bounds(&mut screen, "instruction-write-error-title");
-  let explanation = bounds(&mut screen, "instruction-write-error-body");
+  let explanation = bounds(&mut screen, "instruction-write-error-description");
   let glyph = bounds(&mut screen, "instruction-write-error-icon");
   let retry = bounds(&mut screen, "instruction-retry");
   close(notice.x, bar.x);

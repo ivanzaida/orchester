@@ -149,18 +149,18 @@ impl Card {
       }));
     let card = frame(self.id, self.narrow);
     let card = if self.close {
-      card.spacing(ExtraSpacing::Loose.role())
+      card.gap(ExtraSpacing::Loose.role())
     } else {
       card
     }
     .child(header)
-    .with_children(body);
+    .children(body);
     if self.fill { card.flex(1.0) } else { card }.into()
   }
 }
 
 /// The card's surface and padding, 16 at its sides when `narrow`.
-fn frame(id: &str, narrow: bool) -> Column {
+fn frame(id: &str, narrow: bool) -> lurq::ui::Card {
   let side = if narrow {
     SpacingSize::Lg
   } else {
@@ -168,7 +168,7 @@ fn frame(id: &str, narrow: bool) -> Column {
   };
   card_frame(id, CardSurface::Panel)
     .padding(Padding::symmetric(side, SpacingSize::Lg))
-    .spacing(ExtraSpacing::Inset.role())
+    .gap(ExtraSpacing::Inset.role())
 }
 
 /// Cards side by side, 16 apart, each as wide and as tall as the others (`Charts` `yuCtS`).

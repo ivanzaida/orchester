@@ -8,6 +8,7 @@ use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Text},
   node::Element,
+  ui::Card,
 };
 use orchester_core::integration::local::{HookChange, LocalOperation, LocalPhase};
 use orchester_workspace::{display, tasks::local_integration::IntegrationView};
@@ -54,7 +55,7 @@ fn rows(ctx: &Ctx, operation: &LocalOperation, reviewing_commit: bool) -> Elemen
     ),
   ];
   record(ctx)
-    .with_children(rows.into_iter().map(|(label, value)| {
+    .children(rows.into_iter().map(|(label, value)| {
       Column::new()
         .spacing(SpacingSize::Sm)
         .child(Text::new(&ctx.t(label)).variant(LocalText::Note.role()))
@@ -78,10 +79,10 @@ fn merge(ctx: &Ctx, operation: &LocalOperation) -> String {
   }
 }
 
-fn record(ctx: &Ctx) -> Column {
+fn record(ctx: &Ctx) -> Card {
   card_frame("local-recovery", CardSurface::Outline)
     .padding(SpacingSize::Lg)
-    .spacing(SpacingSize::Sm)
+    .gap(SpacingSize::Sm)
     .child(Text::new(&ctx.t("local_integration.recovery")).variant(LocalText::Heading.role()))
     .child(Text::new(&ctx.t("local_integration.recoveryKept")).variant(LocalText::Explanation.role()))
 }

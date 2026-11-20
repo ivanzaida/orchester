@@ -46,7 +46,7 @@ pub fn section(ctx: &mut Ctx, run: &RunView, step: &StepKey) -> Option<Element> 
     .map(|(index, check)| check_row(ctx, (index, check), &on_link))
     .collect();
   // Rows a hairline apart, as the latest attempt's steps.
-  let list = card_frame("task-unverified", CardSurface::Raised).with_children(rows);
+  let list = card_frame("task-unverified", CardSurface::Raised).children(rows);
   Some(
     Column::new()
       .width(Dimension::Pct(100.0))

@@ -210,9 +210,10 @@ fn avatars_breadcrumbs_and_detail_rows_take_their_design_sizes() {
   );
   assert_close(gap_after(first, slash), 6.0, "crumb to separator");
   assert_close(gap_after(slash, second), 6.0, "separator to crumb");
-  let (key, value) = (kit.bounds("branch-key"), kit.bounds("branch"));
-  assert_eq!(key.width, 108.0, "the key column");
-  assert_close(gap_after(key, value), 12.0, "key to value");
+  let (key, value) = (kit.bounds("branch-term"), kit.bounds("branch-value"));
+  // The term's 12 of end padding is the room between the key and its value.
+  assert_eq!(key.width, 108.0 + 12.0, "the key column");
+  assert_close(gap_after(key, value), 0.0, "key to value");
 }
 
 #[test]

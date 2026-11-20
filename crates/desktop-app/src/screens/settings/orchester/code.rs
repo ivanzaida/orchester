@@ -11,6 +11,7 @@ use lurq::{
   components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::CardPart,
 };
 
 use super::parts::{hint, paragraph};
@@ -170,9 +171,9 @@ impl Component for ShownCode {
     let done = ActionButton::new("orchester-pairing-done", ButtonKind::Ghost, ctx.t("cloud.pairing.done"))
       .on_click(move || done());
     card("orchester-pairing", CardSurface::Outline)
-      .rounded(ExtraRadius::Tile.role())
+      .style(CardPart::Root, |style| style.radius(ExtraRadius::Tile.role()))
       .padding(SpacingSize::Lg)
-      .spacing(SpacingSize::Md)
+      .gap(SpacingSize::Md)
       .child(
         Text::new(&ctx.t_args("cloud.pairing.title", [("server", shown.server.as_str())]))
           .variant(ExtraTypography::Strong.role()),

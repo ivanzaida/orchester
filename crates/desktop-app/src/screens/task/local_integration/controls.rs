@@ -23,6 +23,7 @@ use lurq::{
   components::{Column, Text},
   core::Signal,
   node::{Element, dimension::Dimension},
+  ui::Card,
 };
 use orchester_core::integration::local::{LocalOperation, LocalPhase};
 use orchester_workspace::tasks::local_integration::{IntegrationView, LocalOrigin};
@@ -296,7 +297,7 @@ impl Inspector {
     let panel = action_panel(ctx, phase_title(phase), None);
     let action = |id: &str, label: &str, action: Action| button(ctx, props, id, label, Some(action), false);
     match phase {
-      LocalPhase::Prepared => panel.with_children(self.prepared(ctx, props)),
+      LocalPhase::Prepared => panel.children(self.prepared(ctx, props)),
       LocalPhase::Canceling => panel.child(action(
         "local-resume-cancel",
         "local_integration.reconcile",
@@ -342,7 +343,7 @@ impl Inspector {
     .into()
   }
 
-  fn reconciliation(&self, ctx: &Ctx, props: &Props, panel: Column) -> Column {
+  fn reconciliation(&self, ctx: &Ctx, props: &Props, panel: Card) -> Card {
     let panel = panel.child(button(
       ctx,
       props,
@@ -379,16 +380,16 @@ impl Inspector {
 }
 
 /// The step's card: `title` and what `body` explains; add its actions and note.
-fn action_panel(ctx: &Ctx, title: &str, body: Option<&str>) -> Column {
+fn action_panel(ctx: &Ctx, title: &str, body: Option<&str>) -> Card {
   card_frame("local-actions", CardSurface::Pending)
     .padding(SpacingSize::Lg)
-    .spacing(SpacingSize::Sm)
+    .gap(SpacingSize::Sm)
     .child(
       Text::new(&ctx.t(title))
         .id("local-actions-title")
         .variant(LocalText::Heading.role()),
     )
-    .with_children(body.map(|body| {
+    .children(body.map(|body| {
       Text::new(&ctx.t(body))
         .id("local-actions-body")
         .variant(LocalText::Explanation.role())

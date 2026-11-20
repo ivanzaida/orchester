@@ -75,25 +75,25 @@ impl DecideCard<'_> {
       )
       .fill_width();
     let card = card("task-retry-decision", CardSurface::Attention)
-      .spacing(ExtraSpacing::Loose.role())
+      .gap(ExtraSpacing::Loose.role())
       .child(
         Text::new(&ctx.t("decisions.retries.title"))
           .id("task-retry-decision-title")
           .variant(TaskText::SectionTitle.role()),
       )
       .child(self.facts(ctx))
-      .with_children(self.choices(ctx, pending))
-      .with_children(self.returning(ctx, pending))
+      .children(self.choices(ctx, pending))
+      .children(self.returning(ctx, pending))
       .child(divider())
-      .with_children(
+      .children(
         self
           .offline
           .as_ref()
           .map(|reason| reason_line("task-retry-offline", reason)),
       )
-      .with_children(refused.map(|refused| field_error("task-retry-refused", &message_text(ctx, &refused))))
+      .children(refused.map(|refused| field_error("task-retry-refused", &message_text(ctx, &refused))))
       .child(stop);
-    self.pointing.ring(card).into()
+    self.pointing.ring(card)
   }
 
   /// "Tokens used 1.1M", "Remaining budget No limit".

@@ -213,7 +213,7 @@ fn files_card(ctx: &mut Ctx, task: &TaskContext, files: &[FileDiff]) -> Element 
     ));
   card("task-ready-files", CardSurface::Outline)
     .padding(ExtraSpacing::Snug.role())
-    .with_children(files.iter().take(SHOWN_FILES).map(file_row))
+    .children(files.iter().take(SHOWN_FILES).map(file_row))
     .child(link)
     .into()
 }
@@ -278,7 +278,7 @@ fn verification(ctx: &Ctx, run: &RunView, (delivered, head): (Vec<Element>, Opti
         ExtraSpacing::Loose.role(),
         ExtraSpacing::Snug.role(),
       ))
-      .with_children(checks)
+      .children(checks)
       .into()
   };
   section(ctx, ("task-ready-verification", title), revision, body)

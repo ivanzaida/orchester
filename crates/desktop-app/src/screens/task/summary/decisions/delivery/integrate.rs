@@ -120,7 +120,7 @@ pub(super) fn conflicting(ctx: &Ctx, files: &[String], resolution: Option<&Resol
     .child(
       card("task-delivery-conflict-files", CardSurface::Outline)
         .padding(Padding::symmetric(ExtraSpacing::Pair.role(), ExtraSpacing::Hair.role()))
-        .with_children(rows),
+        .children(rows),
     )
     .into()
 }
@@ -135,7 +135,7 @@ pub(super) fn checks_card(ctx: &Ctx, id: &str, rows: Vec<Element>) -> Element {
       ExtraSpacing::Loose.role(),
       ExtraSpacing::Snug.role(),
     ))
-    .with_children(rows)
+    .children(rows)
     .into()
 }
 

@@ -392,7 +392,7 @@ fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
     &format!("git couldn't sign in to github.com to push {branch}"),
   );
   assert_eq!(
-    page.text("task-pull-request-failure-body"),
+    page.text("task-pull-request-failure-description"),
     "Run gh auth setup-git or sign in to git in a terminal, then retry. Orchester doesn't change git config."
   );
   // The command row lays out each word with the space after it.
@@ -411,7 +411,7 @@ fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
   *fake.create.lock() = output(1, NO_COMMITS, "gh: Validation Failed (HTTP 422)\n");
   retry_until(&mut page, "No pull request opened");
   assert_eq!(
-    page.text("task-pull-request-failure-body"),
+    page.text("task-pull-request-failure-description"),
     format!("GitHub found no commits on {branch} that main doesn't have, so there is nothing to review.")
   );
   assert!(
@@ -421,7 +421,7 @@ fn decision_create_pull_request_failures_say_why_in_place_and_try_again() {
   *fake.create.lock() = output(1, "", "gh: Server Error (HTTP 502)\n");
   retry_until(&mut page, "gh couldn't open the pull request");
   assert_eq!(
-    page.text("task-pull-request-failure-body"),
+    page.text("task-pull-request-failure-description"),
     "GitHub is having trouble. The branch was pushed; try again in a moment."
   );
   *fake.create.lock() = output(0, CREATED, "");

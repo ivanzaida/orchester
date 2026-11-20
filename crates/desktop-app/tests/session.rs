@@ -137,7 +137,7 @@ fn session_other_app_from_another_day_says_the_day() {
   let second = data.launch();
   let mut window = Window::of(data, second);
   let other = window
-    .texts("startup-other-window")
+    .texts("startup-other-window-value")
     .expect("the other window's line shows");
   assert!(
     other[0].starts_with("Open since ") && other[0].contains(", ") && other[0].ends_with("· process 18244"),

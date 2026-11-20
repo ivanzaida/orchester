@@ -13,6 +13,7 @@ use lurq::{
   },
   components::{Row, Text},
   node::Element,
+  ui::CardPart,
 };
 use orchester_core::{repository::RemoteName, run::BranchName};
 
@@ -63,10 +64,11 @@ pub(super) fn question(ctx: &Ctx, unpushed: &Unpushed<'_>, choices: Choices) -> 
   let args = [("base", unpushed.base.as_str()), ("remote", unpushed.remote.as_str())];
   let (title, push) = words(ctx, unpushed);
   card("task-pull-request-unpushed", CardSurface::Decision)
-    .background(PaletteColor::Card)
-    .rounded(ExtraRadius::Tile.role())
+    .style(CardPart::Root, |style| {
+      style.background(PaletteColor::Card).radius(ExtraRadius::Tile.role())
+    })
     .padding(SpacingSize::Lg)
-    .spacing(ExtraSpacing::Loose.role())
+    .gap(ExtraSpacing::Loose.role())
     .child(
       Text::new(&title)
         .id("task-pull-request-unpushed-title")

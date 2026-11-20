@@ -144,7 +144,7 @@ fn notices(state: &State) -> Column {
 
 fn cards() -> Row {
   let sample = |id: &str, surface: CardSurface, title: &str| {
-    card(id, surface).width(Dimension::Px(200.0)).child(
+    card(id, surface).width(200.0).child(
       Text::new(title)
         .variant(ExtraTypography::Strong.role())
         .color(PaletteColor::Foreground),
