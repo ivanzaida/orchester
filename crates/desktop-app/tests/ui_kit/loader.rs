@@ -1,4 +1,4 @@
-//! The loader (`loader-circle`) turns once a second in `LOADER_STEPS` even poses, every loader on lurq's one
+//! The loader (`loader-circle`) turns once a `SPIN_PERIOD` in `SPIN_STEPS` even poses, every loader on lurq's one
 //! animation clock, and a window asks for frames only while a loader is in its tree. Each pass is sampled
 //! against that clock in real time, so a turn that ran fast (a step taken as a whole turn) or out of phase
 //! fails.
@@ -15,9 +15,10 @@ use lurq::{
   app::theme::{PaletteColor, SpacingSize},
   components::Row,
   layout::quad::QuadContent,
+  ui::SPIN_PERIOD,
 };
 use orchester_app::{
-  theme::{ExtraColor, IconSize, LOADER_STEPS, LOADER_TURN},
+  theme::{ExtraColor, IconSize, SPIN_STEPS},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -63,21 +64,21 @@ fn turns(kit: &Kit) -> Vec<f32> {
 
 /// The pose the clock shows at `at`, counted in steps from upright.
 fn pose_at(at: Instant) -> u32 {
-  let turn = LOADER_TURN.as_secs_f64();
+  let turn = SPIN_PERIOD.as_secs_f64();
   let into_turn = at.duration_since(clock_origin()).as_secs_f64() % turn / turn;
-  (into_turn * f64::from(LOADER_STEPS)).floor() as u32
+  (into_turn * f64::from(SPIN_STEPS)).floor() as u32
 }
 
 #[test]
 fn loaders_turn_once_a_second_in_24_poses_15_degrees_apart_all_in_phase() {
-  assert_eq!(LOADER_STEPS, 24, "24 poses a turn");
-  assert_eq!(LOADER_TURN, Duration::from_secs(1), "one turn a second");
-  let step = TAU / LOADER_STEPS as f32;
+  assert_eq!(SPIN_STEPS, 24, "24 poses a turn");
+  assert_eq!(SPIN_PERIOD, Duration::from_secs(1), "one turn a second");
+  let step = TAU / SPIN_STEPS as f32;
   let mut kit = loaders();
   assert_eq!(turns(&kit).len(), 4, "every loader is drawn");
 
   let mut seen = BTreeSet::new();
-  let end = Instant::now() + LOADER_TURN + LOADER_TURN / 4;
+  let end = Instant::now() + SPIN_PERIOD + SPIN_PERIOD / 4;
   while Instant::now() < end {
     let before = Instant::now();
     kit.pass();
@@ -97,7 +98,7 @@ fn loaders_turn_once_a_second_in_24_poses_15_degrees_apart_all_in_phase() {
     }
     thread::sleep(SAMPLE);
   }
-  assert_eq!(seen.len(), LOADER_STEPS as usize, "a turn shows every pose: {seen:?}");
+  assert_eq!(seen.len(), SPIN_STEPS as usize, "a turn shows every pose: {seen:?}");
 }
 
 #[test]
@@ -105,7 +106,7 @@ fn a_loader_keeps_the_window_animating_one_frame_a_pose_and_none_keeps_it_idle()
   let kit = loaders();
   assert!(kit.tree.has_active_timeline(), "a loader asks for frames");
   let next = kit.tree.next_timeline_change().expect("a turning loader changes pose");
-  let pose = LOADER_TURN / LOADER_STEPS;
+  let pose = SPIN_PERIOD / SPIN_STEPS;
   assert!(
     next.saturating_duration_since(Instant::now()) <= pose,
     "the next frame is due within a pose ({pose:?})"
@@ -119,7 +120,7 @@ fn a_loader_keeps_the_window_animating_one_frame_a_pose_and_none_keeps_it_idle()
 #[test]
 fn a_turning_window_asks_for_its_frames_a_pose_apart() {
   let mut kit = loaders();
-  let pose = (LOADER_TURN / LOADER_STEPS).as_secs_f64();
+  let pose = (SPIN_PERIOD / SPIN_STEPS).as_secs_f64();
   let mut due = Vec::new();
   for _ in 0..4 {
     let next = kit.tree.next_timeline_change().expect("a turning loader changes pose");
@@ -135,4 +136,17 @@ fn a_turning_window_asks_for_its_frames_a_pose_apart() {
       "frames come on the pose grid, {pose} s apart: {apart} s"
     );
   }
+}
+
+#[test]
+fn loaders_stand_still_and_ask_for_no_frames_where_motion_is_reduced() {
+  let mut kit = loaders();
+  kit.app.theme().set_reduced_motion(Some(true));
+  kit.pass();
+  assert!(!kit.tree.has_active_timeline(), "still loaders ask for no frames");
+  assert!(
+    turns(&kit).iter().all(|turned| turned.abs() < 1e-3),
+    "every loader stands upright: {:?}",
+    turns(&kit)
+  );
 }

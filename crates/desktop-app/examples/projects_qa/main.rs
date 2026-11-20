@@ -42,7 +42,6 @@ use orchester_app::{
   services::cli_search::CliSearch,
   test_support::signed_in,
   theme::{self, Mode},
-  ui::loader,
 };
 use orchester_exec::search_path::{SearchBasis, SearchPath};
 use orchester_workspace::workspace::Workspace;
@@ -315,7 +314,6 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
   i18n::install(&app)?;
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
   let link = WindowLink::default();
   let settings = McpSettings::with_window_control(true);
   let config = mcp::config(settings, &link, &appearance, launch.services(), app.i18n());

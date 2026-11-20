@@ -45,7 +45,6 @@ use orchester_app::{
   startup::WindowPosition,
   test_support::signed_in,
   theme::{self, Mode},
-  ui::loader,
 };
 use orchester_core::id::ChatId;
 use tokio::runtime::Runtime;
@@ -280,7 +279,6 @@ fn window(prepared: &data::Prepared, (state, runner): (State, PathBuf), scratch:
   }
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
   let link = WindowLink::default();
   let settings = McpSettings::with_window_control(true);
   let config = mcp::config(settings, &link, &appearance, launch.services(), app.i18n());

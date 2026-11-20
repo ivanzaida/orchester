@@ -6,6 +6,7 @@ pub mod callout;
 pub mod chip;
 mod kbd;
 pub mod meter;
+pub mod spinner;
 
 use lurq::app::theme::Theme;
 
@@ -15,4 +16,5 @@ pub(super) fn install(theme: &Theme) {
   chip::install(theme);
   kbd::install(theme);
   meter::install(theme);
+  spinner::install(theme);
 }

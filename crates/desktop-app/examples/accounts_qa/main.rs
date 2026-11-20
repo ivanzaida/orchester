@@ -38,7 +38,6 @@ use orchester_app::{
   routes::{AccountsPanel, AccountsView, ProjectPage, Route, TaskTab, TaskView},
   test_support::signed_in,
   theme::{self, Mode},
-  ui::loader,
 };
 use orchester_core::{account::AccountCli, id::AgentAccountId};
 use orchester_workspace::{accounts::trash::FolderTrash, workspace::Workspace};
@@ -227,7 +226,6 @@ fn window(state: State, account: Option<&str>) -> Result<(), Box<dyn Error>> {
   i18n::install(&app)?;
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
   let link = WindowLink::default();
   let settings = McpSettings::with_window_control(true);
   let discovery = qa_folder()?.join("mcp");

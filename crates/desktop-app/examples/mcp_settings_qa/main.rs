@@ -28,7 +28,6 @@ use orchester_app::{
   services::Services,
   test_support::signed_in,
   theme::{self, Mode},
-  ui::loader,
 };
 use orchester_core::app_mcp::McpPort;
 use orchester_store::SessionEnd;
@@ -77,7 +76,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   );
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
   let discovery = scratch.join("mcp");
   let config = mcp::config(settings, &link, &appearance, Some(&services), app.i18n());
   let verifier = AppMcp::start(

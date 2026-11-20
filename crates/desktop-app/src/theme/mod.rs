@@ -80,8 +80,6 @@ mod typography;
 pub mod usage;
 mod watching;
 
-use std::time::Duration;
-
 use lurq::{
   app::{
     App,
@@ -133,7 +131,7 @@ pub use self::{
   pipelines::{PIPELINE_HUB_LIST_NARROW, PIPELINES_BONE_FADE, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText, UNUSED_ROWS_OPACITY},
   projects::{ProjectsSpacing, ProjectsText},
-  review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
+  review::{ReviewSpacing, ReviewText},
   run_model::ModelText,
   run_services::RunServicesText,
   runs_on_picker::{RUNS_ON_UNAVAILABLE_OPACITY, RunsOnPickerText, runs_on_picker_scrollbar},
@@ -174,11 +172,10 @@ pub const MENU_SPLIT_OPACITY: f32 = 0.25;
 pub const SHORTCUT_OPACITY: f32 = 0.6;
 /// What a primary full-width button does, in `on_accent` under its label (`dwsGC` in `br5EG`).
 pub const CONSEQUENCE_ON_ACCENT_OPACITY: f32 = 0.75;
-/// One turn of a loader (`loader-circle`), which turns while it is shown; the design draws it still.
-pub const LOADER_TURN: Duration = Duration::from_secs(1);
-/// The poses of a loader's turn: 24, 15° apart. lurq draws a frame only when the pose changes, so a window
-/// with a turning loader draws 24 frames a second on any display, not one every display refresh.
-pub const LOADER_STEPS: u32 = 24;
+/// The poses a second of everything that turns (`theme::kit::spinner`): a loader's turn of a second in 24 poses, 15°
+/// apart; the design draws it still. lurq draws a frame only when the pose changes, so a window with a turning loader
+/// draws 24 frames a second on any display, not one every display refresh.
+pub const SPIN_STEPS: u32 = 24;
 
 /// Loads the fonts and fills every role for `mode`.
 pub fn install(app: &mut App, mode: Mode) {

@@ -20,7 +20,6 @@ use orchester_app::{
   app_log, i18n,
   mcp::{APP_NAME, AppMcp, InputGate, McpMode, McpSettings},
   theme::{self, Mode},
-  ui::loader,
 };
 use tokio::runtime::Runtime;
 
@@ -38,7 +37,6 @@ fn main() {
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
   let settings = McpSettings::of_build().with_environment();
   let config = McpConfig::new().app_name(APP_NAME).scopes(settings.scopes());
   // The gallery shows no person-only control, so nothing is protected. It has no settings of its own: a free port
