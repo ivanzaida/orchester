@@ -109,7 +109,9 @@ keyring-core = "1"
 # controls, `i18n` in every build and `svg` part of `canvas`;
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.64.0", default-features = false, features = ["query"] }
+# From lurq's GitHub master (2026-11-20, the person): the kit takes lurq's fixes as they merge, before a release.
+# Cargo.lock pins the commit; `cargo update -p lurq` moves it to master's head.
+lurq = { git = "https://github.com/ivanzaida/lurq", branch = "master", default-features = false, features = ["query"] }
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"
