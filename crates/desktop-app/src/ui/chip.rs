@@ -5,21 +5,13 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::Row,
-  layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  app::theme::TypographyStyle,
+  node::Element,
   ui::{Badge, BadgePart, Styled, Tag},
 };
 
-use super::{icon::Icon, tooltip::Truncated};
-use crate::theme::{ExtraColor, ExtraRadius, ExtraSpacing, kit::chip as variant};
-
-/// A badge's dot (`Vydkx`).
-const DOT_SIZE: f32 = 6.0;
+use super::icon::Icon;
+use crate::theme::kit::chip as variant;
 
 /// The cross of a removable tag: what tools call it, and what a press does.
 struct Remove {
@@ -125,26 +117,6 @@ impl BadgeTone {
       Self::Neutral => variant::NEUTRAL,
     }
   }
-
-  fn color(self) -> PaletteColor {
-    match self {
-      Self::Success => PaletteColor::Success,
-      Self::Info => PaletteColor::Info,
-      Self::Warning => PaletteColor::Warning,
-      Self::Danger => PaletteColor::Destructive,
-      Self::Neutral => ExtraColor::TextSecondary.role(),
-    }
-  }
-
-  fn fill(self) -> PaletteColor {
-    match self {
-      Self::Success => PaletteColor::SuccessMuted,
-      Self::Info => PaletteColor::InfoMuted,
-      Self::Warning => PaletteColor::WarningMuted,
-      Self::Danger => PaletteColor::DestructiveMuted,
-      Self::Neutral => PaletteColor::Highlight,
-    }
-  }
 }
 
 /// A badge saying `word` in `tone`: its dot is `<id>-dot` and its word `<id>-label`.
@@ -159,31 +131,9 @@ pub fn badge_in(id: &str, tone: BadgeTone, word: &str, style: TypographyStyle) -
 
 /// A badge saying `word` in `tone` that keeps to the room its row gives it: the word is cut with an ellipsis, and
 /// while it is cut its whole words show in a tooltip. A word the badge does not choose, such as a team's name, may
-/// be any length. lurq's `ui::Badge` keeps its word whole, so this one is the kit's own, in the badge's look.
-pub fn cut_badge(ctx: &mut Ctx, id: &str, tone: BadgeTone, word: &str) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Fine.role()))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .background(tone.fill())
-    .rounded(ExtraRadius::Full.role())
-    .flex_shrink(1.0)
-    .min_width(Dimension::Px(0.0))
-    .child(
-      Row::new()
-        .id(format!("{id}-dot"))
-        .width(Dimension::Px(DOT_SIZE))
-        .height(Dimension::Px(DOT_SIZE))
-        .flex_shrink(0.0)
-        .rounded(ExtraRadius::Full.role())
-        .background(tone.color()),
-    )
-    .child(
-      Truncated::new(format!("{id}-label"), word.to_owned(), TypographyStyle::FieldLabel)
-        .color(tone.color())
-        .render(ctx),
-    )
+/// be any length.
+pub fn cut_badge(id: &str, tone: BadgeTone, word: &str) -> Badge {
+  badge(id, tone, word).truncate(true).tooltip_when_cut(true)
 }
 
 /// A state's badge: a 12 `glyph` (`<id>-icon`) and `word` (`<id>-label`), 6 apart, in `tone` (`Badge` `sNWem` in T11a

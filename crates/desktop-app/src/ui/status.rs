@@ -18,25 +18,17 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
-  },
-  components::Row,
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
-  ui::{StatusLabel, StatusLabelPart},
+  app::{ctx::Ctx, theme::PaletteColor},
+  node::Element,
+  ui::{StatusLabel, StatusLabelPart, Styled},
 };
 use orchester_core::{
   run::TaskPhase,
   task::organization::{Priority, WorkflowStatus},
 };
 
-use super::{
-  icon::{Icon, icon},
-  tooltip::Truncated,
-};
-use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
+use super::icon::Icon;
+use crate::theme::{ExtraColor, kit::status_label as kit};
 
 /// What a run or one of its steps is doing, and the Blocked flag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -306,23 +298,20 @@ impl StatusChip {
       (None, Some(detail)) => ctx.t_args("ui.status.withDetail", [("status", word), ("detail", detail.clone())]),
       (None, None) => word,
     };
-    let (icon_size, typography) = match self.size {
-      StatusSize::Regular => (IconSize::Base, TypographyStyle::Label),
-      StatusSize::Compact => (IconSize::Sm, ExtraTypography::NoteStrong.role()),
+    let size = match self.size {
+      StatusSize::Regular => kit::STATUS,
+      StatusSize::Compact => kit::STATUS_COMPACT,
     };
+    let glyph = self.status.icon();
     let color = self.status.color();
-    Row::new()
-      .id(self.id.to_string())
-      .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Pair.role())
-      .align_items(Alignment::Center)
+    StatusLabel::new(&text)
+      .icon(glyph.name())
+      .spin(glyph == Icon::LoaderCircle)
+      .size(size)
+      .tooltip_when_cut(true)
+      .style(StatusLabelPart::Root, |style| style.foreground(color))
       .describe("status", self.status.key())
-      .child(icon(self.status.icon(), icon_size, color.clone()).id(format!("{}-icon", self.id)))
-      .child(
-        Truncated::new(format!("{}-label", self.id), text, typography)
-          .color(color)
-          .render(ctx),
-      )
+      .id(self.id)
       .into()
   }
 }

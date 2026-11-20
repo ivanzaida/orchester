@@ -17,7 +17,7 @@ pub mod notice;
 mod segmented;
 mod skeleton;
 pub mod spinner;
-mod status_label;
+pub mod status_label;
 mod tooltip;
 mod trigger;
 mod window_chrome;
