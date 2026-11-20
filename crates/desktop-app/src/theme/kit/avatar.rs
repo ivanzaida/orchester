@@ -8,6 +8,7 @@ use lurq::{
   ui::{Avatar, AvatarPart},
 };
 
+use super::plain::plain;
 use crate::theme::{ExtraColor, ExtraRadius, ExtraTypography, SecretsText};
 
 /// The size a person's avatar names (`x5rV0`).
@@ -30,7 +31,7 @@ pub(super) fn install(theme: &Theme) {
       })
       .size(PERSON, AvatarPart::Initials, |style| {
         style
-          .typography(ExtraTypography::Initials.role())
+          .typography(plain(ExtraTypography::Initials.role()))
           .foreground(PaletteColor::Foreground)
       })
       .size(PROJECT, AvatarPart::Face, |style| {
@@ -42,7 +43,7 @@ pub(super) fn install(theme: &Theme) {
       })
       .size(PROJECT, AvatarPart::Initials, |style| {
         style
-          .typography(SecretsText::ProjectInitial.role())
+          .typography(plain(SecretsText::ProjectInitial.role()))
           .foreground(ExtraColor::TextSecondary.role())
       })
   });

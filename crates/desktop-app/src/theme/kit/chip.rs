@@ -12,6 +12,7 @@ use lurq::{
   ui::{Badge, BadgePart, Length, Recipe, Tag, TagPart, TagState},
 };
 
+use super::plain::plain;
 use crate::theme::{ControlHeight, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
 
 /// A badge's dot (`Vydkx`).
@@ -47,7 +48,9 @@ fn tag() -> Recipe {
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .foreground(ExtraColor::TextSecondary.role())
     })
-    .base(TagPart::Label, |style| style.typography(TypographyStyle::FieldLabel))
+    .base(TagPart::Label, |style| {
+      style.typography(plain(TypographyStyle::FieldLabel))
+    })
     .base(TagPart::Icon, |style| style.square(icon))
     .base(TagPart::Remove, |style| {
       style
@@ -60,7 +63,7 @@ fn tag() -> Recipe {
       style.padding_end(SpacingSize::Xs)
     })
     .state(MONO, TagPart::Label, |style| {
-      style.typography(ExtraTypography::MonoLabel.role())
+      style.typography(plain(ExtraTypography::MonoLabel.role()))
     })
     .state(FIELD, TagPart::Root, |style| style.height(ControlHeight::Sm.value()))
 }
@@ -81,7 +84,9 @@ fn badge() -> Recipe {
         .gap(ExtraSpacing::Snug.role())
         .radius(ExtraRadius::Full.role())
     })
-    .base(BadgePart::Label, |style| style.typography(TypographyStyle::FieldLabel))
+    .base(BadgePart::Label, |style| {
+      style.typography(plain(TypographyStyle::FieldLabel))
+    })
     .base(BadgePart::Icon, |style| style.square(Length::Px(IconSize::Sm.size())))
     .base(BadgePart::Dot, |style| {
       style.square(DOT_SIZE).radius(ExtraRadius::Full.role())

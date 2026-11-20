@@ -7,6 +7,7 @@ use lurq::{
   ui::{Kbd, KbdPart},
 };
 
+use super::plain::plain;
 use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography};
 
 /// The cap's height (`wMPlq`).
@@ -28,7 +29,7 @@ pub(super) fn install(theme: &Theme) {
       })
       .base(KbdPart::Label, |style| {
         style
-          .typography(ExtraTypography::MonoSmall.role())
+          .typography(plain(ExtraTypography::MonoSmall.role()))
           .font_size(LABEL_SIZE)
           .line_height(LABEL_LINE)
           .foreground(ExtraColor::TextSecondary.role())

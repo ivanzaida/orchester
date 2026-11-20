@@ -10,6 +10,7 @@ use lurq::{
   ui::{Button, ButtonPart, Recipe, Selector},
 };
 
+use super::plain::plain;
 use crate::{
   theme::{ControlHeight, ExtraColor, ExtraSpacing},
   ui::{
@@ -43,7 +44,7 @@ fn picker(rules: Recipe) -> Recipe {
     })
     .variant(VARIANT, ButtonPart::Label, |style| {
       style
-        .typography(TypographyStyle::Description)
+        .typography(plain(TypographyStyle::Description))
         .foreground(PaletteColor::Foreground)
     })
     .when(Selector::new().variant(VARIANT).pressed(), ButtonPart::Root, |style| {

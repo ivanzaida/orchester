@@ -6,6 +6,7 @@ use lurq::{
   ui::{Length, Recipe, StatusLabel, StatusLabelPart},
 };
 
+use super::plain::plain;
 use crate::theme::{ExtraSpacing, IconSize};
 
 pub(super) fn install(theme: &Theme) {
@@ -16,7 +17,7 @@ pub(super) fn install(theme: &Theme) {
         style.square(Length::Px(IconSize::Base.size()))
       })
       .base(StatusLabelPart::Label, |style| {
-        style.typography(TypographyStyle::Description)
+        style.typography(plain(TypographyStyle::Description))
       }),
   );
 }
