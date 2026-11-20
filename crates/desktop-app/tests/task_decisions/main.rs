@@ -334,7 +334,7 @@ fn decision_raise_reads_back_the_new_limit_and_asks_the_runner() {
   assert!(page.has("raise-limit-meter"));
   assert_eq!(page.value("raise-limit-input"), "800,000");
   assert_eq!(
-    page.text("raise-limit-field-hint"),
+    page.text("raise-limit-field-description"),
     "= 800k tokens · 300k more than now"
   );
   assert_eq!(page.text("raise-limit-continue-label"), "Continue with 800k tokens");
@@ -345,7 +345,7 @@ fn decision_raise_reads_back_the_new_limit_and_asks_the_runner() {
   );
   // No maximum: far above any project's maximum is read as it is, up to what the project database holds.
   page.set("raise-limit-input", "90,000,000");
-  page.until_says("raise-limit-field-hint", "= 90M tokens · 89.5M more than now");
+  page.until_says("raise-limit-field-description", "= 90M tokens · 89.5M more than now");
   page.set("raise-limit-input", "10,000,000,000,000,000,000");
   page.until_says(
     "raise-limit-input-note",

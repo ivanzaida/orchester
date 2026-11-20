@@ -53,14 +53,14 @@ fn a_text_field_is_a_28_high_box_10_in_with_its_label_and_hint_6_away() {
     kit.bounds("title-field-label"),
     kit.bounds("title-box"),
     kit.bounds("title"),
-    kit.bounds("title-field-hint"),
+    kit.bounds("title-field-description"),
   );
   assert_close(frame.height, 28.0, "box height");
   assert_close(frame.width, COLUMN, "the box fills its column");
   assert_close(input.x - frame.x, 10.0, "value inset");
   assert_close(gap_under(label, frame), 6.0, "label to box");
   assert_close(gap_under(frame, hint), 6.0, "box to hint");
-  assert_eq!(kit.texts("title-field-hint"), ["Shown in lists"]);
+  assert_eq!(kit.texts("title-field-description"), ["Shown in lists"]);
 }
 
 #[test]
