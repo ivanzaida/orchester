@@ -14,7 +14,7 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  menu::{MenuItem, menu, menu_panel, separator},
+  menu::{MenuItem, menu, menu_panel, separator_line},
   pressable::{Focus, pressable},
 };
 use crate::theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
@@ -144,7 +144,7 @@ impl Component for Picker {
         );
       }
       if choice.separator {
-        rows = rows.child(separator(ctx));
+        rows = rows.child(separator_line(ctx));
       }
       let id = format!("{}-option-{index}", props.id);
       let item = match &choice.unavailable {
@@ -169,22 +169,24 @@ impl Component for Picker {
       } else {
         item
       };
-      let mut item = item.chosen(choice.value == chosen).in_form();
+      let mut item = item.chosen(choice.value == chosen);
       if let Some(detail) = &choice.detail {
         item = item.detail(detail.clone());
       }
       if choice.warning {
         item = item.warning_detail();
       }
-      rows = rows.child(item.render(ctx, &props.open));
+      rows = rows.child(item.render_scrolled(ctx, &props.open));
     }
     let panel = menu_panel(&format!("{}-menu", props.id))
-      .width(Dimension::Px(if headings.is_empty() {
+      .width(if headings.is_empty() {
         props.width
       } else {
         GROUPED_MENU_WIDTH
-      }))
-      .child(ScrollVertical::new(rows).max_height(Dimension::Px(MENU_MAX_HEIGHT)));
+      })
+      .child(Element::from(
+        ScrollVertical::new(rows).max_height(Dimension::Px(MENU_MAX_HEIGHT)),
+      ));
     Row::new().width(Dimension::Px(props.width)).child(trigger).child(menu(
       self.anchor.clone(),
       props.open.clone(),

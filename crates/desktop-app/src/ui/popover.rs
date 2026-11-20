@@ -13,6 +13,7 @@ use lurq::{
   components::{Column, Placement, Popup},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
+  ui,
 };
 
 use crate::{shell::status_bar::STATUS_BAR_HEIGHT, theme::ExtraSpacing};
@@ -48,8 +49,27 @@ pub fn padded_popover_panel(id: &str, width: f32, padding: Padding) -> Column {
     .box_shadow(ShadowStyle::Lg)
 }
 
-/// `panel` opened on `side` of `anchor` while `open` holds; a press outside or Esc closes it.
-pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> Popup {
+/// `panel` opened 6 from `anchor` on `side` while `open` holds, in lurq's `ui::Popover`, whose own panel draws nothing
+/// (`theme::kit::popover`): the kit's panel is the popover's. The focus goes to the first control in it as it opens and
+/// back as it closes; a press outside or Esc closes it.
+pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> ui::Popover {
+  let gap = ExtraSpacing::Snug.value();
+  // Over its control it keeps the offset the engine's popup had: into the control, not away from it.
+  let (placement, offset) = match side {
+    PopoverSide::Below => (Placement::BottomStart, gap),
+    PopoverSide::Above => (Placement::TopStart, -gap),
+    PopoverSide::BelowEnd => (Placement::BottomEnd, gap),
+  };
+  ui::Popover::new(open, anchor)
+    .placement(placement)
+    .offset(offset)
+    .child(panel)
+}
+
+/// `panel` opened 6 from `anchor` on `side` while `open` holds, which a press on `anchor` never opens: the app alone
+/// opens it (a card's question). lurq's `ui::Popover` cannot be told so (it has no `switch_on_anchor_press`), so this
+/// stays the engine's `Popup`; a press outside or Esc closes it.
+pub fn popup_by_app(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> Popup {
   let gap = ExtraSpacing::Snug.value();
   let (placement, offset) = match side {
     PopoverSide::Below => (Placement::BottomStart, gap),
@@ -60,6 +80,7 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
     .open(open)
     .placement(placement)
     .offset(0.0, offset)
+    .switch_on_anchor_press(false)
 }
 
 /// `panel`, `width` wide, opened under `anchor` from its start while `open` holds, moved back just enough that it ends

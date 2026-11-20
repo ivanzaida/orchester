@@ -11,6 +11,7 @@ use lurq::{
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension},
+  ui,
 };
 use orchester_core::memory::MemoryKind;
 use orchester_workspace::memory::listing::{AuthorFilter, Filters, KIND_ORDER, StatusFilter};
@@ -18,8 +19,8 @@ use orchester_workspace::memory::listing::{AuthorFilter, Filters, KIND_ORDER, St
 use super::{state::MemoryState, words};
 use crate::ui::{
   field::FieldInput,
-  filter::{FilterButton, filter_menu_panel},
-  menu::{MenuItem, menu},
+  filter::FilterButton,
+  menu::{MenuItem, MenuPanel, filter_menu_panel, menu},
 };
 
 /// The search field's width (`pYCO5`).
@@ -70,9 +71,9 @@ impl Component for FilterBar {
       let (label, active) = button_label(ctx, &filters, facet);
       row = row.child(FilterButton::new(facet_id(facet), label, open.clone(), anchor.clone()).active(active));
       let panel = if open.get() {
-        self.menu(ctx, &state, (&filters, facet))
+        Self::menu(ctx, &state, (&filters, facet))
       } else {
-        Element::new()
+        filter_menu_panel(&format!("{}-menu", facet_id(facet)), MENU_WIDTH)
       };
       popups.push(Element::from(menu(anchor.clone(), open.clone(), panel)));
     }
@@ -82,23 +83,14 @@ impl Component for FilterBar {
 
 impl FilterBar {
   /// The menu of `facet`: its choices, the chosen one checked.
-  fn menu(&self, ctx: &mut Ctx, state: &MemoryState, (filters, facet): (&Filters, Facet)) -> Element {
-    let index = FACETS
-      .iter()
-      .position(|each| *each == facet)
-      .expect("every facet has a menu");
-    let open = self.menus[index].0.clone();
+  fn menu(ctx: &mut Ctx, state: &MemoryState, (filters, facet): (&Filters, Facet)) -> MenuPanel {
     let id = format!("{}-menu", facet_id(facet));
-    let mut panel = filter_menu_panel(&id, MENU_WIDTH);
-    for item in items(ctx, state, (filters, facet), &open) {
-      panel = panel.child(item);
-    }
-    panel.into()
+    filter_menu_panel(&id, MENU_WIDTH).with_children(items(ctx, state, (filters, facet)))
   }
 }
 
-/// `facet`'s choices as items of the menu `open` shows, the chosen one checked (`<facet>-menu-<key>`).
-fn items(ctx: &mut Ctx, state: &MemoryState, (filters, facet): (&Filters, Facet), open: &Signal<bool>) -> Vec<Element> {
+/// `facet`'s choices as items of its menu, the chosen one checked (`<facet>-menu-<key>`).
+fn items(ctx: &mut Ctx, state: &MemoryState, (filters, facet): (&Filters, Facet)) -> Vec<ui::MenuItem> {
   let id = format!("{}-menu", facet_id(facet));
   choices(ctx, filters, facet)
     .into_iter()
@@ -108,7 +100,7 @@ fn items(ctx: &mut Ctx, state: &MemoryState, (filters, facet): (&Filters, Facet)
         shown.update(|filters| change(filters));
       })
       .chosen(choice.chosen)
-      .render(ctx, open)
+      .render(ctx)
     })
     .collect()
 }

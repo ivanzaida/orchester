@@ -3,6 +3,7 @@
 
 pub mod avatar;
 mod button;
+pub mod calendar;
 pub mod callout;
 pub mod card;
 pub mod chip;
@@ -13,8 +14,10 @@ mod field;
 mod hover_card;
 mod icon_button;
 mod kbd;
+pub mod menu;
 pub mod meter;
 pub mod notice;
+mod popover;
 mod segmented;
 mod skeleton;
 pub mod spinner;
@@ -30,6 +33,7 @@ use lurq::app::theme::Theme;
 pub(super) fn install(theme: &Theme) {
   avatar::install(theme);
   button::install(theme);
+  calendar::install(theme);
   callout::install(theme);
   card::install(theme);
   detail_row::install(theme);
@@ -40,8 +44,10 @@ pub(super) fn install(theme: &Theme) {
   hover_card::install(theme);
   icon_button::install(theme);
   kbd::install(theme);
+  menu::install(theme);
   meter::install(theme);
   notice::install(theme);
+  popover::install(theme);
   segmented::install(theme);
   skeleton::install(theme);
   spinner::install(theme);

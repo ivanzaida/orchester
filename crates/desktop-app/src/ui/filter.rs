@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
@@ -225,19 +225,6 @@ impl From<FilterChip> for Element {
       .child(cross)
       .into()
   }
-}
-
-/// The panel of a filter's menu, `width` wide, with the element id `id`; add its options as children.
-pub fn filter_menu_panel(id: &str, width: f32) -> Column {
-  Column::new()
-    .id(id.to_owned())
-    .width(Dimension::Px(width))
-    .padding(ExtraSpacing::Snug.role())
-    .spacing(ExtraSpacing::Tight.role())
-    .rounded(RadiusSize::Lg)
-    .background(PaletteColor::Card)
-    .border_inside(BorderSize::Sm, PaletteColor::Input)
-    .box_shadow(ShadowStyle::Lg)
 }
 
 /// A filter's option `id` saying `label`, `chosen` or not, with its value's swatch where it has one (`u1ZxRL`);

@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, events::KeyboardEvent},
-  components::Popup,
   core::{ElementRef, Signal},
+  ui,
 };
 use orchester_core::resource::StepKey;
 use orchester_workspace::pipelines::flow::{PipelineFlow, StepCard};
@@ -84,7 +84,7 @@ impl StepMenu {
     ctx: &mut Ctx,
     target: &Target<'_>,
     (anchor, opens): (ElementRef, OpensMade),
-  ) -> Popup {
+  ) -> ui::Menu {
     let drive = Drive {
       reorder: self.reorder.clone(),
       edit: target.edit.clone(),

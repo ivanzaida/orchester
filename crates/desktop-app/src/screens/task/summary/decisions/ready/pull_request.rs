@@ -17,6 +17,7 @@ use lurq::{
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
+  ui,
 };
 use orchester_core::{
   command::CommandError,
@@ -170,7 +171,7 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
 
 /// *Create pull request* and *Open as draft*, rows of the header's *More actions* that a choice closes through
 /// `menu`; none once the run has a pull request, which the top card shows with *Review PR*.
-pub fn menu_rows(ctx: &mut Ctx, task: &TaskContext, read: &PullRequestRead, menu: &Signal<bool>) -> Vec<Element> {
+pub fn menu_rows(ctx: &mut Ctx, task: &TaskContext, read: &PullRequestRead) -> Vec<ui::MenuItem> {
   let Some(run) = task.detail.run.as_ref() else {
     return Vec::new();
   };
@@ -201,10 +202,7 @@ pub fn menu_rows(ctx: &mut Ctx, task: &TaskContext, read: &PullRequestRead, menu
   )
   .icon(Icon::GitPullRequestDraft)
   .chosen(on);
-  vec![
-    create.icon(Icon::GitPullRequest).render(ctx, menu),
-    switch.render(ctx, menu),
-  ]
+  vec![create.icon(Icon::GitPullRequest).render(ctx), switch.render(ctx)]
 }
 
 /// The run's open pull request: its number, and its page when it is known.

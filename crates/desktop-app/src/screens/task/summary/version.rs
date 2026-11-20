@@ -24,7 +24,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_at_end, menu_panel},
+    menu::{MenuItem, MenuPanel, menu_at_end, menu_panel},
     pressable::pressable,
     tooltip::Tooltip,
   },
@@ -100,8 +100,8 @@ impl VersionMenu {
     ctx: &mut Ctx,
     requirements: &TaskRequirements,
     (shown, chosen): (RequirementsSource, &Signal<Option<Version>>),
-  ) -> Element {
-    let rows: Vec<Element> = requirements
+  ) -> MenuPanel {
+    let rows: Vec<_> = requirements
       .sources()
       .into_iter()
       .enumerate()
@@ -113,13 +113,12 @@ impl VersionMenu {
           move || chosen.set(Some(Version(source))),
         )
         .chosen(source == shown)
-        .render(ctx, &self.open)
+        .render(ctx)
       })
       .collect();
     menu_panel("task-brief-version-menu")
-      .width(Dimension::Px(MENU_WIDTH))
+      .width(MENU_WIDTH)
       .with_children(rows)
-      .into()
   }
 }
 

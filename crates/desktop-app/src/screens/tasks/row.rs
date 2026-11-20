@@ -348,8 +348,8 @@ fn actions(ctx: &mut Ctx, props: &RowProps, (menu, lists): (&MenuPlace, &team_me
       shared: props.shared,
     };
     let closer = Closer::of(ctx);
-    task_close::more_menu(ctx, menu, (key, &id, task_close::MENU_WIDTH), |ctx, open| {
-      closer.menu(ctx, (&id, &subject), open)
+    task_close::more_menu(ctx, menu, (key, &id, task_close::MENU_WIDTH), |ctx, _| {
+      closer.menu(ctx, (&id, &subject))
     })
   };
   Row::new()

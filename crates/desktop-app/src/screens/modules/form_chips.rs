@@ -27,9 +27,8 @@ use crate::{
   },
   ui::{
     date_picker::{Limits, PickerProps, date_panel},
-    filter::filter_menu_panel,
     icon::Icon,
-    menu::MenuItem,
+    menu::{MenuItem, filter_menu_panel, inline_menu},
   },
 };
 
@@ -100,7 +99,7 @@ pub fn row(ctx: &mut Ctx, props: &FormProps, fields: &Fields, chips: &Chips) -> 
 fn state_chip(ctx: &mut Ctx, chosen: &Signal<StatePick>, state: &ChipState) -> Element {
   let current = chosen.get().0;
   let panel = state.is_open().then(|| {
-    let rows: Vec<Element> = [ModuleState::Open, ModuleState::Closed]
+    let rows: Vec<_> = [ModuleState::Open, ModuleState::Closed]
       .into_iter()
       .map(|choice| {
         let chosen = chosen.clone();
@@ -109,14 +108,14 @@ fn state_chip(ctx: &mut Ctx, chosen: &Signal<StatePick>, state: &ChipState) -> E
           ModuleState::Closed => "module-state-closed",
         };
         MenuItem::new(id, words::state(ctx, choice), move || chosen.set(StatePick(choice)))
-          .in_form()
           .chosen(choice == current)
-          .render(ctx, &state.open)
+          .render(ctx)
       })
       .collect();
-    filter_menu_panel("module-state-menu", MENU_WIDTH)
-      .with_children(rows)
-      .into()
+    inline_menu(
+      state.open.clone(),
+      filter_menu_panel("module-state-menu", MENU_WIDTH).with_children(rows),
+    )
   });
   PropertyChip::new(
     "module-state",

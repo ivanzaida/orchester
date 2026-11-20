@@ -319,10 +319,10 @@ impl DecisionPage {
     .danger()
     .icon(Icon::Trash2);
     let panel = menu_panel("decision-menu")
-      .width(Dimension::Px(MENU_WIDTH))
-      .child(edit.render(ctx, &open))
-      .child(separator(ctx))
-      .child(delete.render(ctx, &open));
+      .width(MENU_WIDTH)
+      .child(edit.render(ctx))
+      .child(separator())
+      .child(delete.render(ctx));
     Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
   }
 

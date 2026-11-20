@@ -17,6 +17,7 @@ use lurq::{
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_core::{
   id::ModuleId,
@@ -37,7 +38,13 @@ use crate::{
   },
   services::Services,
   theme::{ExtraSpacing, ExtraTypography},
-  ui::{field::FieldInput, filter::filter_menu_panel, icon::Icon, message::message_text, popover::room_under},
+  ui::{
+    field::FieldInput,
+    icon::Icon,
+    menu::{filter_menu_panel, inline_menu, standalone},
+    message::message_text,
+    popover::room_under,
+  },
 };
 
 /// The menu's width (`mTQMc`).
@@ -115,25 +122,30 @@ fn menu(ctx: &mut Ctx, read: &FutureState<Read, Message>, chosen: &Signal<BasePi
     .render(ctx);
   let mut panel = filter_menu_panel("module-base-menu", MENU_WIDTH).child(find);
   if let Some(room) = room_under(ctx, &base.state.anchor, BAR_HEIGHT) {
-    panel = panel.max_height(Dimension::Px(room));
+    panel = panel.max_height(room);
   }
   let Some(Read(read)) = &read.data else {
     let words = match &read.error {
       Some(error) => message_text(ctx, error),
       None => ctx.t("modules.form.base.reading"),
     };
-    return panel.child(foot(&words, "module-base-reading")).into();
+    return inline_menu(
+      base.state.open.clone(),
+      panel.child(foot(&words, "module-base-reading")),
+    );
   };
   let lists = ScrollVertical::new(branches(ctx, read, chosen, base))
     .id("module-base-scroll")
     .width(Dimension::Pct(100.0))
     .flex_shrink(1.0);
-  panel
-    .child(checked_out(ctx, read, chosen, base))
-    .child(separator(ctx))
-    .child(lists)
-    .child(note(ctx, read.inheriting))
-    .into()
+  inline_menu(
+    base.state.open.clone(),
+    panel
+      .child(checked_out(ctx, read, chosen, base))
+      .child(separator(ctx))
+      .child(lists)
+      .child(note(ctx, read.inheriting)),
+  )
 }
 
 /// The branches *Find a branch* matches, under *Branches* and *Remote only*, or that none does.
@@ -171,10 +183,13 @@ fn branches(ctx: &mut Ctx, read: &ModuleBaseRead, chosen: &Signal<BasePick>, bas
   }
   for (index, branch) in local.into_iter().enumerate() {
     let choice = ModuleBasePick::Branch(BranchPick::Local(branch.clone()));
-    panel = panel.child(option(
-      (&format!("module-base-branch-{index}"), Icon::GitBranch),
-      (branch.as_str().into(), None),
-      (choice, chosen, base),
+    panel = panel.child(standalone(
+      option(
+        (&format!("module-base-branch-{index}"), Icon::GitBranch),
+        (branch.as_str().into(), None),
+        (choice, chosen, base),
+      ),
+      &base.state.open,
     ));
   }
   if !remote.is_empty() {
@@ -183,17 +198,20 @@ fn branches(ctx: &mut Ctx, read: &ModuleBaseRead, chosen: &Signal<BasePick>, bas
   for (index, remote) in remote.into_iter().enumerate() {
     let creates = ctx.t_args("modules.form.base.creates", [("branch", remote.local().as_str())]);
     let choice = ModuleBasePick::Branch(BranchPick::Remote(remote.clone()));
-    panel = panel.child(option(
-      (&format!("module-base-remote-{index}"), Icon::Cloud),
-      (remote.tracking().into(), Some(creates)),
-      (choice, chosen, base),
+    panel = panel.child(standalone(
+      option(
+        (&format!("module-base-remote-{index}"), Icon::Cloud),
+        (remote.tracking().into(), Some(creates)),
+        (choice, chosen, base),
+      ),
+      &base.state.open,
     ));
   }
   panel
 }
 
 /// *Checked-out branch*, with the branch the checkout has now (`Option · Checked-out branch` `NPwra`).
-fn checked_out(ctx: &mut Ctx, read: &ModuleBaseRead, chosen: &Signal<BasePick>, base: &BaseChip) -> Element {
+fn checked_out(ctx: &mut Ctx, read: &ModuleBaseRead, chosen: &Signal<BasePick>, base: &BaseChip) -> ui::MenuItem {
   let help = match &read.checked_out {
     Some(branch) => ctx.t_args("modules.form.base.checkedOutNow", [("branch", branch.as_str())]),
     None => ctx.t("modules.form.base.checkedOutDetached"),
@@ -210,7 +228,7 @@ fn option(
   (id, glyph): (&str, Icon),
   (title, help): (Arc<str>, Option<Arc<str>>),
   (choice, chosen, base): (ModuleBasePick, &Signal<BasePick>, &BaseChip),
-) -> Element {
+) -> ui::MenuItem {
   let picked = chosen.get_untracked().0 == choice;
   let mono = choice != ModuleBasePick::CheckedOut;
   let (chosen, find) = (chosen.clone(), base.find.clone());
@@ -224,7 +242,7 @@ fn option(
     chosen: picked,
     mono,
   }
-  .render(&base.state.open, move || {
+  .render(move || {
     chosen.set(BasePick(choice.clone()));
     find.set(String::new());
   })

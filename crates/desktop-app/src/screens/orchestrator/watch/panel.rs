@@ -33,7 +33,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     kbd::key_cap,
-    menu::menu_panel,
+    menu::{held_panel, menu_panel},
     message::message_text,
     pressable::Press,
     skeleton::bone,
@@ -106,10 +106,11 @@ impl Picker {
 
 /// The panel named after composer `id`, holding `content`.
 pub(super) fn frame((id, picker): (&str, Picker), content: Vec<Element>) -> Element {
-  menu_panel(&format!("{id}-{}-picker", picker.prefix()))
-    .width(Dimension::Px(WIDTH))
-    .with_children(content)
-    .into()
+  held_panel(
+    menu_panel(&format!("{id}-{}-picker", picker.prefix()))
+      .width(WIDTH)
+      .with_children(content),
+  )
 }
 
 /// The picker's own search field, `{id}-{prefix}-search`, with `count` at its end.

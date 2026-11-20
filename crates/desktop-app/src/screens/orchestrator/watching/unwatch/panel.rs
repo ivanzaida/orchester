@@ -31,7 +31,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, IconSize, SlashText},
   ui::{
     icon::{Icon, icon},
-    menu::{menu_panel, separator},
+    menu::{held_panel, menu_panel, separator_line},
     message::message_text,
     slash::{Choice, PickerSearch},
   },
@@ -108,7 +108,7 @@ pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> 
   if !rows.is_empty() {
     content.push(list(ctx, &format!("{}-unwatch-list", shown.id), rows));
   }
-  content.push(separator(ctx));
+  content.push(separator_line(ctx));
   let cancels = Text::new(&ctx.t("orchestrator.watch.unwatch.cancelsNothing"))
     .variant(TypographyStyle::Caption)
     .flex_shrink(0.0)
@@ -141,10 +141,11 @@ pub(super) fn unshown(ctx: &mut Ctx, (id, search): (&str, &PickerSearch), why: O
 }
 
 fn frame(id: &str, content: Vec<Element>) -> Element {
-  menu_panel(&format!("{id}-unwatch-picker"))
-    .width(Dimension::Px(WIDTH))
-    .with_children(content)
-    .into()
+  held_panel(
+    menu_panel(&format!("{id}-unwatch-picker"))
+      .width(WIDTH)
+      .with_children(content),
+  )
 }
 
 /// The picker's own search field, `{id}-unwatch-search`.

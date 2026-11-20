@@ -16,10 +16,11 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle},
   },
-  components::{Column, Placement, Popup, Row, Text},
+  components::{Column, Placement, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_core::{id::RunId, task::organization::ChangeActor};
 use orchester_store::ProjectDb;
@@ -50,7 +51,7 @@ use crate::{
     icon::Icon,
     icon_button::IconButton,
     kbd::key_cap,
-    menu::menu_panel,
+    menu::{self, menu_panel},
   },
 };
 
@@ -325,24 +326,22 @@ impl BulkBar {
   }
 
   /// The bar's open list, over the button that opened it.
-  fn list(&self, ctx: &mut Ctx, dropping: &Dropping, cards: &[CardModel], menu: BarMenu) -> Option<Popup> {
+  fn list(&self, ctx: &mut Ctx, dropping: &Dropping, cards: &[CardModel], menu: BarMenu) -> Option<ui::Menu> {
     let (rows, anchor) = match menu {
       BarMenu::None => return None,
       BarMenu::MoveTo => (super::bulk_menus::move_rows(ctx, dropping, cards), &self.anchors[0]),
       BarMenu::Priority => (super::bulk_menus::priority_rows(ctx, dropping, cards), &self.anchors[1]),
       BarMenu::Tags => (super::bulk_menus::tag_rows(ctx, dropping, cards), &self.anchors[2]),
     };
-    let rows: Vec<Element> = rows.into_iter().map(|row| row.render(ctx, &self.open)).collect();
+    let rows: Vec<_> = rows.into_iter().map(|row| row.render(ctx)).collect();
+    let panel = menu_panel("tasks-board-bulk-menu")
+      .width(MENU_WIDTH)
+      .with_children(rows);
+    // Over its button, with the offset the engine's popup had: into the button, not away from it.
     Some(
-      Popup::new(
-        anchor.clone(),
-        menu_panel("tasks-board-bulk-menu")
-          .width(Dimension::Px(MENU_WIDTH))
-          .with_children(rows),
-      )
-      .open(self.open.clone())
-      .placement(Placement::TopStart)
-      .offset(0.0, -ExtraSpacing::Snug.value()),
+      menu::menu(anchor.clone(), self.open.clone(), panel)
+        .placement(Placement::TopStart)
+        .offset(-ExtraSpacing::Snug.value()),
     )
   }
 }

@@ -19,7 +19,10 @@ use super::{
 };
 use crate::{
   theme::{ExtraSpacing, ExtraTypography},
-  ui::{filter::filter_menu_panel, icon::Icon, menu::MenuItem},
+  ui::{
+    icon::Icon,
+    menu::{MenuItem, filter_menu_panel, inline_menu},
+  },
 };
 
 /// The menu's width.
@@ -58,7 +61,7 @@ pub fn points_chip(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<
 
 fn menu(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<Points>) -> Element {
   let chosen = view.values.points;
-  let rows: Vec<Element> = std::iter::once(None)
+  let rows: Vec<_> = std::iter::once(None)
     .chain(StoryPoints::all().map(Some))
     .map(|points| {
       let label = points.map_or_else(
@@ -70,14 +73,13 @@ fn menu(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<Points>) ->
       let item = MenuItem::new(format!("task-form-points-{id}"), label, move || {
         pick.set(Points(points))
       })
-      .in_form()
       .chosen(points == chosen);
       let item = if points.is_none() {
         item.detail(ctx.t("task_form.fields.points.automaticDetail"))
       } else {
         item
       };
-      item.render(ctx, &state.open)
+      item.render(ctx)
     })
     .collect();
   let estimate = view
@@ -86,10 +88,12 @@ fn menu(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<Points>) ->
     .and_then(|task| task.estimate())
     .filter(|estimate| estimate.source() == EstimateSource::Automation && chosen.is_none())
     .map(|estimate| estimated(ctx, estimate));
-  filter_menu_panel("task-form-points-menu", MENU_WIDTH)
-    .with_children(rows)
-    .with_children(estimate)
-    .into()
+  inline_menu(
+    state.open.clone(),
+    filter_menu_panel("task-form-points-menu", MENU_WIDTH)
+      .with_children(rows)
+      .with_children(estimate),
+  )
 }
 
 /// Orchester's estimate and its reason, under the choices.

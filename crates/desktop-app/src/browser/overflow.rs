@@ -14,7 +14,7 @@ use lurq::{
     events::MouseEvent,
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Placement, Popup, Row, ScrollVertical, Text, TextOverflow},
+  components::{Button, Column, Row, ScrollVertical, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
@@ -32,7 +32,7 @@ use crate::{
   ui::{
     field::FieldInput,
     icon::{Icon, icon},
-    menu::{menu_panel, separator},
+    menu::{MenuPanel, menu_at_end, menu_panel, separator_line},
     pressable::{in_title_bar, pressable},
   },
 };
@@ -41,6 +41,8 @@ use crate::{
 /// twenty rows and divider fit.
 const MENU_WIDTH: f32 = 440.0;
 const MENU_MAX_HEIGHT: f32 = 640.0;
+/// The menu's element id.
+const MENU_ID: &str = "browser-overflow-menu";
 
 /// The menu's hold on the window's focus: its filter takes it when the menu opens, and it goes back where it was when
 /// the menu closes. The strip keeps this, because the menu also goes when its button does, once the tabs fit again.
@@ -166,17 +168,18 @@ impl Component for Overflow {
     } else {
       button
     };
-    let menu = self.open.get().then(|| self.menu(ctx, &showing, &focus));
-    let popup = Popup::new(self.anchor.clone(), menu.unwrap_or_else(Element::new))
-      .open(self.open.clone())
-      .placement(Placement::BottomEnd)
-      .offset(0.0, ExtraSpacing::MenuOffset.value());
+    let panel = if self.open.get() {
+      self.menu(ctx, &showing, &focus)
+    } else {
+      menu_panel(MENU_ID)
+    };
+    let popup = menu_at_end(self.anchor.clone(), self.open.clone(), panel).offset(ExtraSpacing::MenuOffset.role());
     Row::new().flex_shrink(0.0).child(button).child(popup)
   }
 }
 
 impl Overflow {
-  fn menu(&self, ctx: &mut Ctx, showing: &Showing, focus: &MenuFocus) -> Element {
+  fn menu(&self, ctx: &mut Ctx, showing: &Showing, focus: &MenuFocus) -> MenuPanel {
     let filter = self.filter.get().to_lowercase();
     let rows = |tabs: &[StripTab], offset: usize, ctx: &mut Ctx| -> Vec<Element> {
       let mut rows = Vec::new();
@@ -189,7 +192,7 @@ impl Overflow {
     };
     let agents = rows(&showing.strip.agents, 0, ctx);
     let person = rows(&showing.strip.person, showing.strip.agents.len(), ctx);
-    let divider = (!agents.is_empty() && !person.is_empty()).then(|| separator(ctx));
+    let divider = (!agents.is_empty() && !person.is_empty()).then(|| separator_line(ctx));
     let none = (agents.is_empty() && person.is_empty()).then(|| {
       Row::new()
         .height(Dimension::Px(ControlHeight::Md.value()))
@@ -213,15 +216,11 @@ impl Overflow {
       .with_children(divider)
       .with_children(person)
       .with_children(none);
-    menu_panel("browser-overflow-menu")
-      .width(Dimension::Px(MENU_WIDTH))
-      .child(field)
-      .child(
-        ScrollVertical::new(rows)
-          .width(Dimension::Pct(100.0))
-          .max_height(Dimension::Px(MENU_MAX_HEIGHT)),
-      )
-      .into()
+    menu_panel(MENU_ID).width(MENU_WIDTH).child(field).child(
+      ScrollVertical::new(rows)
+        .width(Dimension::Pct(100.0))
+        .max_height(Dimension::Px(MENU_MAX_HEIGHT)),
+    )
   }
 
   /// A tab's row: its icon and dot, its label, its run, × under the pointer.

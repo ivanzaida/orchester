@@ -30,7 +30,7 @@ use crate::{
   theme::{ControlHeight, ExtraSpacing},
   ui::{
     icon::Icon,
-    menu::{menu_panel, separator},
+    menu::{held_panel, menu_panel, separator_line},
     message::message_text,
   },
 };
@@ -200,10 +200,10 @@ impl Component for SlashMenu {
       content
     };
     let panel = menu_panel(&format!("{}-slash-menu", props.id))
-      .width(Dimension::Px(WIDTH))
+      .width(WIDTH)
       .with_children(content);
     let gap = ctx.theme().spacing_value(SpacingSize::Sm).to_px();
-    Popup::new(props.anchor.clone(), panel)
+    Popup::new(props.anchor.clone(), held_panel(panel))
       .open_when(true)
       .dismiss_on_outside_click(false)
       .dismiss_on_escape(false)
@@ -334,7 +334,7 @@ fn skills_section(
     None => ctx.t_args("composer.slash.published", [("count", section.total.to_string())]),
   };
   let shown_commands = props.faces.iter().any(|face| face_matched(face, typed).is_some());
-  let mut content: Vec<Element> = shown_commands.then(|| separator(ctx)).into_iter().collect();
+  let mut content: Vec<Element> = shown_commands.then(|| separator_line(ctx)).into_iter().collect();
   content.push(heading(ctx, ("skills", "composer.slash.skills"), Some(end)));
   if skills.is_empty() {
     return content;

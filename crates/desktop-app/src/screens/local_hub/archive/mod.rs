@@ -16,7 +16,7 @@ use lurq::{
   },
   components::Column,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{id::ProjectId, resource::ResourceKind};
 use orchester_workspace::local_archive::Archivable;
@@ -121,16 +121,14 @@ impl Component for ArchiveMenu {
       move || asking.set(Some(target.clone()))
     })
     .icon(Icon::Archive)
-    .render(ctx, &self.menu);
+    .render(ctx);
     let toggle = self.menu.clone();
     let button = IconButton::new("local-hub-more", Icon::Ellipsis, ctx.t("local_hub.archive.more"))
       .small()
       .element(self.anchor.clone())
       .on_click(move || toggle.update(|open| *open = !*open))
       .render(ctx);
-    let panel = menu_panel("local-hub-more-menu")
-      .width(Dimension::Px(MORE_MENU_WIDTH))
-      .child(item);
+    let panel = menu_panel("local-hub-more-menu").width(MORE_MENU_WIDTH).child(item);
     Column::new()
       .child(button)
       .child(menu_at_end(self.anchor.clone(), self.menu.clone(), panel))

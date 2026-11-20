@@ -11,7 +11,7 @@ mod tools;
 
 use lurq::{
   app::ctx::Ctx,
-  components::{Column, Placement, Popup, Row},
+  components::{Column, Row},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
@@ -33,7 +33,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
     icon::Icon,
-    menu::{MenuItem, menu_panel},
+    menu::{MenuItem, menu, menu_panel},
     message::message_text,
     pressable::Focus,
     tabs::{Segment, SegmentFace, segmented},
@@ -320,7 +320,7 @@ impl Fields {
       .compact()
       .element_ref(self.secrets_anchor.clone())
       .on_click(move || open.update(|open| *open = !*open));
-    let rows: Vec<Element> = secrets
+    let rows: Vec<_> = secrets
       .iter()
       .enumerate()
       .map(|(index, secret)| {
@@ -344,17 +344,14 @@ impl Fields {
           });
         })
         .icon(Icon::KeyRound)
-        .render(ctx, &self.secrets_open)
+        .render(ctx)
       })
       .collect();
     let panel = menu_panel("connection-mcp-secrets")
-      .width(Dimension::Px(SECRETS_MENU_WIDTH))
+      .width(SECRETS_MENU_WIDTH)
       .with_children(rows);
     // Under the button, from its start.
-    let popup = Popup::new(self.secrets_anchor.clone(), panel)
-      .open(self.secrets_open.clone())
-      .placement(Placement::BottomStart)
-      .offset(0.0, ExtraSpacing::Snug.value());
+    let popup = menu(self.secrets_anchor.clone(), self.secrets_open.clone(), panel);
     Row::new().flex_shrink(0.0).child(button).child(popup).into()
   }
 

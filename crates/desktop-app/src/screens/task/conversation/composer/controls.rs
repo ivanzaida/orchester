@@ -12,7 +12,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
   },
-  components::{Button, Column, Placement, Popup, Row, Spacer, Text},
+  components::{Button, Column, Placement, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
@@ -31,7 +31,7 @@ use crate::{
     attachments::draft::DraftAttachments,
     composer::recipient_pill,
     icon::{Icon, icon},
-    menu::{MenuItem, menu_panel},
+    menu::{MenuItem, menu, menu_panel},
     pressable::{inert, pressable},
     tooltip::Tooltip,
   },
@@ -267,25 +267,19 @@ fn send_menu(ctx: &mut Ctx, bar: &Bar<'_>, (first, second): &(Way, Way)) -> Elem
   };
   let first = item("composer-send-first", first, Some(primary.clone()))
     .chosen(true)
-    .render(ctx, bar.menu);
+    .render(ctx);
   let second = match press {
-    Some(press) if !second.unavailable => {
-      item("composer-send-second", second, Some(press.clone())).render(ctx, bar.menu)
-    }
-    _ => item("composer-send-second", second, None).render(ctx, bar.menu),
+    Some(press) if !second.unavailable => item("composer-send-second", second, Some(press.clone())).render(ctx),
+    _ => item("composer-send-second", second, None).render(ctx),
   };
-  let stopping =
-    words::stop_way(ctx, bar.mode).map(|way| item("composer-send-stop", &way, stop.clone()).render(ctx, bar.menu));
+  let stopping = words::stop_way(ctx, bar.mode).map(|way| item("composer-send-stop", &way, stop.clone()).render(ctx));
   let panel = menu_panel("composer-send-menu")
-    .width(Dimension::Px(MENU_WIDTH))
+    .width(MENU_WIDTH)
     .child(first)
     .child(second)
     .with_children(stopping);
-  Popup::new(bar.anchor.clone(), panel)
-    .open(bar.menu.clone())
+  menu(bar.anchor.clone(), bar.menu.clone(), panel)
     .placement(Placement::TopEnd)
-    // Away from the button: lurq moves an overlay above its anchor up by a positive offset.
-    .offset(0.0, ExtraSpacing::Snug.value())
     .into()
 }
 

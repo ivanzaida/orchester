@@ -44,6 +44,7 @@ use crate::{
     field::field_error,
     icon::Icon,
     icon_button::IconButton,
+    menu::menu_at_end,
     message::message_text,
   },
 };
@@ -284,11 +285,8 @@ impl Head {
       archive: Arc::new(move || hosted.archive(target.clone(), holds)),
     };
     let project: ProjectId = props.project.open.project.id();
-    let panel = menu::panel(ctx, (project, entry, props.default), &self.menu, &actions);
-    let menu = Popup::new(self.anchor.clone(), panel)
-      .open(self.menu.clone())
-      .placement(Placement::BottomEnd)
-      .offset(0.0, ctx.theme().spacing_value(SpacingSize::Xs).to_px());
+    let panel = menu::panel(ctx, (project, entry, props.default), &actions);
+    let menu = menu_at_end(self.anchor.clone(), self.menu.clone(), panel).offset(SpacingSize::Xs);
     Some(Column::new().child(button).child(menu).into())
   }
 }

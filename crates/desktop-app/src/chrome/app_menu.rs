@@ -9,7 +9,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Placement, Popup, Row},
+  components::Row,
   core::{ElementRef, Signal},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
@@ -24,7 +24,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_panel, separator},
+    menu::{self, MenuItem, MenuPanel, menu_panel, separator},
     pressable::{in_title_bar, pressable},
   },
 };
@@ -96,43 +96,38 @@ impl Component for AppMenu {
     if self.open.get() {
       button = button.background(ExtraColor::Hover.role());
     }
-    let menu = Popup::new(self.anchor.clone(), self.menu(ctx))
-      .open(self.open.clone())
-      .placement(Placement::BottomStart)
-      .offset(0.0, ExtraSpacing::MenuOffset.value());
+    let menu =
+      menu::menu(self.anchor.clone(), self.open.clone(), self.menu(ctx)).offset(ExtraSpacing::MenuOffset.role());
     Row::new().child(button).child(menu)
   }
 }
 
 impl AppMenu {
   /// The menu's rows; a window without tabs (a startup screen) offers Quit only.
-  fn menu(&self, ctx: &mut Ctx) -> Column {
+  fn menu(&self, ctx: &mut Ctx) -> MenuPanel {
     let navigation = ctx.use_context::<Navigation>();
     let window = ctx.window();
     let entries = ENTRIES
       .iter()
       .filter(|entry| navigation.is_some() || matches!(entry, Some((_, _, _, Command::Quit))));
-    entries.fold(
-      menu_panel("app-menu-list").width(Dimension::Px(MENU_WIDTH)),
-      |menu, entry| {
-        let Some((id, glyph, label_key, command)) = *entry else {
-          return menu.child(separator(ctx));
-        };
-        let label = ctx.t(label_key);
-        let (navigation, window) = (navigation.clone(), window.clone());
-        // All projects and Settings are places, opened by a browser's rules; New tab, Browser and Quit are actions.
-        let item = match (command, navigation) {
-          (Command::AllProjects, Some(navigation)) => MenuItem::opens(id, label, navigation.to(Route::AllProjects)),
-          (Command::Settings, Some(navigation)) => MenuItem::opens(id, label, navigation.to(Route::Settings)),
-          (Command::NewTab, Some(navigation)) => MenuItem::new(id, label, move || navigation.open_tab()),
-          (Command::Browser, Some(navigation)) => browser_item(ctx, (id, label), &navigation),
-          (Command::Quit, _) => MenuItem::new(id, label, move || window.request_close()),
-          // Only Quit is listed without tabs.
-          (Command::NewTab | Command::AllProjects | Command::Settings | Command::Browser, None) => return menu,
-        };
-        menu.child(item.icon(glyph).render(ctx, &self.open))
-      },
-    )
+    entries.fold(menu_panel("app-menu-list").width(MENU_WIDTH), |menu, entry| {
+      let Some((id, glyph, label_key, command)) = *entry else {
+        return menu.child(separator());
+      };
+      let label = ctx.t(label_key);
+      let (navigation, window) = (navigation.clone(), window.clone());
+      // All projects and Settings are places, opened by a browser's rules; New tab, Browser and Quit are actions.
+      let item = match (command, navigation) {
+        (Command::AllProjects, Some(navigation)) => MenuItem::opens(id, label, navigation.to(Route::AllProjects)),
+        (Command::Settings, Some(navigation)) => MenuItem::opens(id, label, navigation.to(Route::Settings)),
+        (Command::NewTab, Some(navigation)) => MenuItem::new(id, label, move || navigation.open_tab()),
+        (Command::Browser, Some(navigation)) => browser_item(ctx, (id, label), &navigation),
+        (Command::Quit, _) => MenuItem::new(id, label, move || window.request_close()),
+        // Only Quit is listed without tabs.
+        (Command::NewTab | Command::AllProjects | Command::Settings | Command::Browser, None) => return menu,
+      };
+      menu.child(item.icon(glyph).render(ctx))
+    })
   }
 }
 

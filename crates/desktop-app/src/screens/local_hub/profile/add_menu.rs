@@ -11,7 +11,7 @@ use lurq::{
   },
   components::Column,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 
 use crate::{
@@ -104,7 +104,7 @@ where
     } else {
       button.on_click(move || toggle.update(|open| *open = !*open))
     };
-    let rows: Vec<Element> = items
+    let rows: Vec<_> = items
       .into_iter()
       .map(|item| {
         let on_toggle = on_toggle.clone();
@@ -114,11 +114,11 @@ where
           move || on_toggle(item.id, !item.chosen),
         )
         .chosen(item.chosen)
-        .render(ctx, &self.open)
+        .render(ctx)
       })
       .collect();
     let panel = menu_panel(&format!("local-hub-profile-{what}s-menu"))
-      .width(Dimension::Px(MORE_MENU_WIDTH))
+      .width(MORE_MENU_WIDTH)
       .with_children(rows);
     Column::new()
       .child(button)

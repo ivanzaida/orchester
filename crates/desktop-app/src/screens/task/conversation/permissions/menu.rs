@@ -39,7 +39,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
-    menu::separator,
+    menu::separator_line,
     message::message_text,
     pressable::{inert, pressable},
   },
@@ -123,7 +123,7 @@ pub(super) fn panel(
         .then(|| way_row(ctx, &autopilot_way(ctx, props, shown), props, (permissions, confirming))),
     )
     .child(everything)
-    .child(separator(ctx))
+    .child(separator_line(ctx))
     .child(heading_row(
       "conversation-permissions-similar",
       None,

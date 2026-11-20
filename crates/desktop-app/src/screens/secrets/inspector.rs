@@ -221,9 +221,9 @@ impl Inspector {
     }
     .icon(Icon::Archive);
     let panel = menu_panel("secret-more-menu")
-      .width(Dimension::Px(MENU_WIDTH))
-      .child(copy.render(ctx, &open))
-      .child(archive.render(ctx, &open));
+      .width(MENU_WIDTH)
+      .child(copy.render(ctx))
+      .child(archive.render(ctx));
     Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
   }
 
@@ -338,7 +338,7 @@ fn detail(ctx: &mut Ctx, id: &str, (key, shown): (&str, &str)) -> Element {
 /// *Used by* (`WtpzX`): each tool and MCP server that takes the secret, opening it; or that none does.
 pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecrets, secret: &Secret) -> Element {
   let navigation = Navigation::of(ctx);
-  let rows: Vec<Element> = listed
+  let rows: Vec<_> = listed
     .used_by(secret.id())
     .map(|used| {
       let (glyph, what, page) = match used.kind {

@@ -16,6 +16,7 @@ use lurq::{
   components::{Column, Placement, Popup, Text},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_core::{
   project::TaskKey,
@@ -37,7 +38,7 @@ use crate::{
   ui::{
     clipboard::Clipboard,
     icon::Icon,
-    menu::{MenuItem, menu_panel, separator},
+    menu::{Entry, MenuItem, inline_menu, menu_at_end, menu_panel, separator},
     status::{priority_look, workflow_key, workflow_look},
   },
 };
@@ -58,7 +59,7 @@ pub struct MenuHandles<'a> {
 }
 
 /// The menu of `card`, open while `handles.open` holds, beside `handles.anchor`, with the list it opened beside it.
-pub fn card_menu(ctx: &mut Ctx, card: &CardModel, handles: &MenuHandles<'_>) -> Popup {
+pub fn card_menu(ctx: &mut Ctx, card: &CardModel, handles: &MenuHandles<'_>) -> ui::Menu {
   let state = BoardState::of(ctx);
   let page = state
     .menu
@@ -71,16 +72,15 @@ pub fn card_menu(ctx: &mut Ctx, card: &CardModel, handles: &MenuHandles<'_>) -> 
   let rows = commands(ctx, card, &state, (open, page, handles.list_anchor));
   let list = match page {
     MenuPage::Commands => None,
-    MenuPage::MoveTo => Some(move_to(ctx, card, open)),
-    MenuPage::Priority => Some(priorities(ctx, card, &state, open)),
-    MenuPage::Tags => Some(tags(ctx, card, &state, open)),
+    MenuPage::MoveTo => Some(move_to(ctx, card)),
+    MenuPage::Priority => Some(priorities(ctx, card, &state)),
+    MenuPage::Tags => Some(tags(ctx, card, &state)),
   };
   // A press elsewhere in the menu closes the list and reaches the row it is on.
   let list = list.map(|rows| {
-    let panel = menu_panel(&format!("{id}-list"))
-      .width(Dimension::Px(LIST_WIDTH))
-      .with_children(rows);
-    Popup::new(handles.list_anchor.clone(), panel)
+    let panel = menu_panel(&format!("{id}-list")).width(LIST_WIDTH).with_children(rows);
+    // A choice in the list closes the card's menu, which holds it.
+    Popup::new(handles.list_anchor.clone(), inline_menu(open.clone(), panel))
       .open(handles.list_open.clone())
       .placement(Placement::RightStart)
       .offset(LIST_OFFSET.0, LIST_OFFSET.1)
@@ -88,13 +88,10 @@ pub fn card_menu(ctx: &mut Ctx, card: &CardModel, handles: &MenuHandles<'_>) -> 
       .switch_on_anchor_press(false)
   });
   let panel = menu_panel(&id)
-    .width(Dimension::Px(MENU_WIDTH))
+    .width(MENU_WIDTH)
     .with_children(rows)
-    .with_children(list);
-  Popup::new(handles.anchor.clone(), panel)
-    .open(open.clone())
-    .placement(Placement::BottomEnd)
-    .offset(0.0, ExtraSpacing::Snug.value())
+    .with_children(list.map(Element::from));
+  menu_at_end(handles.anchor.clone(), open.clone(), panel)
 }
 
 /// Opens the list `page` of `card`'s menu beside it.
@@ -118,7 +115,7 @@ fn commands(
   card: &CardModel,
   state: &BoardState,
   (open, page, list_anchor): (&Signal<bool>, MenuPage, &ElementRef),
-) -> Vec<Element> {
+) -> Vec<Entry> {
   let dropping = Dropping::of(ctx);
   let busy = state.busy() || dropping.closer.busy();
   let id = |name: &str| format!("task-menu-{}-{name}", card.row.key);
@@ -139,9 +136,9 @@ fn commands(
       .icon(glyph)
       .submenu()
   };
-  let mut rows: Vec<Element> = vec![open_task.render(ctx, open), separator(ctx)];
+  let mut rows: Vec<Entry> = vec![open_task.render(ctx).into(), separator()];
   if dropping.locked(card) {
-    rows.push(copy_key(ctx, card, open));
+    rows.push(copy_key(ctx, card));
     return rows;
   }
   for (name, key, glyph, list, shortcut) in [
@@ -168,33 +165,31 @@ fn commands(
     ),
   ] {
     let (label, keys) = (ctx.t(key), ctx.t(shortcut));
-    let row = changing(name, label, glyph, list).shortcut(keys).render(ctx, open);
-    rows.push(if list == page {
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .ref_element(list_anchor.clone())
-        .child(row)
-        .into()
+    let row = changing(name, label, glyph, list).shortcut(keys);
+    let row = if list == page {
+      row.element(list_anchor.clone())
     } else {
       row
-    });
+    };
+    rows.push(row.render(ctx).into());
   }
-  rows.push(copy_key(ctx, card, open));
-  rows.extend(run_again(ctx, card, (&dropping, busy), open));
-  rows.push(separator(ctx));
-  rows.extend(closing(ctx, card, (&dropping, busy), open));
+  rows.push(copy_key(ctx, card));
+  rows.extend(run_again(ctx, card, (&dropping, busy)));
+  rows.push(separator());
+  rows.extend(closing(ctx, card, (&dropping, busy)));
   rows
 }
 
 /// Copy key, with its keys.
-fn copy_key(ctx: &mut Ctx, card: &CardModel, open: &Signal<bool>) -> Element {
+fn copy_key(ctx: &mut Ctx, card: &CardModel) -> Entry {
   copy_key_item(ctx, format!("task-menu-{}-copy", card.row.key), card.row.key.clone())
     .shortcut(ctx.t(if cfg!(target_os = "macos") {
       "tasks.board.keys.copyMac"
     } else {
       "tasks.board.keys.copy"
     }))
-    .render(ctx, open)
+    .render(ctx)
+    .into()
 }
 
 /// The menu row, as `id`, that copies the task `key`: a card's and a team member's list row's.
@@ -211,12 +206,7 @@ pub(in crate::screens::tasks) fn copy_key_item(ctx: &mut Ctx, id: String, key: A
 /// Run again, for a task whose latest run ended so that Run again may follow it (not one that succeeded with work to
 /// merge, or was merged): asked at the card first, as a drop on Todo asks, also for a card in Todo already, which a
 /// drop there leaves as it is.
-fn run_again(
-  ctx: &mut Ctx,
-  card: &CardModel,
-  (dropping, busy): (&Dropping, bool),
-  open: &Signal<bool>,
-) -> Vec<Element> {
+fn run_again(ctx: &mut Ctx, card: &CardModel, (dropping, busy): (&Dropping, bool)) -> Vec<Entry> {
   if !card.row.runs_again || card.row.run_not_ended || card.row.not_shared {
     return Vec::new();
   }
@@ -233,12 +223,12 @@ fn run_again(
       }
     })
   };
-  vec![separator(ctx), row.icon(Icon::RotateCcw).render(ctx, open)]
+  vec![separator(), row.icon(Icon::RotateCcw).render(ctx).into()]
 }
 
 /// Mark as done and Cancel task, or Reopen task for a closed one, and Delete task… in `danger`, through the screen's
 /// closer.
-fn closing(ctx: &mut Ctx, card: &CardModel, (dropping, busy): (&Dropping, bool), open: &Signal<bool>) -> Vec<Element> {
+fn closing(ctx: &mut Ctx, card: &CardModel, (dropping, busy): (&Dropping, bool)) -> Vec<Entry> {
   let subject = dropping.subject(card);
   let id = |name: &str| format!("task-menu-{}-{name}", card.row.key);
   let waiting = ctx.t("task_close.menu.busy");
@@ -295,19 +285,19 @@ fn closing(ctx: &mut Ctx, card: &CardModel, (dropping, busy): (&Dropping, bool),
       } else {
         item
       };
-      item.render(ctx, open)
+      item.render(ctx).into()
     })
     .collect()
 }
 
 /// The columns by status, each one the card cannot go to faded, and why in the list's foot.
-fn move_to(ctx: &mut Ctx, card: &CardModel, open: &Signal<bool>) -> Vec<Element> {
+fn move_to(ctx: &mut Ctx, card: &CardModel) -> Vec<Entry> {
   let dropping = Dropping::of(ctx);
-  let mut rows: Vec<Element> = Vec::new();
+  let mut rows: Vec<Entry> = Vec::new();
   let mut refused: Vec<(Arc<str>, moves::Refusal)> = Vec::new();
   for status in WorkflowStatus::ALL {
     if status == WorkflowStatus::Canceled {
-      rows.push(separator(ctx));
+      rows.push(separator());
     }
     let id = format!("task-menu-{}-move-{}", card.row.key, super::model::status_name(status));
     let label = ctx.t(workflow_key(status));
@@ -329,11 +319,11 @@ fn move_to(ctx: &mut Ctx, card: &CardModel, open: &Signal<bool>) -> Vec<Element>
         })
       }
     };
-    rows.push(item.icon(glyph).render(ctx, open));
+    rows.push(item.icon(glyph).render(ctx).into());
   }
   if !refused.is_empty() {
-    rows.push(separator(ctx));
-    rows.push(reasons(ctx, card, &refused));
+    rows.push(separator());
+    rows.push(reasons(ctx, card, &refused).into());
   }
   rows
 }
@@ -384,9 +374,9 @@ fn reasons(ctx: &Ctx, card: &CardModel, refused: &[(Arc<str>, moves::Refusal)]) 
     .into()
 }
 
-fn priorities(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>) -> Vec<Element> {
+fn priorities(ctx: &mut Ctx, card: &CardModel, state: &BoardState) -> Vec<Entry> {
   let now = card.row.organization.priority();
-  let mut rows: Vec<Element> = Vec::new();
+  let mut rows: Vec<Entry> = Vec::new();
   for priority in Priority::ALL {
     let (glyph, key, _) = priority_look(priority);
     let id = format!(
@@ -404,13 +394,13 @@ fn priorities(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal
     })
     .icon(glyph)
     .chosen(priority == now);
-    rows.push(item.render(ctx, open));
+    rows.push(item.render(ctx).into());
   }
   rows
 }
 
 /// The project's tags, each chosen while the task has it; a choice adds or takes it off.
-fn tags(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>) -> Vec<Element> {
+fn tags(ctx: &mut Ctx, card: &CardModel, state: &BoardState) -> Vec<Entry> {
   let dropping = Dropping::of(ctx);
   if dropping.tags.is_empty() {
     return vec![
@@ -420,11 +410,12 @@ fn tags(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>
         ctx.t("tasks.board.menu.noTagsReason"),
       )
       .without_lock()
-      .render(ctx, open),
+      .render(ctx)
+      .into(),
     ];
   }
   let held = card.row.organization.tags().to_vec();
-  let mut rows: Vec<Element> = Vec::new();
+  let mut rows: Vec<Entry> = Vec::new();
   for (index, (tag, name)) in dropping.tags.iter().enumerate() {
     let chosen = held.contains(tag);
     let mut next = held.clone();
@@ -447,7 +438,7 @@ fn tags(ctx: &mut Ctx, card: &CardModel, state: &BoardState, open: &Signal<bool>
     )
     .icon(Icon::Tag)
     .chosen(chosen);
-    rows.push(item.render(ctx, open));
+    rows.push(item.render(ctx).into());
   }
   rows
 }

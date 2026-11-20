@@ -79,7 +79,7 @@ pub(crate) fn head_with(
       archive()
     })
     .icon(Icon::Trash2)
-    .render(ctx, &more.open);
+    .render(ctx);
     let open = more.open.clone();
     let button = IconButton::new(format!("{id}-more"), Icon::Ellipsis, ctx.t("hub.more"))
       .small()
@@ -87,7 +87,7 @@ pub(crate) fn head_with(
       .on_click(move || open.update(|open| *open = !*open))
       .render(ctx);
     let panel = menu_panel(&format!("{id}-more-menu"))
-      .width(Dimension::Px(MORE_MENU_WIDTH))
+      .width(MORE_MENU_WIDTH)
       .child(item);
     Column::new()
       .child(button)

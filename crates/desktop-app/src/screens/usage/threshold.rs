@@ -9,7 +9,7 @@ use lurq::{
   },
   components::Row,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::usage::limits::WarningThreshold;
 use orchester_workspace::usage::Dashboard;
@@ -70,10 +70,8 @@ impl Component for ThresholdMenu {
       )
       .icon(Icon::Settings)
       .detail(ctx.t_args("usage.threshold.now", [("percent", &*share)]))
-      .render(ctx, &self.open);
-      let panel = menu_panel("usage-threshold-menu-panel")
-        .width(Dimension::Px(MENU_WIDTH))
-        .child(item);
+      .render(ctx);
+      let panel = menu_panel("usage-threshold-menu-panel").width(MENU_WIDTH).child(item);
       menu_at_end(self.anchor.clone(), self.open.clone(), panel)
     });
     Row::new().child(button).with_children(menu)

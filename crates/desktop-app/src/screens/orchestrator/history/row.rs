@@ -52,7 +52,7 @@ use crate::{
     icon::Icon,
     icon_button::IconButton,
     kbd::key_cap,
-    menu::{MenuItem, menu_at_end, menu_panel, separator},
+    menu::{MenuItem, inline_menu, menu_at_end, menu_panel, separator},
     message::message_text,
     pressable::opening,
   },
@@ -441,11 +441,11 @@ impl ItemView {
         self.changer(listing, rows, Change::Archive),
       )
       .icon(Icon::Archive)
-      .render(ctx, &self.menu)
+      .render(ctx)
     });
     let deleting = rows.deleting.clone();
     let panel = menu_panel(&format!("orchestrator-history-menu-{id}"))
-      .width(Dimension::Px(MENU_WIDTH))
+      .width(MENU_WIDTH)
       .child(
         MenuItem::new(
           format!("orchestrator-history-rename-{id}"),
@@ -453,7 +453,7 @@ impl ItemView {
           move || rename(),
         )
         .icon(Icon::Pencil)
-        .render(ctx, &self.menu),
+        .render(ctx),
       )
       .child(
         MenuItem::new(
@@ -462,10 +462,10 @@ impl ItemView {
           self.changer(listing, rows, change),
         )
         .icon(glyph)
-        .render(ctx, &self.menu),
+        .render(ctx),
       )
       .with_children(archive)
-      .child(separator(ctx))
+      .child(separator())
       .child(
         MenuItem::new(
           format!("orchestrator-history-delete-{id}"),
@@ -474,13 +474,13 @@ impl ItemView {
         )
         .icon(Icon::Trash2)
         .danger()
-        .render(ctx, &self.menu),
+        .render(ctx),
       );
     match self.pointer.get() {
       // The menu's corner at the pointer: the popup is placed from the row's bottom start.
       Some((x, y)) => {
         let (left, top, _, height) = self.row.rect();
-        Popup::new(self.row.clone(), panel)
+        Popup::new(self.row.clone(), inline_menu(self.menu.clone(), panel))
           .open(self.menu.clone())
           .placement(Placement::BottomStart)
           .offset(x - left, y - (top + height))

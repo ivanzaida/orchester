@@ -29,6 +29,7 @@ use lurq::{
   components::Column,
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_workspace::{messages::Message, tasks::run_again::RunAgainCheck};
 
@@ -181,7 +182,7 @@ impl TaskHeader {
     &self,
     ctx: &mut Ctx,
     props: &HeaderProps,
-    (check, pull_request): (Option<&Result<RunAgainCheck, Message>>, Vec<Element>),
+    (check, pull_request): (Option<&Result<RunAgainCheck, Message>>, Vec<ui::MenuItem>),
     latest_busy: bool,
   ) -> (Option<controls::Control>, Element) {
     let detail = props.task.detail.clone();

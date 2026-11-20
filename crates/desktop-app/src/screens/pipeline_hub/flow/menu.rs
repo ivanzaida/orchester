@@ -9,10 +9,11 @@ use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, events::MouseEvent, theme::RadiusSize},
-  components::{Button, Column, Placement, Popup},
+  components::Button,
   core::ElementRef,
   layout::{Alignment, layout_kind::Justify},
   node::{CursorIcon, Element, Style, dimension::Dimension},
+  ui,
 };
 use orchester_core::{
   name::Name,
@@ -25,10 +26,10 @@ use super::{
   state::{Held, Reorder},
 };
 use crate::{
-  theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize},
+  theme::{ControlHeight, ExtraColor, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_panel, separator},
+    menu::{Entry, MenuItem, MenuPanel, menu_at_end, menu_panel, separator},
     pressable::Focus,
     tooltip::Tooltip,
   },
@@ -101,18 +102,14 @@ pub(super) fn more_button(ctx: &mut Ctx, reorder: &Reorder, card: &StepCard, anc
 }
 
 /// The popup of `card`'s menu, open while the flow's menu is open for it.
-pub(super) fn popup(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, anchor: ElementRef) -> Popup {
+pub(super) fn popup(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, anchor: ElementRef) -> ui::Menu {
   let panel = panel(ctx, menu, card);
-  Popup::new(anchor, panel)
-    .open(menu.drive.reorder.menu_open.clone())
-    .placement(Placement::BottomEnd)
-    .offset(0.0, ExtraSpacing::Snug.value())
+  menu_at_end(anchor, menu.drive.reorder.menu_open.clone(), panel)
 }
 
-fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Column {
-  let open = &menu.drive.reorder.menu_open;
+fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> MenuPanel {
   let id = |part: &str| format!("pipeline-hub-flow-menu-{part}");
-  let mut rows: Vec<Element> = Vec::new();
+  let mut rows: Vec<Entry> = Vec::new();
   match menu.drive.current.possible_moves(&card.key) {
     Ok(moves) => {
       rows.extend(move_rows(ctx, menu, card, &moves));
@@ -125,11 +122,12 @@ fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Column {
         menu.cards.reason(ctx, &error, Some(&card.key)),
       )
       .icon(Icon::ArrowUp)
-      .render(ctx, open),
+      .render(ctx)
+      .into(),
     ),
   }
-  rows.push(separator(ctx));
-  rows.push(add_after(ctx, menu, card).render(ctx, open));
+  rows.push(separator());
+  rows.push(add_after(ctx, menu, card).render(ctx).into());
   let (drive, key, opens) = (menu.drive.clone(), card.key.clone(), menu.opens.clone());
   let copy = copy_name(ctx, &card.name);
   rows.push(
@@ -137,18 +135,19 @@ fn panel(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Column {
       open_made(opens.as_ref(), drive.duplicate(&key, copy.clone()));
     })
     .icon(Icon::Copy)
-    .render(ctx, open),
+    .render(ctx)
+    .into(),
   );
-  rows.push(remove_row(ctx, menu, card).render(ctx, open));
+  rows.push(remove_row(ctx, menu, card).render(ctx).into());
   menu_panel("pipeline-hub-flow-menu")
-    .width(Dimension::Px(MENU_WIDTH))
+    .width(MENU_WIDTH)
     .with_children(rows)
 }
 
 /// *Wait for some steps only…* (P16b `P1853`): the step opens with its *Waits for* row, which names the steps it waits
 /// for. Only for a step with a stage before it whose row is not shown yet: one that waits for part of that stage, or
 /// whose row the person opened or changed, has the row already.
-fn wait_some(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Option<Element> {
+fn wait_some(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Option<Entry> {
   let first = menu
     .flow
     .stages
@@ -171,7 +170,7 @@ fn wait_some(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard) -> Option<Element>
       }
     },
   );
-  Some(item.icon(Icon::GitMerge).render(ctx, &menu.drive.reorder.menu_open))
+  Some(item.icon(Icon::GitMerge).render(ctx).into())
 }
 
 /// *Remove step*, faded with why when another step returns to this one on failure.
@@ -195,9 +194,8 @@ fn remove_row(ctx: &Ctx, menu: &Menu<'_>, card: &StepCard) -> MenuItem {
 }
 
 /// *Move up*, *Move down*, the neighbours to run in parallel with and *Run on its own*, then the line before the rest.
-fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves) -> Vec<Element> {
-  let open = &menu.drive.reorder.menu_open;
-  let mut rows: Vec<Element> = Vec::new();
+fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves) -> Vec<Entry> {
+  let mut rows: Vec<Entry> = Vec::new();
   let item = |ctx: &mut Ctx, (part, key): (&str, &str), offer: &MoveOffer, change: Move, glyph: Icon| {
     let id = format!("pipeline-hub-flow-menu-{part}");
     let label = ctx.t(key);
@@ -227,9 +225,9 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
   };
   let up = item(ctx, ("up", up_words), &moves.up, Move::Up, Icon::ArrowUp).shortcut(keys(ctx, "up"));
   let down = item(ctx, ("down", down_words), &moves.down, Move::Down, Icon::ArrowDown).shortcut(keys(ctx, "down"));
-  rows.push(up.render(ctx, open));
-  rows.push(down.render(ctx, open));
-  let joins: Vec<Element> = moves
+  rows.push(up.render(ctx).into());
+  rows.push(down.render(ctx).into());
+  let joins: Vec<Entry> = moves
     .parallel_with
     .iter()
     .enumerate()
@@ -252,7 +250,7 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
         }
         _ => MenuItem::unavailable(id, label, ctx.t("pipeline_hub.flow.move.reason.broken")),
       };
-      row.icon(Icon::Split).render(ctx, open)
+      row.icon(Icon::Split).render(ctx).into()
     })
     .collect();
   let mut group = joins;
@@ -265,11 +263,12 @@ fn move_rows(ctx: &mut Ctx, menu: &Menu<'_>, card: &StepCard, moves: &StepMoves)
         move || drive.apply(&step, &Move::OnItsOwn, false),
       )
       .icon(Icon::ArrowRight)
-      .render(ctx, open),
+      .render(ctx)
+      .into(),
     );
   }
   if !group.is_empty() {
-    rows.push(separator(ctx));
+    rows.push(separator());
     rows.extend(group);
   }
   rows
