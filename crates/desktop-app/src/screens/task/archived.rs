@@ -19,6 +19,7 @@ use lurq::{
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::CardPart,
 };
 use orchester_api::SharedResourceKind;
 use orchester_core::{
@@ -164,8 +165,8 @@ impl Component for ArchivedCard {
       ));
     }
     card("task-archived", CardSurface::Stopped)
-      .rounded(TaskRadius::NotReadyCard.role())
-      .spacing(SpacingSize::Md)
+      .style(CardPart::Root, |style| style.radius(TaskRadius::NotReadyCard.role()))
+      .gap(SpacingSize::Md)
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -189,7 +190,7 @@ impl Component for ArchivedCard {
           .variant(ExtraTypography::Lead.role()),
       )
       .child(rows_box(rows))
-      .with_children(archived_foot::foot(ctx, &task))
+      .children(archived_foot::foot(ctx, &task))
   }
 }
 

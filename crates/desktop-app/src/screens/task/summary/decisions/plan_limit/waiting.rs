@@ -85,7 +85,7 @@ impl WaitingCard<'_> {
       ],
     );
     let head = card("plan-limit-waiting", CardSurface::Attention)
-      .spacing(SpacingSize::Xs)
+      .gap(SpacingSize::Xs)
       .child(
         Row::new()
           .spacing(SpacingSize::Sm)

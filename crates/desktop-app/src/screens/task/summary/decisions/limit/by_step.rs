@@ -35,7 +35,7 @@ pub fn section(ctx: &mut Ctx, stop: &Stop<'_>, now: Timestamp) -> Option<Element
   }
   let list = card("raise-limit-by-step", CardSurface::Outline)
     .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Sm))
-    .with_children(rows);
+    .children(rows);
   Some(
     Column::new()
       .id("raise-limit-tokens-by-step")

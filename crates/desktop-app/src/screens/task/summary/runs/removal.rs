@@ -114,29 +114,29 @@ fn confirmation(ctx: &mut Ctx, confirm: &Confirm) -> Element {
     "summary.runs.remove.explanationOne"
   };
   card(&format!("run-remove-confirm-{number}"), CardSurface::Decision)
-    .spacing(SpacingSize::Sm)
+    .gap(SpacingSize::Sm)
     .child(
       Text::new(&ctx.t_args(explanation, [("run", number.as_str())]))
         .variant(ExtraTypography::Prose.role())
         .width(Dimension::Pct(100.0)),
     )
-    .with_children(interrupted(ctx, confirm.run))
-    .with_children(
+    .children(interrupted(ctx, confirm.run))
+    .children(
       confirm
         .leftovers
         .worktrees
         .iter()
         .map(|worktree| worktree_line(ctx, confirm.run, worktree, &separator)),
     )
-    .with_children(confirm.leftovers.branches.iter().map(|branch| branch_line(ctx, branch)))
-    .with_children(discard(ctx, confirm))
-    .with_children(confirm.working.map(|working| {
+    .children(confirm.leftovers.branches.iter().map(|branch| branch_line(ctx, branch)))
+    .children(discard(ctx, confirm))
+    .children(confirm.working.map(|working| {
       note(
         Icon::Info,
         &ctx.t_args("summary.runs.remove.otherWorking", [("run", working.get().to_string())]),
       )
     }))
-    .with_children(confirm.failed.map(|failed| {
+    .children(confirm.failed.map(|failed| {
       Text::new(&message_text(ctx, failed))
         .id(format!("run-remove-error-{number}"))
         .variant(ExtraTypography::Note.role())

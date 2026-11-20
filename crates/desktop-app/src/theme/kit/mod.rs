@@ -4,6 +4,7 @@
 pub mod avatar;
 mod button;
 pub mod callout;
+pub mod card;
 pub mod chip;
 mod icon_button;
 mod kbd;
@@ -20,6 +21,7 @@ pub(super) fn install(theme: &Theme) {
   avatar::install(theme);
   button::install(theme);
   callout::install(theme);
+  card::install(theme);
   chip::install(theme);
   icon_button::install(theme);
   kbd::install(theme);

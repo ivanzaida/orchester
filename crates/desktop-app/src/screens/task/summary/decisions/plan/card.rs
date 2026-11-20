@@ -54,16 +54,16 @@ impl PlanCard<'_> {
   pub fn render(&self, ctx: &mut Ctx, shown: &Signal<Shown>, decision: Element) -> Element {
     let text = self.plan_text(ctx);
     let card = card("plan-review", CardSurface::Attention)
-      .spacing(ExtraSpacing::Loose.role())
+      .gap(ExtraSpacing::Loose.role())
       .child(self.head(ctx, shown))
       .child(divider())
       .child(text)
-      .with_children(self.change_line(ctx))
+      .children(self.change_line(ctx))
       .child(divider())
       .child(self.criteria(ctx))
       .child(divider())
       .child(decision);
-    self.pointing.ring(card).into()
+    self.pointing.ring(card)
   }
 
   /// "Plan v2 · Add retry to webhook sender", "by Planner · 16:14", and the version choice.

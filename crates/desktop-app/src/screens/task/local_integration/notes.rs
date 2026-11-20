@@ -6,8 +6,9 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Text},
+  components::Text,
   node::Element,
+  ui::Card,
 };
 use orchester_core::integration::local::LocalPhase;
 
@@ -24,10 +25,10 @@ use crate::{
 };
 
 /// A panel `id` on `surface`: `title` over `body`.
-pub(super) fn panel(id: &str, surface: CardSurface, title: &str, body: &str) -> Column {
+pub(super) fn panel(id: &str, surface: CardSurface, title: &str, body: &str) -> Card {
   card_frame(id, surface)
     .padding(SpacingSize::Lg)
-    .spacing(SpacingSize::Sm)
+    .gap(SpacingSize::Sm)
     .child(
       Text::new(title)
         .id(format!("{id}-title"))

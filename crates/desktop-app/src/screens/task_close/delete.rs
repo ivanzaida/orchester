@@ -127,15 +127,17 @@ impl Component for DeleteCard {
       .filter(|failed| !pending && failed.task == props.subject.id)
       .map(|failed| field_error(&format!("{id}-error"), &message_text(ctx, &failed.message)));
     let deletable = matches!(preview, Some(Ok(_)));
-    let frame = match props.popover {
-      Some(width) => popover_panel(id, width),
-      None => card(id, CardSurface::Decision).spacing(SpacingSize::Md),
-    };
-    frame
-      .child(head)
-      .with_children(body)
-      .with_children(failed)
-      .child(buttons(ctx, closer, &props.subject, (id, deletable, pending)))
+    let parts = std::iter::once(Element::from(head))
+      .chain(body)
+      .chain(failed.map(Element::from))
+      .chain([buttons(ctx, closer, &props.subject, (id, deletable, pending)).into()]);
+    match props.popover {
+      Some(width) => Element::from(popover_panel(id, width).with_children(parts)),
+      None => card(id, CardSurface::Decision)
+        .gap(SpacingSize::Md)
+        .children(parts)
+        .into(),
+    }
   }
 }
 

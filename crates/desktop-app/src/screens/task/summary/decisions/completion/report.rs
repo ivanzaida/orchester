@@ -103,7 +103,7 @@ fn outside(ctx: &Ctx, changes: &[OutsideChange]) -> Element {
   } else {
     card("task-outside-list", CardSurface::Outline)
       .padding(Padding::symmetric(ExtraSpacing::Snug.role(), ExtraSpacing::Hair.role()))
-      .with_children(
+      .children(
         changes
           .iter()
           .enumerate()

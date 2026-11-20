@@ -1,19 +1,15 @@
-//! Card: a block of related content, radius 10 inside a 1 stroke, 14 over and under its content and 16
-//! at its sides (`Raise the limit` `xHs82`, `Approval card` `gwOaJ`). Its surface says what it holds:
-//! a result on `surface_panel` (`Result card` `T0uKNU`), a figure or a request on `surface_raised`
-//! (`Metric card` `Qhj0H`, `Needs-you card` `rkhZ2`), a list on the panel itself (`By step` `QuX1T`), a
-//! decision the person makes in a `border_strong` stroke (`xHs82`), and what waits for them on
-//! `surface_raised` in a `warning` stroke (`gwOaJ`, `Plan card` `Q5J0r`), or on the page itself in a `warning`
-//! stroke where the page is the step (Local integration's `hULqu`). Callers add the content, its
-//! spacing, and other padding where the design gives it.
+//! Card: lurq's `ui::Card` in the kit's recipe (`theme::kit::card`), a block of related content, radius 10 inside a 1
+//! stroke, 14 over and under its content and 16 at its sides (`Raise the limit` `xHs82`, `Approval card` `gwOaJ`). Its
+//! surface says what it holds: a result on `surface_panel` (`Result card` `T0uKNU`), a figure or a request on
+//! `surface_raised` (`Metric card` `Qhj0H`, `Needs-you card` `rkhZ2`), a list on the panel itself (`By step` `QuX1T`),
+//! a decision the person makes in a `border_strong` stroke (`xHs82`), and what waits for them on `surface_raised` in a
+//! `warning` stroke (`gwOaJ`, `Plan card` `Q5J0r`), or on the page itself in a `warning` stroke where the page is the
+//! step (Local integration's `hULqu`). Callers add the content, its spacing (`gap`), and other padding where the design
+//! gives it; a card of a height of its own gives it to its children.
 
-use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
-  components::Column,
-  node::{border::Border, dimension::Dimension, padding::Padding},
-};
+use lurq::{app::theme::SpacingSize, node::padding::Padding, ui::Card};
 
-use crate::theme::ExtraSpacing;
+use crate::theme::{ExtraSpacing, kit::card as recipe};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CardSurface {
@@ -34,35 +30,26 @@ pub enum CardSurface {
 }
 
 impl CardSurface {
-  const fn colors(self) -> (Option<PaletteColor>, PaletteColor) {
+  /// The variant of the card's recipe (`theme::kit::card`) that draws this surface.
+  const fn variant(self) -> &'static str {
     match self {
-      Self::Panel => (Some(PaletteColor::Canvas), PaletteColor::Border),
-      Self::Raised => (Some(PaletteColor::Card), PaletteColor::Border),
-      Self::Outline => (None, PaletteColor::Border),
-      Self::Decision => (None, PaletteColor::Input),
-      Self::Attention => (Some(PaletteColor::Card), PaletteColor::Warning),
-      Self::Pending => (None, PaletteColor::Warning),
-      Self::Stopped => (Some(PaletteColor::Card), PaletteColor::Destructive),
+      Self::Panel => recipe::PANEL,
+      Self::Raised => recipe::RAISED,
+      Self::Outline => recipe::OUTLINE,
+      Self::Decision => recipe::DECISION,
+      Self::Attention => recipe::ATTENTION,
+      Self::Pending => recipe::PENDING,
+      Self::Stopped => recipe::STOPPED,
     }
   }
 }
 
 /// A card on `surface` with the element id `id`, as wide as its parent; add its content as children.
-pub fn card(id: &str, surface: CardSurface) -> Column {
+pub fn card(id: &str, surface: CardSurface) -> Card {
   card_frame(id, surface).padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
 }
 
 /// A card whose header and body own their padding (`LruUv`, `VsylR`).
-pub fn card_frame(id: &str, surface: CardSurface) -> Column {
-  let (fill, stroke) = surface.colors();
-  let card = Column::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .border(Border::inside(BorderSize::Sm, stroke))
-    .rounded(RadiusSize::Lg)
-    .clip();
-  match fill {
-    Some(fill) => card.background(fill),
-    None => card,
-  }
+pub fn card_frame(id: &str, surface: CardSurface) -> Card {
+  Card::new().id(id.to_owned()).variant(surface.variant())
 }

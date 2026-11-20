@@ -331,7 +331,7 @@ pub fn confirmation(ctx: &mut Ctx, confirm: &Confirmation) -> Element {
   let next = confirm.next.number.get().to_string();
   let key = confirm.detail.task.key().to_string();
   card("task-run-again-confirm", CardSurface::Decision)
-    .spacing(SpacingSize::Md)
+    .gap(SpacingSize::Md)
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -344,8 +344,8 @@ pub fn confirmation(ctx: &mut Ctx, confirm: &Confirmation) -> Element {
         .child(Text::new(&explanation(ctx, confirm)).variant(ExtraTypography::Prose.role())),
     )
     .child(properties(ctx, confirm))
-    .with_children(option(ctx, confirm))
-    .with_children(errors.iter().enumerate().map(|(index, error)| {
+    .children(option(ctx, confirm))
+    .children(errors.iter().enumerate().map(|(index, error)| {
       Text::new(&message_text(ctx, error))
         .id(format!("task-run-again-refusal-{index}"))
         .variant(ExtraTypography::Note.role())

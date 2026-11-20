@@ -182,7 +182,7 @@ fn checks(ctx: &mut Ctx, view: &View<'_>, files: &[String]) -> Element {
     );
   outline("task-delivery-resolve-checks", CardSurface::Outline)
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
+    .gap(ExtraSpacing::Loose.role())
     .child(head)
     .child(Column::new().width(Dimension::Pct(100.0)).with_children(rows))
     .child(note)

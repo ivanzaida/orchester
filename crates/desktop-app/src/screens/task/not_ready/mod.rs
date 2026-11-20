@@ -18,6 +18,7 @@ use lurq::{
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::CardPart,
 };
 use orchester_core::time::Timestamp;
 use orchester_workspace::{
@@ -107,8 +108,8 @@ fn card_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element
     (false, None) => "summary.notReady.body",
   };
   card("task-not-ready", CardSurface::Attention)
-    .rounded(TaskRadius::NotReadyCard.role())
-    .spacing(SpacingSize::Md)
+    .style(CardPart::Root, |style| style.radius(TaskRadius::NotReadyCard.role()))
+    .gap(SpacingSize::Md)
     .child(head(ctx, refusal, team))
     .child(
       Text::new(&ctx.t(body))

@@ -90,7 +90,7 @@ impl Inspector {
       ));
     }
     panel
-      .with_children(self.cancellation(ctx, props, "local-review-cancel-partial", ButtonKind::Ghost))
+      .children(self.cancellation(ctx, props, "local-review-cancel-partial", ButtonKind::Ghost))
       .child(guard_note(ctx, note))
       .into()
   }

@@ -83,7 +83,7 @@ pub(super) fn section(ctx: &Ctx, read: Option<&Result<Commits, Message>>) -> Ele
           ExtraSpacing::Tight.role(),
           ExtraSpacing::Hair.role(),
         ))
-        .with_children(commits.iter().map(row))
+        .children(commits.iter().map(row))
         .into(),
     ),
   };
