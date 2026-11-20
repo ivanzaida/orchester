@@ -22,9 +22,10 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, TypographyStyle},
   },
-  components::{Row, Text},
+  components::Row,
   layout::Alignment,
   node::{Element, dimension::Dimension},
+  ui::{StatusLabel, StatusLabelPart},
 };
 use orchester_core::{
   run::TaskPhase,
@@ -327,16 +328,13 @@ impl StatusChip {
 }
 
 /// A task's priority: its icon and word in `text_secondary`; Urgent in `warning`, No priority in
-/// `text_muted`.
-pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> Row {
+/// `text_muted`. lurq's `ui::StatusLabel` in the theme's recipe (`theme::kit::status_label`).
+pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> StatusLabel {
   let (glyph, key, color) = priority_look(priority);
-  labelled(
-    id,
-    (glyph, IconSize::Base),
-    &ctx.t(key),
-    TypographyStyle::Description,
-    color,
-  )
+  StatusLabel::new(&ctx.t(key))
+    .icon(glyph.name())
+    .style(StatusLabelPart::Root, |style| style.foreground(color))
+    .id(id.to_owned())
 }
 
 /// A priority's icon, the i18n key of its word and its color.
@@ -366,20 +364,17 @@ pub fn workflow_look(status: WorkflowStatus) -> (Icon, PaletteColor) {
   }
 }
 
-/// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`.
-pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
+/// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`. lurq's
+/// `ui::StatusLabel` in the theme's recipe (`theme::kit::status_label`).
+pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> StatusLabel {
   let (glyph, tone) = workflow_look(status);
-  Row::new()
+  StatusLabel::new(&ctx.t(workflow_key(status)))
+    .icon(glyph.name())
+    .style(StatusLabelPart::Root, |style| {
+      style.foreground(ExtraColor::TextSecondary.role())
+    })
+    .style(StatusLabelPart::Icon, |style| style.foreground(tone))
     .id(id.to_owned())
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, tone).id(format!("{id}-icon")))
-    .child(
-      Text::new(&ctx.t(workflow_key(status)))
-        .id(format!("{id}-label"))
-        .variant(TypographyStyle::Description)
-        .nowrap(),
-    )
 }
 
 /// The i18n key of a workflow status's word.
@@ -392,25 +387,4 @@ pub const fn workflow_key(status: WorkflowStatus) -> &'static str {
     WorkflowStatus::Done => "ui.workflow.done",
     WorkflowStatus::Canceled => "ui.workflow.canceled",
   }
-}
-
-fn labelled(
-  id: &str,
-  (glyph, size): (Icon, IconSize),
-  text: &str,
-  typography: TypographyStyle,
-  color: PaletteColor,
-) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(icon(glyph, size, color.clone()).id(format!("{id}-icon")))
-    .child(
-      Text::new(text)
-        .id(format!("{id}-label"))
-        .variant(typography)
-        .color(color)
-        .nowrap(),
-    )
 }

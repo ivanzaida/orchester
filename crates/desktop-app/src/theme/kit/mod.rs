@@ -7,6 +7,7 @@ pub mod chip;
 mod kbd;
 pub mod meter;
 pub mod spinner;
+mod status_label;
 
 use lurq::app::theme::Theme;
 
@@ -17,4 +18,5 @@ pub(super) fn install(theme: &Theme) {
   kbd::install(theme);
   meter::install(theme);
   spinner::install(theme);
+  status_label::install(theme);
 }
