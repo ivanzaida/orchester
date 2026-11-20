@@ -14,10 +14,7 @@ use lurq::{
 };
 
 use crate::{
-  navigation::{
-    link::{Open, follow, keeps_middle_click, navigates},
-    press::LinkPress,
-  },
+  navigation::link::{Open, follow, keeps_middle_click, navigates},
   theme::{ExtraRadius, ExtraShadow},
 };
 
@@ -81,9 +78,7 @@ impl Press {
         button
           .on_click(move |event: MouseEvent| {
             event.stop_propagation();
-            if !aside_asked(&event) {
-              action();
-            }
+            action();
           })
           .on_open_aside(move |event: MouseEvent| {
             if event.button != MouseButton::Middle {
@@ -94,13 +89,7 @@ impl Press {
       Self::Open(open) => {
         let aside = open.clone();
         button
-          .on_click(move |event: MouseEvent| {
-            if aside_asked(&event) {
-              event.stop_propagation();
-            } else {
-              follow(&open, &event);
-            }
-          })
+          .on_click(move |event: MouseEvent| follow(&open, &event))
           .on_open_aside(move |event: MouseEvent| follow(&aside, &event))
       }
     }
@@ -110,13 +99,6 @@ impl Press {
   pub fn button(self) -> Button {
     self.on(surface())
   }
-}
-
-/// Whether lurq's button hands `event` to its `on_open_aside` handler: a click with the command key held. lurq 0.63.2
-/// calls every `on_click` handler of a button that Enter presses, the one it stopped as well, so a press with the key
-/// held would run twice.
-fn aside_asked(event: &MouseEvent) -> bool {
-  LinkPress::of(event).command
 }
 
 /// `button`, a control in the custom title bar. The bar hands a press that reaches it to the OS to move
