@@ -335,16 +335,16 @@ fn a_menu_row_is_28_high_8_in_an_unavailable_row_says_why_and_a_choice_closes_it
       })
       .icon(Icon::Workflow)
       .chosen(true)
-      .render(ctx, &shown),
+      .render(ctx),
       MenuItem::new("quick", "Quick fix v2", || {})
         .icon(Icon::Workflow)
         .shortcut("Ctrl 2")
-        .render(ctx, &shown),
+        .render(ctx),
       MenuItem::unavailable("draft", "Release v1", "Not published yet")
         .icon(Icon::Workflow)
-        .render(ctx, &shown),
+        .render(ctx),
     ];
-    let panel = menu_panel("menu").width(Dimension::Px(300.0)).with_children(rows);
+    let panel = menu_panel("menu").width(300.0).with_children(rows);
     Row::new()
       .child(
         Row::new()

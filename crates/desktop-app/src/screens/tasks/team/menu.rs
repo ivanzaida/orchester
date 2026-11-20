@@ -12,9 +12,10 @@ use lurq::{
     ctx::{Ctx, OutsidePress},
     theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Placement, Popup, Text},
+  components::{Placement, Popup, Text},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_core::{
   id::{ProjectId, TaskId},
@@ -31,7 +32,7 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     icon::Icon,
-    menu::{MenuItem, foot as menu_foot, menu_panel, separator},
+    menu::{Entry, MenuItem, foot as menu_foot, inline_menu, menu_panel, separator},
     status::{workflow_key, workflow_look},
   },
 };
@@ -99,13 +100,14 @@ impl Lists {
   }
 }
 
-/// The rows of `team`'s *More actions* menu, their ids starting with `id`, closed by a choice through `open`.
+/// The rows of `team`'s *More actions* menu, their ids starting with `id`; a row that opens a list keeps the menu
+/// `open` for it.
 pub(in crate::screens::tasks) fn rows(
   ctx: &mut Ctx,
   (project, team): (ProjectId, &RowTeam),
   id: &str,
   (open, lists): (&Signal<bool>, &Lists),
-) -> Vec<Element> {
+) -> Vec<Entry> {
   let task: TaskKey = team.key.parse().expect("a task's key reads back as a task key");
   let navigation = Navigation::of(ctx);
   let route = Route::Project(project, ProjectPage::Task(task, TaskView::default()));
@@ -119,9 +121,9 @@ pub(in crate::screens::tasks) fn rows(
   } else {
     "tasks.board.keys.copy"
   }));
-  let mut rows = vec![open_task.render(ctx, open)];
+  let mut rows: Vec<Entry> = vec![open_task.render(ctx).into()];
   let Some(offered) = &team.offered else {
-    rows.push(copy.render(ctx, open));
+    rows.push(copy.render(ctx).into());
     return rows;
   };
   let items = Items {
@@ -133,16 +135,16 @@ pub(in crate::screens::tasks) fn rows(
   };
   let moves = items
     .moves(ctx, open)
-    .map(|row| items.beside(Page::MoveTo, row.render(ctx, open)));
+    .map(|row| items.beside(Page::MoveTo, row).render(ctx).into());
   rows.extend(moves);
-  rows.push(copy.render(ctx, open));
+  rows.push(copy.render(ctx).into());
   let changes = items.changes(ctx, open);
   if !changes.is_empty() {
-    rows.push(separator(ctx));
+    rows.push(separator());
   }
   rows.extend(changes);
-  rows.extend(foot(ctx, team, offered));
-  rows.extend(items.list(ctx, open));
+  rows.extend(foot(ctx, team, offered).map(Entry::from));
+  rows.extend(items.list(ctx, open).map(Entry::from));
   rows
 }
 
@@ -182,15 +184,11 @@ impl Items<'_> {
   }
 
   /// `row` of the list `page`, which that list opens beside while it is open.
-  fn beside(&self, page: Page, row: Element) -> Element {
+  fn beside(&self, page: Page, row: MenuItem) -> MenuItem {
     if self.lists.page.get() != Some(page) {
       return row;
     }
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .ref_element(self.lists.anchor.clone())
-      .child(row)
-      .into()
+    row.element(self.lists.anchor.clone())
   }
 
   /// *Move to* for a task in Backlog or Todo, while the person may.
@@ -211,7 +209,7 @@ impl Items<'_> {
 
   /// Mark as done, Mark as blocked or Clear blocked and Cancel task for an open task, *Reopen task* for a closed one,
   /// those the person may make.
-  fn changes(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Vec<Element> {
+  fn changes(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Vec<Entry> {
     let abilities = self.offered.abilities;
     let mut changes = Vec::new();
     if self.closed() {
@@ -223,7 +221,7 @@ impl Items<'_> {
         )
         .icon(Icon::RotateCcw)
         .submenu();
-        changes.push(self.beside(Page::Reopen, reopen.render(ctx, open)));
+        changes.push(self.beside(Page::Reopen, reopen).render(ctx).into());
       }
       return changes;
     }
@@ -247,7 +245,7 @@ impl Items<'_> {
       );
       items.push(cancel);
     }
-    changes.extend(items.into_iter().map(|item| item.render(ctx, open)));
+    changes.extend(items.into_iter().map(|item| item.render(ctx).into()));
     changes
   }
 
@@ -277,16 +275,16 @@ impl Items<'_> {
   fn list(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Option<Element> {
     let page = self.lists.page.get()?;
     let (rows, foot) = match page {
-      Page::MoveTo => (self.move_rows(ctx, open), "tasks.team.lifecycle.moveFoot"),
-      Page::Reopen => (self.reopen_rows(ctx, open), "tasks.team.lifecycle.reopenFoot"),
+      Page::MoveTo => (self.move_rows(ctx), "tasks.team.lifecycle.moveFoot"),
+      Page::Reopen => (self.reopen_rows(ctx), "tasks.team.lifecycle.reopenFoot"),
     };
     let panel = menu_panel(&format!("{}-list", self.id))
-      .width(Dimension::Px(LIST_WIDTH))
+      .width(LIST_WIDTH)
       .with_children(rows)
-      .child(separator(ctx))
+      .child(separator())
       .child(note(&format!("{}-list-foot", self.id), &ctx.t(foot)));
-    // A press elsewhere in the menu closes the list and reaches the row it is on.
-    let list = Popup::new(self.lists.anchor.clone(), panel)
+    // A press elsewhere in the menu closes the list and reaches the row it is on; a choice in it closes the menu.
+    let list = Popup::new(self.lists.anchor.clone(), inline_menu(open.clone(), panel))
       .open(self.lists.open.clone())
       .placement(Placement::RightStart)
       .offset(LIST_OFFSET.0, LIST_OFFSET.1)
@@ -296,7 +294,7 @@ impl Items<'_> {
   }
 
   /// Backlog and Todo, the task's own checked.
-  fn move_rows(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Vec<Element> {
+  fn move_rows(&self, ctx: &mut Ctx) -> Vec<ui::MenuItem> {
     let now = self.team.organization.status();
     [
       ("move-backlog", WorkflowStatus::Backlog),
@@ -313,13 +311,13 @@ impl Items<'_> {
       } else {
         self.item(label, (suffix, glyph), Change::MoveTo(status))
       };
-      item.render(ctx, open)
+      item.render(ctx)
     })
     .collect()
   }
 
   /// Back to Backlog and Back to Todo.
-  fn reopen_rows(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Vec<Element> {
+  fn reopen_rows(&self, ctx: &mut Ctx) -> Vec<ui::MenuItem> {
     [
       (
         "reopen-backlog",
@@ -333,7 +331,7 @@ impl Items<'_> {
       let glyph = workflow_look(status).0;
       self
         .item(ctx.t(label), (suffix, glyph), Change::MoveTo(status))
-        .render(ctx, open)
+        .render(ctx)
     })
     .collect()
   }

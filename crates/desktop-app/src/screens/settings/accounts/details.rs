@@ -139,10 +139,11 @@ fn more(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> El
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
     let items = menu_items(ctx, parts, work, account);
-    let panel = items.into_iter().fold(
-      menu_panel("account-more-menu").width(Dimension::Px(MENU_WIDTH)),
-      |panel, item| panel.child(item.render(ctx, &open)),
-    );
+    let panel = items
+      .into_iter()
+      .fold(menu_panel("account-more-menu").width(MENU_WIDTH), |panel, item| {
+        panel.child(item.render(ctx))
+      });
     menu_at_end(anchor, open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()

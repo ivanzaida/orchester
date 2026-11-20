@@ -38,7 +38,7 @@ use crate::{
     icon::{Icon, icon},
     kbd::key_cap,
     message::message_text,
-    popover::{PopoverSide, popover, popover_panel},
+    popover::{PopoverSide, popover_panel, popup_by_app},
   },
 };
 
@@ -131,9 +131,7 @@ pub fn at_anchor(state: &BoardState, (asking, first): (&Asking, bool), panel: El
     Asking::Card { .. } => (state.question_anchor.clone(), PopoverSide::BelowEnd),
     Asking::Bulk => (state.bulk_anchor.clone(), PopoverSide::Above),
   };
-  popover(anchor, state.question_open.clone(), side, panel)
-    .switch_on_anchor_press(false)
-    .into()
+  popup_by_app(anchor, state.question_open.clone(), side, panel).into()
 }
 
 /// What a question shows: its mark in its tone, its words, what Enter does and what Esc keeps, what more it says (why

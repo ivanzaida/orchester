@@ -32,7 +32,7 @@ use crate::{
   ui::{
     icon::{Icon, icon},
     kbd::key_cap,
-    menu::separator,
+    menu::separator_line,
     message::message_text,
     pressable::pressable,
     status::{Status, StatusChip, workflow_key},
@@ -82,7 +82,7 @@ pub(super) fn rows(
   let runs = offer.runs.shown.len();
   if runs > 0 {
     if !rows.is_empty() {
-      rows.push(separator(ctx));
+      rows.push(separator_line(ctx));
     }
     rows.push(heading(ctx, "runs", &offer.runs));
     for (index, run) in offer.runs.shown.iter().enumerate() {
@@ -93,7 +93,7 @@ pub(super) fn rows(
     }
   }
   if !rows.is_empty() && (!offer.files.shown.is_empty() || note.is_some()) {
-    rows.push(separator(ctx));
+    rows.push(separator_line(ctx));
   }
   if !offer.files.shown.is_empty() {
     rows.push(heading(ctx, "files", &offer.files));

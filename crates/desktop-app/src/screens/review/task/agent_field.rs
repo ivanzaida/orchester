@@ -14,7 +14,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, Text, TextOverflow},
+  components::{Column, Placement, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -27,7 +27,7 @@ use crate::{
   theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize, ReviewText},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_panel, separator},
+    menu::{self as kit_menu, MenuItem, MenuPanel, menu_panel, separator},
     pressable::pressable,
   },
 };
@@ -131,12 +131,7 @@ pub(in crate::screens) fn field(
     Column::new()
       .child(trigger)
       // Over the field from its end, 6 clear of it: over its anchor lurq counts the offset away from it.
-      .child(
-        Popup::new(menu.anchor.clone(), panel)
-          .open(menu.open.clone())
-          .placement(Placement::TopEnd)
-          .offset(0.0, ExtraSpacing::Snug.value()),
-      )
+      .child(kit_menu::menu(menu.anchor.clone(), menu.open.clone(), panel).placement(Placement::TopEnd))
       .into(),
   )
 }
@@ -190,9 +185,8 @@ fn panel(
   (page, choice): (&ReviewPage, &AgentChoice),
   (place, own): (Place, &ReviewAgent),
   current: ResourceId,
-) -> Element {
+) -> MenuPanel {
   let id = place.id();
-  let menu = choice.menu(place);
   // The run's own agent stays a choice when its profile is no longer published.
   let listed = page.agents.iter();
   let agents: Vec<&ReviewAgent> = if page.agents.iter().any(|agent| agent.id == own.id) {
@@ -200,7 +194,7 @@ fn panel(
   } else {
     std::iter::once(own).chain(listed).collect()
   };
-  let rows: Vec<Element> = agents
+  let rows: Vec<_> = agents
     .into_iter()
     .enumerate()
     .map(|(at, agent)| {
@@ -218,11 +212,11 @@ fn panel(
       .detail(detail)
       .tall()
       .chosen(agent.id == current)
-      .render(ctx, &menu.open)
+      .render(ctx)
     })
     .collect();
   menu_panel(&format!("{id}-menu"))
-    .width(Dimension::Px(MENU_WIDTH))
+    .width(MENU_WIDTH)
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
@@ -240,7 +234,7 @@ fn panel(
         ),
     )
     .with_children(rows)
-    .child(separator(ctx))
+    .child(separator())
     .child(
       Row::new()
         .width(Dimension::Pct(100.0))
@@ -258,5 +252,4 @@ fn panel(
             .width(Dimension::Pct(100.0)),
         ),
     )
-    .into()
 }

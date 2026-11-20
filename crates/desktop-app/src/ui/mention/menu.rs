@@ -15,7 +15,7 @@ use lurq::{
   },
   components::{Placement, Popup},
   core::ElementRef,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{id::RunId, project::TaskKey, run::RunNumber};
 use orchester_workspace::{
@@ -31,7 +31,10 @@ use super::{
 };
 use crate::{
   services::Services,
-  ui::{menu::menu_panel, message::message_text},
+  ui::{
+    menu::{held_panel, menu_panel},
+    message::message_text,
+  },
 };
 
 /// The menu's width (`qhBhC`).
@@ -144,14 +147,14 @@ impl Component for MentionMenu {
       }
     };
     let panel = menu_panel(&format!("{}-mention-menu", props.id))
-      .width(Dimension::Px(WIDTH))
+      .width(WIDTH)
       .with_children(content);
     // Its left edge at the `@` (the field's marker), its bottom 8 over the box: the marker sits at the top of the
     // field, as far under the box's top as the last layout put it.
     let marker = field.marker();
     let under_top = (marker.y() - props.anchor.y()).max(0.0);
     let gap = ctx.theme().spacing_value(SpacingSize::Sm).to_px();
-    Popup::new(marker, panel)
+    Popup::new(marker, held_panel(panel))
       .open_when(true)
       .dismiss_on_outside_click(false)
       .dismiss_on_escape(false)

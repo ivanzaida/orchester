@@ -338,10 +338,11 @@ fn more(ctx: &mut Ctx, work: &Work, account: &ApiAccount, (uses, reading): (Opti
       })
     }
     .icon(Icon::Trash2);
-    let panel = [rename, edit, remove].into_iter().fold(
-      menu_panel("provider-more-menu").width(Dimension::Px(MENU_WIDTH)),
-      |panel, item| panel.child(item.render(ctx, &open)),
-    );
+    let panel = [rename, edit, remove]
+      .into_iter()
+      .fold(menu_panel("provider-more-menu").width(MENU_WIDTH), |panel, item| {
+        panel.child(item.render(ctx))
+      });
     menu_at_end(anchor, open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()

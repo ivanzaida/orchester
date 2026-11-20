@@ -80,7 +80,7 @@ pub(crate) fn field_names(ctx: &Ctx, fields: &[Arc<str>]) -> String {
 }
 
 /// `content` scrolling where the popover is too short for it, clear of its scrollbar at its end.
-fn scrolled(id: &str, content: Column) -> ScrollVertical {
+fn standalone(id: &str, content: Column) -> ScrollVertical {
   ScrollVertical::new(content.padding(Padding::new().right(SpacingSize::Md)))
     .id(format!("{id}-scroll"))
     .width(Dimension::Pct(100.0))
@@ -176,7 +176,7 @@ impl VersionsButton {
           Column::new().width(Dimension::Pct(100.0)).spacing(SpacingSize::Md),
           |rows, entry| rows.child(version_row(ctx, id, entry)),
         );
-        panel.child(scrolled(id, rows))
+        panel.child(standalone(id, rows))
       }
       _ => panel,
     }

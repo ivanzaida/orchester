@@ -104,7 +104,7 @@ fn more(ctx: &mut Ctx, panel: &ServerPanel) -> Element {
     menu_at_end(
       anchor,
       open.clone(),
-      menu_panel("orchester-server-more-menu").child(item.render(ctx, &open)),
+      menu_panel("orchester-server-more-menu").child(item.render(ctx)),
     )
   });
   Row::new().child(button).with_children(menu).into()

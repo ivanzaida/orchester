@@ -10,10 +10,11 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_workspace::tasks::browse::TaskSort;
 
@@ -22,7 +23,7 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_panel, separator},
+    menu::{MenuItem, menu_at_end, menu_panel, separator_line},
     pressable::{Focus, pressable},
     tabs::{Segment, SegmentFace, segmented},
     toggle::{Toggle, ToggleKind},
@@ -149,9 +150,9 @@ impl Component for BoardOptions {
       .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .child(layout_switch(ctx, &props.display, "tasks-board-options-layout", true))
       .child(groups)
-      .child(separator(ctx))
+      .child(separator_line(ctx))
       .child(properties(ctx, &props.display, &display))
-      .child(separator(ctx))
+      .child(separator_line(ctx))
       .child(checks(ctx, &props.display, &display))
       .child(foot(ctx, &props.display))
       .with_children(list)
@@ -216,7 +217,7 @@ impl BoardOptions {
   }
 
   /// The open select's list.
-  fn list(&self, ctx: &mut Ctx, props: &OptionsProps, open: Open) -> Option<Popup> {
+  fn list(&self, ctx: &mut Ctx, props: &OptionsProps, open: Open) -> Option<ui::Menu> {
     let display = props.display.clone();
     let now = display.get();
     let (rows, anchor): (Vec<MenuItem>, &ElementRef) = match open {
@@ -266,18 +267,14 @@ impl BoardOptions {
         &self.anchors[2],
       ),
     };
-    let rows: Vec<Element> = rows.into_iter().map(|row| row.render(ctx, &self.shown)).collect();
-    Some(
-      Popup::new(
-        anchor.clone(),
-        menu_panel("tasks-board-options-list")
-          .width(Dimension::Px(LIST_WIDTH))
-          .with_children(rows),
-      )
-      .open(self.shown.clone())
-      .placement(Placement::BottomEnd)
-      .offset(0.0, ExtraSpacing::Snug.value()),
-    )
+    let rows: Vec<_> = rows.into_iter().map(|row| row.render(ctx)).collect();
+    Some(menu_at_end(
+      anchor.clone(),
+      self.shown.clone(),
+      menu_panel("tasks-board-options-list")
+        .width(LIST_WIDTH)
+        .with_children(rows),
+    ))
   }
 }
 

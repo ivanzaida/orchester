@@ -24,7 +24,7 @@ use lurq::{
   },
   components::Column,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_api::{UsedBy, UsedByRun};
 use orchester_core::{id::ResourceId, run::Answerer};
@@ -170,16 +170,14 @@ impl Component for ArchiveMenu {
       }
     })
     .icon(Icon::Archive)
-    .render(ctx, &self.menu);
+    .render(ctx);
     let toggle = self.menu.clone();
     let button = IconButton::new("team-hub-more", Icon::Ellipsis, ctx.t("team_archive.more"))
       .small()
       .element(self.anchor.clone())
       .on_click(move || toggle.update(|open| *open = !*open))
       .render(ctx);
-    let panel = menu_panel("team-hub-more-menu")
-      .width(Dimension::Px(MORE_MENU_WIDTH))
-      .child(item);
+    let panel = menu_panel("team-hub-more-menu").width(MORE_MENU_WIDTH).child(item);
     let confirmation = self.confirmation(ctx, &props);
     Column::new()
       .child(button)

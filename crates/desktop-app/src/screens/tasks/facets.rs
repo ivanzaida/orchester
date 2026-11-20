@@ -28,9 +28,9 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    filter::{FilterChip, filter_group, filter_menu_panel, filter_option},
+    filter::{FilterChip, filter_group, filter_option},
     icon::Icon,
-    menu::menu,
+    menu::{MenuPanel, filter_menu_panel, menu},
     status::priority_look,
   },
 };
@@ -220,7 +220,7 @@ impl Component for FilterControl {
 
 impl FilterControl {
   /// The menu: its search, then each facet with the options the search finds.
-  fn panel(&self, ctx: &mut Ctx, options: &Options, facets: &Signal<Facets>) -> Column {
+  fn panel(&self, ctx: &mut Ctx, options: &Options, facets: &Signal<Facets>) -> MenuPanel {
     let query = self.query.get().trim().to_lowercase();
     let chosen = facets.get();
     let mut groups = Column::new()

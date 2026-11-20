@@ -226,13 +226,11 @@ impl WaitsFor {
 
   /// The steps it may wait for, then *Wait for everything before it*.
   fn popup(&self, ctx: &mut Ctx, props: &Props, choices: &[WaitChoice]) -> Element {
-    let mut panel = menu_panel(&format!("{ID}-menu")).width(Dimension::Px(MENU_WIDTH));
+    let mut panel = menu_panel(&format!("{ID}-menu")).width(MENU_WIDTH);
     for choice in choices {
       panel = panel.child(self.choice_row(ctx, props, choice));
     }
-    panel = panel
-      .child(separator(ctx))
-      .child(self.everything(ctx, props).render(ctx, &self.open));
+    panel = panel.child(separator()).child(self.everything(ctx, props).render(ctx));
     menu(self.anchor.clone(), self.open.clone(), panel).into()
   }
 

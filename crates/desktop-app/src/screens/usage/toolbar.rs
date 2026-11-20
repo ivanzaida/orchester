@@ -30,9 +30,9 @@ use super::{Requery, custom_range, filters, words};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, UsageSpacing, UsageText},
   ui::{
-    filter::{FilterButton, filter_menu_panel},
+    filter::FilterButton,
     icon::Icon,
-    menu::{MenuItem, menu},
+    menu::{MenuItem, MenuPanel, filter_menu_panel, menu},
     pressable::Focus,
     tabs::{Segment, SegmentFace, segmented},
   },
@@ -40,6 +40,8 @@ use crate::{
 
 /// The *Group by* menu's width (`Group by menu` `GdEHA`).
 const GROUP_MENU_WIDTH: f32 = 240.0;
+/// The Group by menu's element id.
+const GROUP_MENU_ID: &str = "usage-group-menu";
 
 #[derive(Clone)]
 pub struct ToolbarProps {
@@ -267,12 +269,12 @@ impl UsageToolbar {
       let panel = if open.get() {
         filters::menu(ctx, props.dashboard.as_deref(), facet, &self.search, &props.requery)
       } else {
-        Element::new()
+        filters::closed(facet)
       };
       let popup = menu(anchor.clone(), open.clone(), panel);
       // The Provider menu opens 12 under its button, as the Account menu did (`EU0ex`).
       let popup = if facet == Facet::Provider {
-        popup.offset(0.0, ctx.theme().spacing_value(SpacingSize::Md).to_px())
+        popup.offset(SpacingSize::Md)
       } else {
         popup
       };
@@ -281,14 +283,14 @@ impl UsageToolbar {
     let panel = if self.group.0.get() {
       self.group_menu(ctx, props)
     } else {
-      Element::new()
+      filter_menu_panel(GROUP_MENU_ID, GROUP_MENU_WIDTH)
     };
     popups.push(menu(self.group.1.clone(), self.group.0.clone(), panel).into());
     popups.push(custom_range::popover(ctx, props, &self.custom));
     popups
   }
 
-  fn group_menu(&self, ctx: &mut Ctx, props: &ToolbarProps) -> Element {
+  fn group_menu(&self, ctx: &mut Ctx, props: &ToolbarProps) -> MenuPanel {
     let today = local_date(Timestamp::now());
     let range = props.query.range(today);
     let chosen = props.query.grouping(range);
@@ -313,21 +315,9 @@ impl UsageToolbar {
       .without_lock()
     };
     let day = MenuItem::new("usage-group-day", ctx.t("usage.groupBy.day"), choose(GroupBy::Day));
-    let open = self.group.0.clone();
-    filter_menu_panel("usage-group-menu", GROUP_MENU_WIDTH)
-      .child(
-        hour
-          .icon(Icon::Clock3)
-          .chosen(chosen == Grouping::Hour)
-          .render(ctx, &open),
-      )
-      .child(
-        day
-          .icon(Icon::CalendarDays)
-          .chosen(chosen == Grouping::Day)
-          .render(ctx, &open),
-      )
-      .into()
+    filter_menu_panel(GROUP_MENU_ID, GROUP_MENU_WIDTH)
+      .child(hour.icon(Icon::Clock3).chosen(chosen == Grouping::Hour).render(ctx))
+      .child(day.icon(Icon::CalendarDays).chosen(chosen == Grouping::Day).render(ctx))
   }
 }
 

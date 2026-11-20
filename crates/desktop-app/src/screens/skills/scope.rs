@@ -17,12 +17,16 @@ use crate::{
   theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{self},
+    menu,
     pressable::{Focus, inert, pressable},
   },
 };
 const WIDTH: f32 = 380.0;
 const MENU_HEIGHT: f32 = 700.0;
+
+/// The menu's element id.
+const MENU_ID: &str = "skill-scope-menu";
+
 #[derive(Clone)]
 pub struct Props {
   pub page: PageProps,
@@ -100,7 +104,7 @@ impl Component for ScopePicker {
       let panel = if self.open.get() {
         self.options(ctx, &p)
       } else {
-        Element::new()
+        menu::filter_menu_panel(MENU_ID, WIDTH)
       };
       menu::menu(self.anchor.clone(), self.open.clone(), panel)
     });
@@ -111,7 +115,7 @@ impl Component for ScopePicker {
   }
 }
 impl ScopePicker {
-  fn options(&self, ctx: &mut Ctx, p: &Props) -> Element {
+  fn options(&self, ctx: &mut Ctx, p: &Props) -> menu::MenuPanel {
     let mut list = Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Tight.role());
@@ -173,16 +177,11 @@ impl ScopePicker {
         .variant(ExtraTypography::Note.role())
         .padding(SpacingSize::Sm),
     );
-    menu::menu_panel("skill-scope-menu")
-      .width(Dimension::Px(WIDTH))
-      .padding(ExtraSpacing::Snug.role())
-      .rounded(RadiusSize::Lg)
-      .child(
-        ScrollVertical::new(list)
-          .width(Dimension::Pct(100.0))
-          .max_height(Dimension::Px(MENU_HEIGHT)),
-      )
-      .into()
+    menu::filter_menu_panel(MENU_ID, WIDTH).child(
+      ScrollVertical::new(list)
+        .width(Dimension::Pct(100.0))
+        .max_height(Dimension::Px(MENU_HEIGHT)),
+    )
   }
   fn option(&self, ctx: &mut Ctx, p: &Props, o: &ScopeOption) -> Element {
     let (label, detail, glyph) = option_words(ctx, p, o);

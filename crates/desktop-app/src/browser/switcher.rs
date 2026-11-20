@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, Text, TextOverflow},
+  components::{Column, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, dimension::Dimension, padding::Padding},
@@ -25,7 +25,7 @@ use crate::{
   theme::{BrowserSpacing, BrowserText, ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ShellText},
   ui::{
     icon::{Icon, icon},
-    menu::{menu_panel, separator},
+    menu::{MenuPanel, menu, menu_panel, separator},
     pressable::{in_title_bar, pressable},
   },
 };
@@ -35,6 +35,8 @@ const BUTTON_HEIGHT: f32 = 28.0;
 const TILE: f32 = 20.0;
 const ROW_TILE: f32 = 24.0;
 const MENU_WIDTH: f32 = 300.0;
+/// The menu's element id.
+const MENU_ID: &str = "browser-project-menu";
 /// The dot before *acting* in a row (`f9Z3no`).
 const ACTING_DOT: f32 = 6.0;
 
@@ -81,18 +83,19 @@ impl Component for Switcher {
     } else {
       button
     };
-    let menu = self.open.get().then(|| self.menu(ctx, &showing));
-    let popup = Popup::new(self.anchor.clone(), menu.unwrap_or_else(Element::new))
-      .open(self.open.clone())
-      .placement(Placement::BottomStart)
-      .offset(0.0, ExtraSpacing::MenuOffset.value());
+    let panel = if self.open.get() {
+      self.menu(ctx, &showing)
+    } else {
+      menu_panel(MENU_ID)
+    };
+    let popup = menu(self.anchor.clone(), self.open.clone(), panel).offset(ExtraSpacing::MenuOffset.role());
     Row::new().child(button).child(popup)
   }
 }
 
 impl Switcher {
   /// The menu: every project of the person's and every project whose browser has tabs, by name.
-  fn menu(&self, ctx: &mut Ctx, showing: &Showing) -> Element {
+  fn menu(&self, ctx: &mut Ctx, showing: &Showing) -> MenuPanel {
     let services = Services::of(ctx);
     let workspace = services.workspace.clone();
     let registered = ctx
@@ -123,8 +126,8 @@ impl Switcher {
         row(ctx, index, (&name, view.as_ref(), current, now), choose)
       })
       .collect();
-    menu_panel("browser-project-menu")
-      .width(Dimension::Px(MENU_WIDTH))
+    menu_panel(MENU_ID)
+      .width(MENU_WIDTH)
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -140,7 +143,7 @@ impl Switcher {
           ),
       )
       .with_children(rows)
-      .child(separator(ctx))
+      .child(separator())
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -152,7 +155,6 @@ impl Switcher {
               .width(Dimension::Pct(100.0)),
           ),
       )
-      .into()
   }
 }
 

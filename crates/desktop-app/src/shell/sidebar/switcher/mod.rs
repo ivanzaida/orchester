@@ -41,7 +41,7 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ShellText},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu, menu_panel, separator},
+    menu::{MenuItem, MenuPanel, menu, menu_panel, separator},
     pressable::pressable,
   },
 };
@@ -51,6 +51,9 @@ const SWITCHER_HEIGHT: f32 = 40.0;
 const GLYPH_SIZE: f32 = 26.0;
 /// `Project switcher menu` width.
 const MENU_WIDTH: f32 = 320.0;
+
+/// The menu's element id.
+const MENU_ID: &str = "project-switcher-menu";
 
 type PickAction = FutureAction<Arc<str>, Picked, Message>;
 
@@ -119,7 +122,7 @@ impl Component for Switcher {
     let panel = if self.open.get() {
       self.panel(ctx, project, &picks)
     } else {
-      Element::new()
+      menu_panel(MENU_ID)
     };
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -272,7 +275,7 @@ impl Switcher {
 
   /// The menu (`Switcher menu` `Gb7af` in `NEHAB`): *RECENT*, then the shown project's Project settings with its
   /// keys, All projects, Settings, Open folder… with what it found, and Add project.
-  fn panel(&self, ctx: &mut Ctx, project: Option<ProjectId>, picks: &Picks) -> Element {
+  fn panel(&self, ctx: &mut Ctx, project: Option<ProjectId>, picks: &Picks) -> MenuPanel {
     let recent = recent::rows(ctx, self.openings.get(), project, &self.open);
     let navigation = Navigation::of(ctx);
     let project_settings = project.map(|project| {
@@ -291,12 +294,12 @@ impl Switcher {
       )
       .icon(Icon::SlidersHorizontal)
       .shortcut(keys)
-      .render(ctx, &self.open)
+      .render(ctx)
     });
     let opens = |ctx: &mut Ctx, (id, label, glyph): (&str, &str, Icon), route: Route| {
       MenuItem::opens(id.to_owned(), ctx.t(label), navigation.to(route))
         .icon(glyph)
-        .render(ctx, &self.open)
+        .render(ctx)
     };
     let all = opens(
       ctx,
@@ -313,25 +316,24 @@ impl Switcher {
       pick.pick();
     })
     .icon(Icon::FolderOpen)
-    .render(ctx, &self.open);
+    .render(ctx);
     let found = refusal::block(ctx, &self.folder.get(), picks);
     let add = opens(
       ctx,
       ("switcher-add-project", "shell.switcher.addProject", Icon::Plus),
       Route::AddProject(None),
     );
-    menu_panel("project-switcher-menu")
-      .width(Dimension::Px(MENU_WIDTH))
+    menu_panel(MENU_ID)
+      .width(MENU_WIDTH)
       .child(section(&ctx.t("shell.switcher.recent")))
       .with_children(recent)
-      .child(separator(ctx))
+      .child(separator())
       .with_children(project_settings)
       .child(all)
       .child(settings)
       .child(open_folder)
       .with_children(found)
       .child(add)
-      .into()
   }
 }
 

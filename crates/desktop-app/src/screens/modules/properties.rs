@@ -173,7 +173,7 @@ impl ModuleProperties {
           .color(PaletteColor::Foreground),
       );
     let panel = self.state.open.get().then(|| {
-      let rows: Vec<Element> = [ModuleState::Open, ModuleState::Closed]
+      let rows: Vec<_> = [ModuleState::Open, ModuleState::Closed]
         .into_iter()
         .map(|choice| {
           let (save, invalid, props) = (self.save.clone(), self.invalid.clone(), props.clone());
@@ -186,14 +186,14 @@ impl ModuleProperties {
             run(&save, &invalid, args);
           })
           .chosen(choice == state)
-          .render(ctx, &self.state.open)
+          .render(ctx)
         })
         .collect();
       menu(
         self.state.anchor.clone(),
         self.state.open.clone(),
         menu_panel("module-property-state-menu")
-          .width(Dimension::Px(MENU_WIDTH))
+          .width(MENU_WIDTH)
           .with_children(rows),
       )
     });

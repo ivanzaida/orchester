@@ -21,7 +21,7 @@ use lurq::{
     events::KeyboardEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
   },
-  components::{Column, Popup, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -87,7 +87,12 @@ impl DevtoolsInspectable for Calendar {}
 
 /// `props`' picker in a popover under `anchor` while `open` holds; `props` only while open, so each opening starts on
 /// the chosen day, or on today without one.
-pub fn date_popover(ctx: &mut Ctx, anchor: &ElementRef, props: Option<PickerProps>, open: &Signal<bool>) -> Popup {
+pub fn date_popover(
+  ctx: &mut Ctx,
+  anchor: &ElementRef,
+  props: Option<PickerProps>,
+  open: &Signal<bool>,
+) -> lurq::ui::Popover {
   let panel = props.map(|props| date_panel(ctx, props));
   popover(
     anchor.clone(),

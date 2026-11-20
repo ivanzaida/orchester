@@ -18,7 +18,10 @@ use super::{
   state::View,
 };
 use crate::ui::{
-  filter::filter_menu_panel, icon::Icon, menu::separator, message::message_text, popover::popover_panel,
+  icon::Icon,
+  menu::{filter_menu_panel, inline_menu, separator},
+  message::message_text,
+  popover::popover_panel,
   unavailable::reason_line,
 };
 
@@ -145,18 +148,20 @@ fn menu(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<DeliversPic
       chosen: delivers == chosen,
       mono: false,
     }
-    .render(&state.open, move || pick.set(DeliversPick(delivers)))
+    .render(move || pick.set(DeliversPick(delivers)))
   };
-  let choices: Vec<Element> = Deliverable::ALL
+  let choices: Vec<_> = Deliverable::ALL
     .into_iter()
     .map(|delivers| option(ctx, Some(delivers)))
     .collect();
-  filter_menu_panel("task-form-delivers-menu", MENU_WIDTH)
-    .child(menu_head(&ctx.t("task_form.delivers.head")))
-    .child(option(ctx, None))
-    .child(separator(ctx))
-    .with_children(choices)
-    .into()
+  inline_menu(
+    state.open.clone(),
+    filter_menu_panel("task-form-delivers-menu", MENU_WIDTH)
+      .child(menu_head(&ctx.t("task_form.delivers.head")))
+      .child(option(ctx, None))
+      .child(separator())
+      .with_children(choices),
+  )
 }
 
 /// What the chosen pipeline says its runs deliver, or that a pipeline decides once one is chosen.

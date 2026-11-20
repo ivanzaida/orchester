@@ -29,9 +29,9 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    filter::{FilterChip, filter_group, filter_menu_panel, filter_option, filter_option_explained},
+    filter::{FilterChip, filter_group, filter_option, filter_option_explained},
     icon::{Icon, icon},
-    menu::separator,
+    menu::{MenuPanel, filter_menu_panel, separator_line},
     skeleton::{self, Skeleton},
   },
 };
@@ -118,7 +118,7 @@ pub fn menu(
   facet: Facet,
   search: &Signal<String>,
   requery: &Requery,
-) -> Element {
+) -> MenuPanel {
   let id = format!("{}-menu", facet_id(facet));
   let Some(dashboard) = dashboard else {
     // The menu's values are bones while the period is read (`usage.filters.reading` inside an open filter).
@@ -127,7 +127,7 @@ pub fn menu(
       .padding(SpacingSize::Sm)
       .child(skeleton::lines(ctx, &READING));
     let bones = Skeleton::new(format!("{id}-reading"), ctx.t("usage.filters.reading")).show(ctx, bones);
-    return filter_menu_panel(&id, MENU_WIDTH).child(bones).into();
+    return filter_menu_panel(&id, MENU_WIDTH).child(bones);
   };
   if facet == Facet::Provider {
     return provider_menu(ctx, dashboard, &id, requery);
@@ -153,7 +153,12 @@ pub fn menu(
     .with_children(field)
     .with_children(rows)
     .with_children(empty)
-    .into()
+}
+
+/// The menu of `facet` while it is closed: declared all the same, so that a press on its button switches to it from
+/// another open dropdown.
+pub fn closed(facet: Facet) -> MenuPanel {
+  filter_menu_panel(&format!("{}-menu", facet_id(facet)), MENU_WIDTH)
 }
 
 fn option_row(
@@ -185,7 +190,7 @@ fn option_row(
 
 /// *Provider*'s menu (in the look of `Account menu` `JoCR3`): the agent providers as the Connections page lists them,
 /// by name, each with its series' swatch; then, past a line, *Earlier runs* and what it holds.
-fn provider_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Requery) -> Element {
+fn provider_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Requery) -> MenuPanel {
   let mut rows: Vec<Element> = vec![filter_group(
     format!("{id}-group"),
     Icon::Bot,
@@ -197,7 +202,7 @@ fn provider_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Reque
     let option_id = format!("{}-option-{index}", facet_id(Facet::Provider));
     let swatch = option.series.map(series_swatch);
     if option.label == ValueLabel::Earlier {
-      rows.push(separator(ctx));
+      rows.push(separator_line(ctx));
       rows.push(filter_option_explained(
         option_id,
         (
@@ -213,7 +218,7 @@ fn provider_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Reque
       rows.push(filter_option(option_id, (&label, option.chosen, false), swatch, choose));
     }
   }
-  filter_menu_panel(id, PROVIDER_MENU_WIDTH).with_children(rows).into()
+  filter_menu_panel(id, PROVIDER_MENU_WIDTH).with_children(rows)
 }
 
 /// What a menu says when it lists nothing: *No tags yet* for a project whose tasks have no tags

@@ -13,7 +13,8 @@ use lurq::{
   app::ctx::Ctx,
   components::Row,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::Element,
+  ui,
 };
 use orchester_core::{pull_request::task_link, run::RunStatus};
 use orchester_workspace::{files::Version, tasks::return_work};
@@ -35,7 +36,7 @@ use crate::{
     clipboard::Clipboard,
     icon::Icon,
     icon_button::IconButton,
-    menu::{menu_at_end, menu_panel, separator},
+    menu::{Entry, MenuPanel, menu_at_end, menu_panel, separator},
     pressable::Press,
   },
 };
@@ -54,7 +55,7 @@ pub struct Held {
   pub run_again: Option<Control>,
   /// *Create pull request* and *Open as draft* while the latest run waits to be merged and has no pull request
   /// (ORC-731), rows a choice closes the menu with.
-  pub pull_request: Vec<Element>,
+  pub pull_request: Vec<ui::MenuItem>,
   /// Closing and deleting the task; none for a task kept *Not shared*.
   pub closing: Option<(Closer, task_close::Subject)>,
 }
@@ -85,13 +86,13 @@ pub fn more(ctx: &mut Ctx, (task, conversation): (&TaskContext, bool), place: &M
   let shown = place.open.get();
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
-    let panel = panel(ctx, (task, conversation), &place.open, held);
+    let panel = panel(ctx, (task, conversation), held);
     menu_at_end(place.anchor.clone(), place.open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()
 }
 
-fn panel(ctx: &mut Ctx, (task, conversation): (&TaskContext, bool), open: &Signal<bool>, held: Held) -> Element {
+fn panel(ctx: &mut Ctx, (task, conversation): (&TaskContext, bool), held: Held) -> MenuPanel {
   let own = own_actions(ctx, task);
   let run: Vec<Control> = held
     .controls
@@ -112,41 +113,38 @@ fn panel(ctx: &mut Ctx, (task, conversation): (&TaskContext, bool), open: &Signa
     Vec::new()
   };
   let split = if exports.is_empty() { own.len() } else { linked(&own) };
-  let mut rows: Vec<Element> = own[..split].iter().map(|control| control.item(ctx, open)).collect();
+  let mut rows: Vec<Entry> = own[..split].iter().map(|control| control.item(ctx).into()).collect();
   if !exports.is_empty() {
-    rows.push(separator(ctx));
-    rows.extend(exports.iter().map(|control| control.item(ctx, open)));
-    rows.push(separator(ctx));
-    rows.extend(own[split..].iter().map(|control| control.item(ctx, open)));
+    rows.push(separator());
+    rows.extend(exports.iter().map(|control| control.item(ctx).into()));
+    rows.push(separator());
+    rows.extend(own[split..].iter().map(|control| control.item(ctx).into()));
   }
   if !held.pull_request.is_empty() {
-    rows.push(separator(ctx));
-    rows.extend(held.pull_request);
+    rows.push(separator());
+    rows.extend(held.pull_request.into_iter().map(Entry::from));
   }
   if !run.is_empty() {
-    rows.push(separator(ctx));
-    rows.extend(run.iter().map(|control| control.item(ctx, open)));
+    rows.push(separator());
+    rows.extend(run.iter().map(|control| control.item(ctx).into()));
   }
   let (closing, delete) = match &held.closing {
     Some((closer, subject)) => {
-      let (rows, delete) = closer.rows(ctx, ("task-more", subject), open);
+      let (rows, delete) = closer.rows(ctx, ("task-more", subject));
       (rows, Some(delete))
     }
     None => (Vec::new(), None),
   };
   if !closing.is_empty() {
-    rows.push(separator(ctx));
-    rows.extend(closing);
+    rows.push(separator());
+    rows.extend(closing.into_iter().map(Entry::from));
   }
   if !removing.is_empty() || delete.is_some() {
-    rows.push(separator(ctx));
-    rows.extend(removing.iter().map(|control| control.item(ctx, open)));
-    rows.extend(delete);
+    rows.push(separator());
+    rows.extend(removing.iter().map(|control| control.item(ctx).into()));
+    rows.extend(delete.map(Entry::from));
   }
-  menu_panel("task-more-panel")
-    .width(Dimension::Px(MENU_WIDTH))
-    .with_children(rows)
-    .into()
+  menu_panel("task-more-panel").width(MENU_WIDTH).with_children(rows)
 }
 
 fn is_cancel(control: &Control) -> bool {

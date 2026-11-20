@@ -13,15 +13,18 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Popup, Row, Text},
+  components::{Button, Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  ui::{self, Styled},
 };
 
 use crate::{
   shell::status_bar::dot,
-  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormSpacing, TaskFormText},
+  theme::{
+    ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormSpacing, TaskFormText, kit::menu,
+  },
   ui::{
     icon::{Icon, icon},
     popover::{PopoverSide, popover, popover_inside},
@@ -51,7 +54,7 @@ impl ChipState {
 
   /// `panel` under the chip while it is open; declared while closed too, so that a press on the chip switches to it
   /// from another open popover.
-  pub fn popover(&self, panel: Option<Element>) -> Popup {
+  pub fn popover(&self, panel: Option<Element>) -> ui::Popover {
     popover(
       self.anchor.clone(),
       self.open.clone(),
@@ -229,14 +232,15 @@ impl PropertyChip {
         .describe("reason", reason.clone())
         .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground).id(format!("{}-lock", self.id)));
     }
-    let popup = match &self.inside {
+    let popup: Element = match &self.inside {
       Some((column, width, end_inset)) => popover_inside(
         (&state.anchor, column),
         state.open.clone(),
         (*width, *end_inset),
         panel.unwrap_or_default(),
-      ),
-      None => state.popover(panel),
+      )
+      .into(),
+      None => state.popover(panel).into(),
     };
     Row::new().child(chip).child(popup).into()
   }
@@ -390,7 +394,7 @@ impl MenuOption {
   }
 
   /// The icon, then the name with the help under it.
-  fn beside(self, option: Button) -> Button {
+  fn beside(self, option: Row) -> Row {
     let words = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
@@ -407,7 +411,7 @@ impl MenuOption {
   }
 
   /// A line of the icon, the name and the check, then the help under it from the icon's start.
-  fn under(self, option: Button) -> Button {
+  fn under(self, option: Row) -> Row {
     let line = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
@@ -429,26 +433,21 @@ impl MenuOption {
       .child(lines)
   }
 
-  pub fn render(self, open: &Signal<bool>, choose: impl Fn() + Send + Sync + 'static) -> Element {
-    let open = open.clone();
-    let mut option = pressable(move || {
-      open.set(false);
-      choose();
-    })
-    .id(self.id.clone())
-    .width(Dimension::Pct(100.0))
-    .rounded(RadiusSize::Md)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .describe("a11y_name", self.title.clone())
-    .describe("chosen", if self.chosen { "true" } else { "false" });
-    if self.chosen {
-      option = option.background(ExtraColor::Hover.role());
-    }
-    match self.help_place {
-      HelpPlace::BesideIcon => self.beside(option),
-      HelpPlace::UnderIcon => self.under(option),
-    }
-    .into()
+  /// The option as an item of lurq's menu: a choice closes the menu and runs `choose`.
+  pub fn render(self, choose: impl Fn() + Send + Sync + 'static) -> ui::MenuItem {
+    let (id, title, chosen) = (self.id.clone(), self.title.clone(), self.chosen);
+    let row = Row::new().width(Dimension::Pct(100.0));
+    let row = match self.help_place {
+      HelpPlace::BesideIcon => self.beside(row),
+      HelpPlace::UnderIcon => self.under(row),
+    };
+    ui::MenuItem::new(&title)
+      .id(id)
+      .content(row)
+      .checked(chosen)
+      .state(menu::OPTION, true)
+      .describe("chosen", if chosen { "true" } else { "false" })
+      .on_select(choose)
   }
 }
 

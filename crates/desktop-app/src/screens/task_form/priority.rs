@@ -9,7 +9,11 @@ use super::{
   chips::{ChipState, Look, PropertyChip},
   state::View,
 };
-use crate::ui::{filter::filter_menu_panel, icon::Icon, menu::MenuItem, status::priority_look};
+use crate::ui::{
+  icon::Icon,
+  menu::{MenuItem, filter_menu_panel, inline_menu},
+  status::priority_look,
+};
 
 /// The menu's width.
 const MENU_WIDTH: f32 = 220.0;
@@ -41,7 +45,7 @@ pub fn priority_chip(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signa
 }
 
 fn menu(ctx: &mut Ctx, state: &ChipState, pick: &Signal<PriorityPick>, chosen: Priority) -> Element {
-  let rows: Vec<Element> = Priority::ALL
+  let rows: Vec<_> = Priority::ALL
     .into_iter()
     .map(|priority| {
       let (glyph, key, _) = priority_look(priority);
@@ -50,12 +54,12 @@ fn menu(ctx: &mut Ctx, state: &ChipState, pick: &Signal<PriorityPick>, chosen: P
         pick.set(PriorityPick(priority));
       })
       .icon(glyph)
-      .in_form()
       .chosen(priority == chosen)
-      .render(ctx, &state.open)
+      .render(ctx)
     })
     .collect();
-  filter_menu_panel("task-form-priority-menu", MENU_WIDTH)
-    .with_children(rows)
-    .into()
+  inline_menu(
+    state.open.clone(),
+    filter_menu_panel("task-form-priority-menu", MENU_WIDTH).with_children(rows),
+  )
 }

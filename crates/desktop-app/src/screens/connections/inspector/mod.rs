@@ -197,10 +197,11 @@ fn more_menu(ctx: &mut Ctx, actions: &Actions, items: Vec<MenuItem>) -> Element 
     .element(anchor.clone())
     .on_click(move || toggle.update(|open| *open = !*open));
   let button = if open.get() { button.active() } else { button }.render(ctx);
-  let panel = items.into_iter().fold(
-    menu_panel("connection-more-menu").width(Dimension::Px(MENU_WIDTH)),
-    |panel, item| panel.child(item.render(ctx, &open)),
-  );
+  let panel = items
+    .into_iter()
+    .fold(menu_panel("connection-more-menu").width(MENU_WIDTH), |panel, item| {
+      panel.child(item.render(ctx))
+    });
   Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
 }
 

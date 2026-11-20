@@ -15,7 +15,7 @@ use lurq::{
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::{
   id::ProjectId,
@@ -229,9 +229,9 @@ impl QueueControls {
       let create = MenuItem::unavailable("tasks-create-multiple", ctx.t("tasks.createMultiple"), reason.clone())
         .icon(Icon::ListPlus);
       let panel = menu_panel("tasks-more-menu")
-        .width(Dimension::Px(MENU_WIDTH))
-        .child(item.icon(glyph).render(ctx, &self.open))
-        .child(create.render(ctx, &self.open));
+        .width(MENU_WIDTH)
+        .child(item.icon(glyph).render(ctx))
+        .child(create.render(ctx));
       menu_at_end(self.anchor.clone(), self.open.clone(), panel)
     });
     Row::new().child(button).with_children(menu).into()

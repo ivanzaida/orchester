@@ -23,6 +23,7 @@ use lurq::{
   components::Column,
   core::Signal,
   node::Element,
+  ui,
 };
 use orchester_core::id::RunId;
 use orchester_workspace::tasks::{integration_jobs::JobState, resolve::Worktree};
@@ -90,7 +91,7 @@ impl Component for ReadyForReview {
 /// *Create pull request* and *Open as draft* for the header's *More actions*, which `menu` opens, while the task's
 /// latest run waits to be merged; read on every render of the header, in the same place: lurq keeps futures by their
 /// order. Whether one can be created is read while the menu is open.
-pub fn pull_request_rows(ctx: &mut Ctx, task: &TaskContext, menu: &Signal<bool>) -> Vec<Element> {
+pub fn pull_request_rows(ctx: &mut Ctx, task: &TaskContext, menu: &Signal<bool>) -> Vec<ui::MenuItem> {
   let waits = Merge::of(task).is_some();
   let open = menu.get();
   let readiness = pull_request::read(ctx, task, waits && open);
@@ -98,7 +99,7 @@ pub fn pull_request_rows(ctx: &mut Ctx, task: &TaskContext, menu: &Signal<bool>)
     return Vec::new();
   }
   let read = PageState::of(ctx).pull_request.read(readiness);
-  pull_request::menu_rows(ctx, task, &read, menu)
+  pull_request::menu_rows(ctx, task, &read)
 }
 
 /// `run`'s worktree and the merge waiting in it for the person to resolve it, read again when the task or its

@@ -33,7 +33,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
-    menu::{MenuItem, separator},
+    menu::{MenuItem, separator_line, standalone},
     message::message_text,
     pressable::pressable,
     toggle::radio_mark,
@@ -84,17 +84,17 @@ pub(super) fn panel(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel
 fn choosing(ctx: &mut Ctx, props: &ChipProps, (model, draft): (&RunModel, &Draft)) -> Vec<Element> {
   let step = &props.step;
   let chosen = draft.chosen().unwrap_or_else(|| step.now.clone());
-  let mut rows: Vec<Element> = step
+  let mut rows: Vec<_> = step
     .offered
     .iter()
     .enumerate()
     .map(|(index, offered)| model_row(ctx, step, (index, offered), (&chosen, draft)))
     .collect();
   if !step.efforts_of(&chosen.model).is_empty() {
-    rows.push(separator(ctx));
+    rows.push(separator_line(ctx));
     rows.extend(effort(ctx, step, &chosen, draft));
   }
-  rows.push(separator(ctx));
+  rows.push(separator_line(ctx));
   rows.push(heading(&ctx.t("conversation.model.applies")));
   rows.push(scope_row(ctx, props, ModelScope::Step, draft));
   rows.push(scope_row(ctx, props, ModelScope::Run, draft));
@@ -255,8 +255,9 @@ fn effort_options(ctx: &mut Ctx, step: &StepModel, chosen: &ModelChoice, draft: 
         set.set(Chosen(Some(choice.clone())));
       })
       .chosen(picked)
-      .render(ctx, &draft.efforts)
+      .render(ctx)
     })
+    .map(|item| standalone(item, &draft.efforts))
     .collect();
   Column::new()
     .id("conversation-model-effort-menu")

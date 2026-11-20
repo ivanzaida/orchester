@@ -8,7 +8,7 @@ use lurq::{
   app::ctx::Ctx,
   components::Row,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::module::{Module, ModuleDetails, ModuleState};
 use orchester_workspace::modules::data::ModulePage;
@@ -21,7 +21,7 @@ use crate::{
   ui::{
     icon::Icon,
     icon_button::IconButton,
-    menu::{MenuItem, menu_at_end, menu_panel},
+    menu::{MenuItem, MenuPanel, menu_at_end, menu_panel},
   },
 };
 
@@ -58,7 +58,7 @@ pub fn more(
   let shown = place.open.get();
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
-    let panel = panel(ctx, (project, page), &place.open, save);
+    let panel = panel(ctx, (project, page), save);
     menu_at_end(place.anchor.clone(), place.open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()
@@ -67,15 +67,14 @@ pub fn more(
 fn panel(
   ctx: &mut Ctx,
   (project, page): (&ShownProject, &ModulePage),
-  open: &Signal<bool>,
   (save, written): (&SaveAction, &Written),
-) -> Element {
+) -> MenuPanel {
   let navigation = Navigation::of(ctx);
   let module = &page.module;
   let edit = Route::Project(project.open.project.id(), ProjectPage::EditModule(module.id()));
   let edit = MenuItem::opens("module-edit", ctx.t("modules.page.edit"), navigation.to(edit))
     .icon(Icon::Pencil)
-    .render(ctx, open);
+    .render(ctx);
   let (id, key, glyph, state) = match module.details().state() {
     ModuleState::Open => ("module-close", "modules.page.close", Icon::Archive, ModuleState::Closed),
     ModuleState::Closed => (
@@ -93,12 +92,11 @@ fn panel(
     }
   })
   .icon(glyph)
-  .render(ctx, open);
+  .render(ctx);
   menu_panel("module-more-panel")
-    .width(Dimension::Px(MENU_WIDTH))
+    .width(MENU_WIDTH)
     .child(edit)
     .child(close)
-    .into()
 }
 
 /// The save that sets `module`'s state to `state`, its other details as they are.

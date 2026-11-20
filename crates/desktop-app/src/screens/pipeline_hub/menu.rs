@@ -5,12 +5,7 @@
 
 use std::sync::Arc;
 
-use lurq::{
-  app::ctx::{Ctx, FutureAction},
-  components::Column,
-  core::Signal,
-  node::dimension::Dimension,
-};
+use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::id::ProjectId;
 use orchester_workspace::messages::Message;
 
@@ -20,7 +15,7 @@ use crate::{
   routes::{ProjectPage, Route},
   ui::{
     icon::Icon,
-    menu::{MenuItem, menu_panel, separator},
+    menu::{MenuItem, MenuPanel, menu_panel, separator},
   },
 };
 
@@ -35,13 +30,12 @@ pub(super) struct Actions {
   pub archive: Arc<dyn Fn() + Send + Sync>,
 }
 
-/// The menu's rows for `entry`; a choice closes the menu `open` shows.
+/// The menu's rows for `entry`.
 pub(super) fn panel(
   ctx: &mut Ctx,
   (project, entry, default): (ProjectId, &Entry, bool),
-  open: &Signal<bool>,
   actions: &Actions,
-) -> Column {
+) -> MenuPanel {
   let rename = actions.rename.clone();
   let rename = MenuItem::new(
     "pipeline-hub-menu-rename",
@@ -49,12 +43,12 @@ pub(super) fn panel(
     move || rename(),
   )
   .icon(Icon::Pencil)
-  .render(ctx, open);
-  let duplicate = duplicate(ctx, (project, entry)).render(ctx, open);
+  .render(ctx);
+  let duplicate = duplicate(ctx, (project, entry)).render(ctx);
   let make_default = actions
     .make_default
     .clone()
-    .map(|action| make_default(ctx, default, action).render(ctx, open));
+    .map(|action| make_default(ctx, default, action).render(ctx));
   let archive = actions.archive.clone();
   let used = match entry.used_by {
     0 => None,
@@ -71,10 +65,10 @@ pub(super) fn panel(
     Some(used) => archive.hint(used),
     None => archive,
   }
-  .render(ctx, open);
-  let separator = separator(ctx);
+  .render(ctx);
+  let separator = separator();
   menu_panel("pipeline-hub-menu")
-    .width(Dimension::Px(MENU_WIDTH))
+    .width(MENU_WIDTH)
     .child(rename)
     .child(duplicate)
     .with_children(make_default)
