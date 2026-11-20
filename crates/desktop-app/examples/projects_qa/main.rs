@@ -329,15 +329,14 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
     mcp: McpLink::new(&server),
     start,
   };
-  tree.mount_root::<host::Host>(
-    &mut app,
-    host::props(
-      root,
-      (folders.folder(state.folder()), state.file(folders)),
-      folders.root.join("copied.txt"),
-      state.cli_search(),
-    ),
+  let props = host::props(
+    root,
+    (folders.folder(state.folder()), state.file(folders)),
+    folders.root.join("copied.txt"),
+    state.cli_search(),
   );
+  props.clipboard().install(&app);
+  tree.mount_root::<host::Host>(&mut app, props);
   WinitWindow::new(app, tree)
     .with_title("Orchester projects QA")
     .with_icon(brand::window_icon()?)

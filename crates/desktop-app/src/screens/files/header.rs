@@ -39,7 +39,7 @@ use crate::{
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
-    code_box::Copier,
+    clipboard::Clipboard,
     icon::{Icon, file_icon, icon},
     message::message_text,
   },
@@ -391,7 +391,7 @@ fn copy(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
   } else {
     "files.copyFile"
   };
-  let clipboard = Copier::of(ctx);
+  let clipboard = Clipboard::of(ctx);
   let gate = ctx.use_context::<InputGate>();
   let press = actions::copy((clipboard, gate), page.view.refusal.clone(), (text.clone(), lines));
   Some(

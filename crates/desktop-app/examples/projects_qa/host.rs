@@ -17,15 +17,22 @@ use orchester_app::{
     cli_search::CliSearch,
     path_picker::{PathKind, PathPicker},
   },
-  ui::code_box::Copier,
+  ui::clipboard::Clipboard,
 };
 
 #[derive(Clone)]
 pub struct HostProps {
   root: RootProps,
   picker: PathPicker,
-  copier: Copier,
+  copier: Clipboard,
   cli_search: Option<CliSearch>,
+}
+
+impl HostProps {
+  /// Where Copy writes: `copied.txt`, for the app to install as every copy's.
+  pub fn clipboard(&self) -> &Clipboard {
+    &self.copier
+  }
 }
 
 impl PartialEq for HostProps {
@@ -50,7 +57,7 @@ pub fn props(
     };
     Box::pin(async move { Some(chosen) })
   });
-  let copier = Copier::other(move |text| {
+  let copier = Clipboard::new(move |text| {
     OpenOptions::new()
       .create(true)
       .append(true)

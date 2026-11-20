@@ -43,7 +43,7 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
-    code_box::Copier,
+    clipboard::Clipboard,
     command_row::CommandRow,
     icon::{Icon, icon},
     menu::MenuItem,
@@ -362,7 +362,7 @@ fn failure(ctx: &mut Ctx, run: &RunView, problem: &CreateProblem, again: Option<
       ..
     }
   ) {
-    let copier = Copier::of(ctx);
+    let copier = Clipboard::of(ctx);
     notice.part(
       CommandRow::new(
         "task-pull-request-command",

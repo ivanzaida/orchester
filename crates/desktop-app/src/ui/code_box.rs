@@ -2,8 +2,8 @@
 //! 11/500 `text_secondary` with a ghost Copy at the row's end, and 6 under them the value in 12
 //! `text_primary` on `code_bg` inside a `border` stroke, radius 6, 8 over and under it and 10 at its
 //! sides. The value is never shortened: it wraps, it can be selected, and past twelve lines it scrolls
-//! inside its box. Copy is a Tab stop; it says Copied for a moment once the clipboard holds the value,
-//! or that it could not copy. Inline (`Command` `SiCGv`), the box has no caption and Copy is a small
+//! inside its box. Copy is a Tab stop; it says Copied for a moment once the window's clipboard
+//! (`ui::clipboard`) holds the value, or that it could not copy. Inline (`Command` `SiCGv`), the box has no caption and Copy is a small
 //! icon button inside it at its end, 8 over and under and 12 at its sides; its tooltip says Copied.
 
 use std::{sync::Arc, time::Duration};
@@ -14,7 +14,6 @@ use lurq::{
     ctx::{Ctx, Timeout},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  clipboard::copy_to_clipboard,
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
   layout::Alignment,
@@ -23,6 +22,7 @@ use lurq::{
 
 use super::{
   button::{ActionButton, ButtonKind},
+  clipboard::Clipboard,
   icon::Icon,
   icon_button::IconButton,
 };
@@ -32,44 +32,6 @@ use crate::theme::{ExtraColor, ExtraSpacing};
 const COPY_FEEDBACK: Duration = Duration::from_secs(2);
 /// The tallest the value gets before it scrolls: twelve lines of mono 12 at 1.5.
 const VALUE_MAX_HEIGHT: f32 = 216.0;
-
-/// Where Copy puts the value; `true` once it is there.
-#[derive(Clone)]
-pub struct Copier(Arc<dyn Fn(&str) -> bool + Send + Sync>);
-
-impl Copier {
-  /// The system clipboard.
-  pub fn clipboard() -> Self {
-    Self(Arc::new(|text| copy_to_clipboard(text)))
-  }
-
-  /// Somewhere else, e.g. a gallery that must leave the person's clipboard alone.
-  pub fn other(copy: impl Fn(&str) -> bool + Send + Sync + 'static) -> Self {
-    Self(Arc::new(copy))
-  }
-
-  /// The copier the context provides (a QA window's), else the system clipboard.
-  pub fn of(ctx: &mut lurq::app::ctx::Ctx) -> Self {
-    ctx.use_context::<Self>().unwrap_or_else(Self::clipboard)
-  }
-
-  /// Puts `text` where this copier puts it; `true` once it is there.
-  pub fn copy(&self, text: &str) -> bool {
-    (self.0)(text)
-  }
-}
-
-impl PartialEq for Copier {
-  fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.0, &other.0)
-  }
-}
-
-impl std::fmt::Debug for Copier {
-  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    formatter.write_str("Copier")
-  }
-}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Copied {
@@ -86,7 +48,6 @@ pub struct CodeBox {
   id: Arc<str>,
   label: Arc<str>,
   value: Arc<str>,
-  copier: Copier,
   inline: bool,
 }
 
@@ -99,15 +60,8 @@ impl CodeBox {
       id: id.into(),
       label: label.into(),
       value: value.into(),
-      copier: Copier::clipboard(),
       inline: false,
     }
-  }
-
-  /// Copy puts the value there instead of the clipboard.
-  pub fn copy_with(mut self, copier: Copier) -> Self {
-    self.copier = copier;
-    self
   }
 
   /// One box with no caption over it, Copy a small icon button inside it at its end (`Command` `SiCGv` in `14`): 8
@@ -146,9 +100,9 @@ impl Component for CodeBoxView {
       Copied::Failed => (Icon::CircleAlert, "ui.copyFailed"),
     };
     let (copied, reset, value) = (self.copied.clone(), self.reset.clone(), props.value.clone());
-    let copier = props.copier.clone();
+    let clipboard = Clipboard::of(ctx);
     let press = move || {
-      copied.set(if (copier.0)(&value) {
+      copied.set(if clipboard.copy(&value) {
         Copied::Done
       } else {
         Copied::Failed

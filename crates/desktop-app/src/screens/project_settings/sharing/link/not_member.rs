@@ -25,7 +25,7 @@ use crate::{
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
-    code_box::Copier,
+    clipboard::Clipboard,
     detail_row::{DetailValue, detail_row, detail_row_of},
     icon::Icon,
     notice::{Notice, NoticeTone},
@@ -96,7 +96,7 @@ impl Link {
       DetailValue::Text,
     );
     let username_row = username.map(|username| {
-      let copier = Copier::of(ctx);
+      let copier = Clipboard::of(ctx);
       let copied = username.clone();
       let value = Row::new()
         .spacing(SpacingSize::Sm)

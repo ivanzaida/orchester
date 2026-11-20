@@ -23,7 +23,7 @@ use orchester_app::{
 };
 use tokio::runtime::Runtime;
 
-use self::gallery::Gallery;
+use self::gallery::{Copies, Gallery};
 
 /// `1` opens the window without taking the focus, as the app does for agents.
 const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCUS";
@@ -60,7 +60,9 @@ fn main() {
       "the UI kit's gallery runs without its MCP server"
     ),
   }
-  tree.mount_root::<Gallery>(&mut app, ());
+  let copies = Copies::new();
+  copies.clipboard().install(&app);
+  tree.mount_root::<Gallery>(&mut app, copies);
 
   let without_focus = std::env::var_os(START_WITHOUT_FOCUS_VARIABLE).is_some_and(|value| value == "1");
   WinitWindow::new(app, tree)

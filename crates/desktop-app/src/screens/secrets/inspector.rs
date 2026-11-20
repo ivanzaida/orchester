@@ -198,7 +198,7 @@ impl Inspector {
       .on_click(move || toggle.update(|open| *open = !*open));
     let button = if open.get() { button.active() } else { button }.render(ctx);
     let (copier, name) = (
-      crate::ui::code_box::Copier::of(ctx),
+      crate::ui::clipboard::Clipboard::of(ctx),
       props.secret.name().as_str().to_owned(),
     );
     let copy = MenuItem::new("secret-copy-name", ctx.t("secrets.copyName"), move || {

@@ -16,7 +16,7 @@ use crate::{
   root::{Root, RootProps},
   startup::{Launch, WindowPosition},
   system_icon, theme,
-  ui::skeleton,
+  ui::{clipboard::Clipboard, skeleton},
 };
 
 /// For agents that drive the app over MCP while the person works in other windows: `1` opens the
@@ -39,6 +39,7 @@ pub fn open_showing(runtime: &Runtime, launch: &Launch, position: Option<WindowP
   app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app, appearance.mode());
   i18n::install(&app).expect("the bundled locale files are valid JSON; covered by tests/i18n.rs");
+  Clipboard::default().install(&app);
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));

@@ -36,7 +36,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ProjectsText},
   ui::{
     button::{ActionButton, ButtonKind},
-    code_box::Copier,
+    clipboard::Clipboard,
     command_row::CommandRow,
     github_mark::github_mark,
     icon::{Icon, icon},
@@ -267,7 +267,7 @@ fn fix(ctx: &mut Ctx, state: &DetectionState, detection: Option<&Detection>) -> 
 
 /// `command` in its box with Copy, which puts it where the window's copier puts text.
 fn command_row(ctx: &mut Ctx, id: &str, command: &str) -> Element {
-  let (copier, copied) = (Copier::of(ctx), command.to_owned());
+  let (copier, copied) = (Clipboard::of(ctx), command.to_owned());
   CommandRow::new(id.to_owned(), command.to_owned(), ctx.t("common.copy"), move || {
     copier.copy(&copied)
   })

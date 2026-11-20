@@ -13,12 +13,12 @@ use orchester_workspace::files::{FilePath, FileText, LineRange, OpenError, OpenW
 use super::Refusal;
 use crate::{
   mcp::input_gate::{InputGate, persons_press},
-  ui::code_box::Copier,
+  ui::clipboard::Clipboard,
 };
 
 /// Copies `lines` of `text`, or all of it, when a person asked.
 pub fn copy(
-  (clipboard, gate): (Copier, Option<InputGate>),
+  (clipboard, gate): (Clipboard, Option<InputGate>),
   refusal: Signal<Option<Refusal>>,
   (text, lines): (Arc<FileText>, Option<LineRange>),
 ) -> impl Fn() + Send + Sync + 'static {
