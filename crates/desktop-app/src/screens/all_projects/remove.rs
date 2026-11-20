@@ -173,8 +173,7 @@ fn keys(
         removing.set(Removing(None));
         event.prevent_default();
       }
-      // What has the focus takes Enter itself: a button of the question, or a row of the list of open tabs over it.
-      "Enter" if !event.focus_takes_enter => {
+      "Enter" => {
         if let Some(confirm) = &confirm {
           confirm();
         }
