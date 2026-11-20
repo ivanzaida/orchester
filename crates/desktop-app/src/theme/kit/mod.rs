@@ -3,10 +3,12 @@
 
 pub mod avatar;
 mod kbd;
+pub mod meter;
 
 use lurq::app::theme::Theme;
 
 pub(super) fn install(theme: &Theme) {
   avatar::install(theme);
   kbd::install(theme);
+  meter::install(theme);
 }
