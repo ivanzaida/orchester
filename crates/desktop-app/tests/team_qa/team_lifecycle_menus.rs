@@ -292,7 +292,7 @@ fn team_qa_lifecycle_menu_the_blocking_dialog_cancels_three_ways() {
   window.until("the question once more", |window| {
     window.texts("task-block-reason").is_some()
   });
-  let (x, y) = at(&mut window, "task-block-scrim");
+  let (x, y) = at(&mut window, "task-block-veil");
   window.tree.mouse_move(x + 4.0, y + 4.0);
   window
     .tree

@@ -119,7 +119,7 @@ pub(super) fn dialog(ctx: &Ctx, env: &Env) -> Element {
   .plain_footer()
   .part(
     Text::new(&body(ctx, &unsent))
-      .id("review-approve-ask-body")
+      .id("review-approve-ask-words")
       .variant(TypographyStyle::Description)
       .width(Dimension::Pct(100.0)),
   )

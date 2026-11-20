@@ -165,7 +165,7 @@ fn approve_modal_asks_first_and_counts_the_comments_not_sent() {
     page.window.text("review-approve-ask-title"),
     "2 comments aren't sent yet"
   );
-  let body = page.window.text("review-approve-ask-body");
+  let body = page.window.text("review-approve-ask-words");
   assert!(
     body.starts_with("Your 2 comments have not reached the agent."),
     "{body}"
@@ -196,7 +196,7 @@ fn approve_modal_names_the_file_and_lines_of_the_one_comment_not_sent() {
     .window
     .until("the question", |window| window.texts("review-approve-ask").is_some());
   assert_eq!(page.window.text("review-approve-ask-title"), "1 comment isn't sent yet");
-  let body = page.window.text("review-approve-ask-body");
+  let body = page.window.text("review-approve-ask-words");
   assert!(
     body.starts_with("Your comment on src/") && body.contains(", line") && body.contains("has not reached the agent."),
     "{body}"

@@ -8,34 +8,29 @@
 //! what Enter does where Enter confirms it (`Keys` `D0v5t` in `08e · History · Delete confirmation` `I4xzOf`), and
 //! ends in *Cancel* (which its caller may give the focus) and the actions; a plain footer (`Footer` `a2EDb` of `03 ·
 //! Install now · runs at work` `MGILm`) ends in a ghost *Cancel* with its ×, then the actions. Esc and a press on the
-//! scrim cancel.
+//! scrim cancel. It is lurq's `ui::Dialog` in the theme's recipe (`theme::kit::dialog`, which says how it looks); where
+//! Enter confirms, the panel takes the focus as it opens, so Enter confirms and presses no button.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    events::KeyboardEvent,
-    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Modal, ModalTarget, Row, Stack, Text},
+  components::{Column, Row, Text},
   core::{ElementRef, Signal},
-  layout::{Alignment, StackAlignment, layout_kind::Justify},
-  node::{Element, HitTestBehavior, border::Border, dimension::Dimension, padding::Padding},
+  layout::Alignment,
+  node::{Element, dimension::Dimension, padding::Padding},
+  ui::{self, DialogFocus},
 };
 
 use super::{
   button::{ActionButton, ButtonKind},
   icon::{Icon, icon},
-  kbd::key_cap,
-  pressable::pressable,
 };
-use crate::{
-  chrome::TITLE_BAR_HEIGHT,
-  theme::{
-    DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography,
-    IconSize,
-  },
+use crate::theme::{
+  DIALOG_WIDTH, DialogText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, kit::dialog as kit,
 };
 
 /// A line of what it does: its glyph is 18 high, as the line's first line is (`Icon box` `EyPBp`).
@@ -57,12 +52,13 @@ pub enum Tone {
 }
 
 impl Tone {
-  fn colors(self) -> (PaletteColor, PaletteColor) {
+  /// The state the dialog's recipe draws the tile in (`theme::kit::dialog`); the warning's is its own look.
+  const fn state(self) -> &'static str {
     match self {
-      Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
-      Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),
-      Self::Danger => (PaletteColor::DestructiveMuted, PaletteColor::Destructive),
-      Self::Neutral => (PaletteColor::Highlight, ExtraColor::TextSecondary.role()),
+      Self::Warning => "warning",
+      Self::Info => kit::INFO,
+      Self::Danger => kit::DANGER,
+      Self::Neutral => kit::NEUTRAL,
     }
   }
 }
@@ -102,7 +98,8 @@ pub struct Dialog {
 }
 
 impl Dialog {
-  /// The dialog `id` (its title `<id>-title`, its *Cancel* `<id>-cancel`) asking `title` beside `glyph`.
+  /// The dialog `id` (its title `<id>-title`, its *Cancel* `<id>-cancel`, its scrim `<id>-veil`, the caps of its
+  /// footer's keys `<id>-note_key_cap`, `<id>-note_key_cap-2`) asking `title` beside `glyph`.
   pub fn new(id: &str, glyph: Icon, title: impl Into<Arc<str>>, cancel: impl Into<Arc<str>>) -> Self {
     Self {
       id: id.into(),
@@ -135,7 +132,7 @@ impl Dialog {
     self
   }
 
-  /// What the dialog is about, in 11.5 `text_muted` 2 under its title (`<id>-what`; `What` `eoJka` of `hysCz`).
+  /// What the dialog is about, in 11.5 `text_muted` 2 under its title (`<id>-description`; `What` `eoJka` of `hysCz`).
   pub fn what(mut self, what: impl Into<Arc<str>>) -> Self {
     self.what = Some(what.into());
     self
@@ -192,248 +189,122 @@ impl Dialog {
   }
 
   /// The dialog over the window while `open` holds; *Cancel*, Esc and the scrim set it to `false`.
-  pub fn render(mut self, ctx: &Ctx, open: &Signal<bool>) -> Element {
-    let id = self.id.clone();
-    let actions = std::mem::take(&mut self.actions);
-    let enter = self.enter.take();
-    let note = self.note.take();
-    let footer = if self.plain_footer {
-      plain_footer(&id, &self.cancel, (note, actions), open)
+  pub fn render(self, ctx: &Ctx, open: &Signal<bool>) -> Element {
+    let shut = open.clone();
+    let cancel = if self.plain_footer {
+      ActionButton::new(format!("{}-cancel", self.id), ButtonKind::Ghost, self.cancel.clone()).icon(Icon::X)
     } else {
-      footer(
-        ctx,
-        &id,
-        (&self.cancel, enter.as_ref(), self.cancel_ref.take()),
-        actions,
-        open,
-      )
+      ActionButton::new(format!("{}-cancel", self.id), ButtonKind::Secondary, self.cancel.clone())
+    }
+    .in_form()
+    .on_click(move || shut.set(false));
+    let cancel = match self.cancel_ref.clone() {
+      Some(element) => cancel.element_ref(element),
+      None => cancel,
     };
-    let width = self.width;
-    let body = self.body();
-    let dialog = Column::new()
-      .id(id.to_string())
-      .width(Dimension::Px(width))
-      .background(PaletteColor::Card)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
-      .rounded(RadiusSize::Lg)
-      .box_shadow(ShadowStyle::Lg)
-      .clip()
-      .child(body)
-      .child(footer);
-    over_window(&id, dialog, open, enter.map(|(_, confirm)| confirm))
+    let bodiless = self.parts.is_empty() && self.person_only.is_none() && self.under.is_empty();
+    let mut dialog = ui::Dialog::new(open.clone())
+      .id(self.id.clone())
+      .title(&self.title)
+      .icon(self.glyph.name())
+      .width(self.width)
+      .state(self.tone.state(), true)
+      .state(kit::BODILESS, bodiless);
+    if let Some(what) = &self.what {
+      dialog = dialog.description(what);
+    }
+    dialog = self.note(ctx, dialog);
+    if let Some((_, confirm)) = &self.enter {
+      let confirm = confirm.clone();
+      dialog = dialog
+        .initial_focus(DialogFocus::Panel)
+        .on_confirm(move || confirm());
+    }
+    let person = self.person_only.as_ref().map(|words| person_only(&self.id, words));
+    let dialog = dialog
+      .children(self.parts)
+      .children(person)
+      .children(self.under)
+      .footer(cancel);
+    self
+      .actions
+      .into_iter()
+      .fold(dialog, |dialog, action| dialog.footer(action.in_form()))
+      .into()
   }
 
-  fn body(self) -> Column {
-    let id = &self.id;
-    let (fill, glyph) = self.tone.colors();
-    let tile = Row::new()
-      .width(Dimension::Px(DIALOG_TILE))
-      .height(Dimension::Px(DIALOG_TILE))
-      .flex_shrink(0.0)
-      .align_items(Alignment::Center)
-      .justify(Justify::Center)
-      .rounded(ExtraRadius::Tile.role())
-      .background(fill)
-      .child(icon(self.glyph, IconSize::Lg, glyph));
-    let what = self.what.as_ref().map(|what| {
-      Text::new(what)
-        .id(format!("{id}-what"))
-        .variant(DialogText::Detail.role())
-    });
-    let head = Row::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Md)
-      .align_items(Alignment::Center)
-      .child(tile)
-      .child(
-        Column::new()
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0))
-          .spacing(ExtraSpacing::Tight.role())
-          .child(
-            Text::new(&self.title)
-              .id(format!("{id}-title"))
-              .variant(DialogText::Title.role())
-              .width(Dimension::Pct(100.0)),
-          )
-          .with_children(what),
-      );
-    let person = self.person_only.as_ref().map(|words| {
-      Row::new()
-        .id(format!("{id}-person-only"))
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .rounded(RadiusSize::Md)
-        .background(ExtraColor::Hover.role())
-        .child(icon(Icon::Hand, IconSize::Base, ExtraColor::TextSecondary.role()))
-        .child(
-          Text::new(words)
-            .variant(TypographyStyle::Description)
-            .color(ExtraColor::TextSecondary.role())
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0)),
-        )
-    });
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(
-        Padding::new()
-          .top(DialogSpacing::Side.role())
-          .left(DialogSpacing::Side.role())
-          .right(DialogSpacing::Side.role())
-          .bottom(SpacingSize::Lg),
-      )
-      .spacing(DialogSpacing::Parts.role())
-      .child(head)
-      .with_children(self.parts)
-      .with_children(person)
-      .with_children(self.under)
+  /// What the footer says at its start: what Enter does and that Esc cancels, in the app's words for the keys, or the
+  /// caller's note; nothing in a plain footer without one.
+  fn note(&self, ctx: &Ctx, dialog: ui::Dialog) -> ui::Dialog {
+    if self.plain_footer {
+      return match &self.note {
+        Some(note) => dialog.note_child(note_start(&self.id, note)),
+        None => dialog,
+      };
+    }
+    let dialog = match &self.enter {
+      Some((does, _)) => dialog.note_key_worded(&ctx.t("ui.dialog.enterKey"), does),
+      None => dialog,
+    };
+    dialog.note_key_worded(&ctx.t("ui.dialog.escKey"), &ctx.t("ui.dialog.escCancels"))
   }
 }
 
-/// `dialog` centred over the window under its title bar, on the `scrim`, while `open` holds; a press on the scrim sets
-/// it to `false`. `confirm` runs when Enter is pressed while no text field has the focus.
-pub fn over_window(
-  id: &str,
-  dialog: Column,
-  open: &Signal<bool>,
-  confirm: Option<Arc<dyn Fn() + Send + Sync>>,
-) -> Element {
-  let shut = open.clone();
-  let scrim = pressable(move || shut.set(false))
-    .id(format!("{id}-scrim"))
-    .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
-    .background(ExtraColor::Scrim.role());
-  let layer = Stack::new()
+/// The line on `hover` that only the person confirms it, after the hand.
+fn person_only(id: &str, words: &str) -> Row {
+  Row::new()
+    .id(format!("{id}-person-only"))
     .width(Dimension::Pct(100.0))
-    .flex(1.0)
-    .stack_align(StackAlignment::Center)
-    .child(scrim)
-    .child(dialog);
-  // The band above the scrim is the title bar's: the pointer passes through to its drag and window controls.
-  let window = Column::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .padding(Padding::new().top(Dimension::Px(TITLE_BAR_HEIGHT)))
-    .hit_test(HitTestBehavior::ContentOnly)
-    .child(layer);
-  let window = match confirm {
-    Some(confirm) => window.on_key_down(move |event: KeyboardEvent| {
-      if event.key == "Enter" && !event.text_input_focused && !event.composing {
-        event.prevent_default();
-        confirm();
-      }
-    }),
-    None => window,
-  };
-  Modal::new(window).target(ModalTarget::Root).open(open.clone()).into()
-}
-
-/// What Enter does when it confirms, *Esc cancels*, *Cancel* and the actions.
-fn footer(
-  ctx: &Ctx,
-  id: &str,
-  (cancel, enter, cancel_ref): (&str, Option<&Enter>, Option<ElementRef>),
-  actions: Vec<ActionButton>,
-  open: &Signal<bool>,
-) -> Row {
-  let shut = open.clone();
-  let cancel = ActionButton::new(format!("{id}-cancel"), ButtonKind::Secondary, cancel)
-    .in_form()
-    .on_click(move || shut.set(false));
-  let cancel = match cancel_ref {
-    Some(element) => cancel.element_ref(element),
-    None => cancel,
-  };
-  let words = |text: &str| Text::new(text).variant(DialogText::Keys.role()).nowrap();
-  // The pairs are a cap's gap further apart than a key and its words (`Gap` `t5dAz`).
-  let enter = enter.map(|(does, _)| -> [Element; 3] {
-    [
-      key_cap(&format!("{id}-enter"), &ctx.t("ui.dialog.enterKey")),
-      words(does).into(),
-      Row::new()
-        .width(Dimension::Px(ExtraSpacing::Snug.value()))
-        .flex_shrink(0.0)
-        .into(),
-    ]
-  });
-  footer_row(id)
+    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .rounded(RadiusSize::Md)
+    .background(ExtraColor::Hover.role())
+    .child(icon(Icon::Hand, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
-      Row::new()
-        .id(format!("{id}-keys"))
+      Text::new(words)
+        .variant(TypographyStyle::Description)
+        .color(ExtraColor::TextSecondary.role())
         .flex(1.0)
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .with_children(enter.into_iter().flatten().collect::<Vec<Element>>())
-        .child(key_cap(&format!("{id}-esc"), &ctx.t("ui.dialog.escKey")))
-        .child(words(&ctx.t("ui.dialog.escCancels"))),
+        .min_width(Dimension::Px(0.0)),
     )
-    .child(cancel)
-    .with_children(actions.into_iter().map(ActionButton::in_form))
 }
 
-/// A ghost *Cancel* with its × and the actions, at the footer's end.
-fn plain_footer(
-  id: &str,
-  cancel: &str,
-  (note, actions): (Option<FooterNote>, Vec<ActionButton>),
-  open: &Signal<bool>,
-) -> Row {
-  let shut = open.clone();
-  let cancel = ActionButton::new(format!("{id}-cancel"), ButtonKind::Ghost, cancel)
-    .icon(Icon::X)
-    .in_form()
-    .on_click(move || shut.set(false));
-  let start = note.map(|note| note_start(id, note));
-  let row = footer_row(id);
-  let row = if start.is_some() {
-    row
-  } else {
-    row.justify(Justify::End)
-  };
-  row
-    .with_children(start)
-    .child(cancel)
-    .with_children(actions.into_iter().map(ActionButton::in_form))
+/// `parts`, the caller's own, in a dialog `width` wide over the window while `open` holds: no header or footer of
+/// the dialog's, only its panel, 20 inside it; Esc and a press on the scrim set `open` to `false`.
+pub fn over_window(id: &str, width: f32, parts: Vec<Element>, open: &Signal<bool>) -> Element {
+  ui::Dialog::new(open.clone())
+    .id(id.to_owned())
+    .width(width)
+    .state(kit::BARE, true)
+    .children(parts)
+    .into()
 }
 
 /// A footer note, as wide as the room before the buttons.
-fn note_start(id: &str, note: FooterNote) -> Element {
+fn note_start(id: &str, note: &FooterNote) -> Element {
   match note {
     FooterNote::Unavailable(reason) => Row::new()
       .id(format!("{id}-unavailable"))
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
+      .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .describe("role", "unavailable-reason")
       .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground).flex_shrink(0.0))
       .child(
-        Text::new(&reason)
+        Text::new(reason)
           .id(format!("{id}-unavailable-text"))
           .variant(TypographyStyle::Description)
           .flex(1.0)
           .min_width(Dimension::Px(0.0)),
       )
       .into(),
-    FooterNote::Keys(words) => Row::new()
+    FooterNote::Keys(words) => Text::new(words)
       .id(format!("{id}-keys"))
-      .flex(1.0)
-      .child(Text::new(&words).variant(ExtraTypography::MonoNote.role()).nowrap())
+      .variant(ExtraTypography::MonoNote.role())
+      .nowrap()
       .into(),
   }
-}
-
-fn footer_row(id: &str) -> Row {
-  Row::new()
-    .id(format!("{id}-footer"))
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(DialogSpacing::Side.role(), SpacingSize::Md))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
 }
 
 /// A line of what it does: a 13 `glyph` in `text_muted`, 10 from its words in 12.5 `text_secondary`.

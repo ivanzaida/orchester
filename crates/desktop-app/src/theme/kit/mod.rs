@@ -8,6 +8,7 @@ pub mod card;
 pub mod chip;
 pub mod code_box;
 pub mod detail_row;
+pub mod dialog;
 mod field;
 mod hover_card;
 mod icon_button;
@@ -32,6 +33,7 @@ pub(super) fn install(theme: &Theme) {
   callout::install(theme);
   card::install(theme);
   detail_row::install(theme);
+  dialog::install(theme);
   field::install(theme);
   chip::install(theme);
   code_box::install(theme);

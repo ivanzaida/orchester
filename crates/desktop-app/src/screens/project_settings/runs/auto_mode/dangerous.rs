@@ -174,7 +174,7 @@ fn body(ctx: &Ctx, project: &str) -> Column {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
     .child(words(
-      "settings-dangerous-dialog-text",
+      "settings-dangerous-dialog-words",
       ctx.t_args("project_settings.dangerousDialog.text", [("project", project)]),
     ))
     .child(list)
