@@ -34,7 +34,7 @@ use crate::{
   services::Services,
   theme::{ControlHeight, DISABLED_OPACITY, ExtraSpacing, ExtraTypography, IconSize, StartupSpacing, StartupText},
   ui::{
-    avatar::{initials, person_avatar},
+    avatar::person_avatar,
     button::{ActionButton, ButtonKind},
     field::{FieldInput, field},
     icon::{Icon, icon},
@@ -193,7 +193,7 @@ pub(super) fn account_row(ctx: &mut Ctx, (email, account): (&str, CloudAccountId
     .width(Dimension::Pct(100.0))
     .spacing(StartupSpacing::Row.role())
     .align_items(Alignment::Center)
-    .child(person_avatar("join-team-account-avatar", &initials(&name)))
+    .child(person_avatar("join-team-account-avatar", &name))
     .child(
       Text::new(email)
         .id("join-team-account-email")

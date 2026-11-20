@@ -35,7 +35,7 @@ mod groups;
 mod hub;
 mod icons;
 pub mod instructions;
-mod kit;
+pub mod kit;
 mod leading;
 mod lifecycle;
 mod local_integration;

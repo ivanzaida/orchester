@@ -8,7 +8,7 @@ use lurq::{
   node::Element,
 };
 use orchester_app::ui::{
-  avatar::{agent_avatar, initials, person_avatar},
+  avatar::{agent_avatar, person_avatar},
   breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
   chip::{BadgeTone, TagChip, badge},
   detail_row::{DetailValue, detail_row},
@@ -149,7 +149,7 @@ fn avatars_breadcrumbs_and_detail_rows_take_their_design_sizes() {
     );
     Column::new()
       .spacing(SpacingSize::Sm)
-      .child(person_avatar("person", &initials("Ada Lovelace")))
+      .child(person_avatar("person", "Ada Lovelace"))
       .child(agent_avatar("agent", Icon::Hammer))
       .child(crumbs)
       .child(Element::from(

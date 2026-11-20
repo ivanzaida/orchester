@@ -10,7 +10,7 @@ use lurq::{
   node::Element,
 };
 use orchester_app::ui::{
-  avatar::{agent_avatar, initials, person_avatar},
+  avatar::{agent_avatar, person_avatar},
   breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
   chip::{BadgeTone, TagChip, badge},
   detail_row::{DetailValue, detail_row},
@@ -246,7 +246,7 @@ fn badges() -> Row {
 fn avatars() -> Row {
   Row::new()
     .spacing(SpacingSize::Sm)
-    .child(person_avatar("g-avatar", &initials("Ada Lovelace")))
+    .child(person_avatar("g-avatar", "Ada Lovelace"))
     .child(agent_avatar("g-agent", Icon::Hammer))
 }
 

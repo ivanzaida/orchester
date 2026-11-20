@@ -43,7 +43,7 @@ use crate::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   theme::{ExtraSpacing, IconSize, ReviewSpacing, ReviewText},
   ui::{
-    avatar::{agent_avatar, initials, person_avatar},
+    avatar::{agent_avatar, person_avatar},
     button::{ActionButton, ButtonKind},
     chat::{self, agent_text, names::ProjectNames},
     icon::{Icon, icon},
@@ -173,7 +173,7 @@ fn project(env: &Env) -> ProjectId {
 fn you(ctx: &Ctx, id: &str, meta: Arc<str>) -> Who {
   let you = ctx.t("review_page.thread.you");
   Who {
-    avatar: person_avatar(&format!("{id}-avatar"), &initials(&you)),
+    avatar: person_avatar(&format!("{id}-avatar"), &you),
     name: you,
     meta,
     meta_color: PaletteColor::MutedForeground,
