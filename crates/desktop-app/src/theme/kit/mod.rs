@@ -13,6 +13,7 @@ mod segmented;
 mod skeleton;
 pub mod spinner;
 mod status_label;
+mod tooltip;
 mod trigger;
 mod window_chrome;
 
@@ -31,6 +32,7 @@ pub(super) fn install(theme: &Theme) {
   skeleton::install(theme);
   spinner::install(theme);
   status_label::install(theme);
+  tooltip::install(theme);
   trigger::install(theme);
   window_chrome::install(theme);
 }

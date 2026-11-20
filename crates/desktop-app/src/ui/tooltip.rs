@@ -1,9 +1,10 @@
-//! Tooltip (`Tooltip` `b6q3OZ`): a short label in 11/500 `text_inverse` on `text_primary`, radius 4, 4
-//! over and under it and 8 at its sides, an optional shortcut 8 after it in Geist Mono 10 at 60 %. It
-//! shows while the pointer rests on its anchor and lets the pointer through; a long one wraps. [`Truncated`]
-//! is text cut to one line with an ellipsis that keeps its full value in a tooltip, shown only while the
-//! text is cut (handover §5.3), or that has a hint of its own, worded for whether it is cut. A path or a
-//! command in a tooltip is in Geist Mono 11/500 (`C9Phsz`).
+//! Tooltip (`Tooltip` `b6q3OZ`): lurq's `ui::Tooltip` in the theme's recipe (`theme::kit::tooltip`), a short label
+//! in 11/500 `text_inverse` on `text_primary` with an optional shortcut; a long one wraps. It shows while the pointer
+//! rests on its anchor and lets the pointer through, so the kit hangs it (`Tooltip::hang`) beside its anchor while the
+//! pointer rests there: a mounted lurq tooltip takes the pointer that moves onto it, and covers what is under it.
+//! [`Truncated`] is text cut to one line with an ellipsis that keeps its full value in a tooltip, shown only while the
+//! text is cut (lurq's `ElementRef::text_cut`, handover §5.3), or that has a hint of its own, worded for whether it is
+//! cut. A path or a command in a tooltip is in Geist Mono 11/500 (`C9Phsz`).
 
 use std::{sync::Arc, time::Duration};
 
@@ -11,20 +12,19 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Timeout},
-    theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{CollisionStrategy, Column, Placement, Popup, Row, Text, TextOverflow},
+  components::{Placement, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
+  ui::{self, TooltipPart},
 };
 
-use crate::theme::{ExtraSpacing, ExtraTypography, SHORTCUT_OPACITY};
+use crate::theme::ExtraSpacing;
 
 /// How long the pointer rests on the anchor before the tooltip shows.
 pub const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
-/// The class of a hung tooltip's panel while it shows ([`Tooltip::hung`]), for tests and QA.
-pub const SHOWN_CLASS: &str = "tooltip-shown";
 /// The widest a tooltip's words run before they wrap.
 const TEXT_MAX_WIDTH: f32 = 400.0;
 /// The widest the words of a tooltip with a note run before they wrap (`Tooltip · account switch` `oL5mO`: 236 less 8
@@ -183,18 +183,11 @@ impl Tooltip {
     ctx.mount_keyed_with::<TooltipHost>(&key, self, vec![anchor.into()])
   }
 
-  /// Its panel hung `placement` of `anchor`, for an anchor that shows its tooltip by itself rather than once the
-  /// pointer rested on it (a message's actions, `Tooltip` in `06 · Message actions` `XPDAX`). It is always laid out,
-  /// unseen until `shown`: the pointer's arrival only fades it in, so a press that arrives with the pointer reaches
-  /// the anchor laid out as it was.
-  pub fn hung(&self, anchor: ElementRef, placement: Placement, shown: bool) -> Popup {
-    let panel = self.panel(&self.text);
-    let panel = if shown {
-      panel.class(SHOWN_CLASS)
-    } else {
-      panel.opacity(0.0)
-    };
-    self.popup(anchor, panel, (placement, ExtraSpacing::Snug.value()))
+  /// Its panel hung `placement` of `anchor` while `shown`, for an anchor that shows its tooltip by itself rather than
+  /// once the pointer rested on it (a message's actions, `Tooltip` in `06 · Message actions` `XPDAX`). It takes no
+  /// pointer, so a press that arrives with the pointer reaches the anchor.
+  pub fn hung(&self, anchor: &ElementRef, placement: Placement, shown: bool) -> Element {
+    self.lurq(&self.text).placement(placement).hang(anchor, shown)
   }
 
   /// What the tooltip says once the pointer rested on its anchor, if it shows at all: a cut text's own
@@ -209,96 +202,50 @@ impl Tooltip {
     }
   }
 
-  /// Its panel saying `words`, hung `placement` of `anchor`, `Snug` from it; the pointer goes through it.
-  /// `panel` hung `placement` of `anchor`, `away` from it.
-  fn popup(&self, anchor: ElementRef, panel: Row, (placement, away): (Placement, f32)) -> Popup {
-    Popup::new(anchor, panel)
-      .open_when(true)
-      .placement(placement)
-      .offset(0.0, away)
-      .hit_test(HitTestBehavior::None)
-      .dismiss_on_outside_click(false)
-      .dismiss_on_escape(false)
-  }
-
-  fn panel(&self, words: &str) -> Row {
-    let typography = if self.mono {
-      ExtraTypography::MonoLabel.role()
-    } else {
-      TypographyStyle::FieldLabel
-    };
-    let words = Text::new(words)
-      .variant(typography)
-      .color(PaletteColor::PrimaryForeground)
-      .max_width(Dimension::Px(self.wrap_at));
-    let padding = match self.note {
-      Some(_) => Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()),
-      None => Padding::symmetric(SpacingSize::Sm, SpacingSize::Xs),
-    };
-    let mut panel = Row::new()
+  /// lurq's tooltip saying `words`, 6 from its anchor, its words wrapping at [`Self::wrap_at`]'s width; one with a note
+  /// is that wide whatever its words (`oL5mO`).
+  fn lurq(&self, words: &str) -> ui::Tooltip {
+    let side = ui::current_theme().spacing_value(SpacingSize::Sm).to_px();
+    let widest = self.wrap_at + 2.0 * side;
+    let mut tooltip = ui::Tooltip::new(words)
       .id(format!("{}-tooltip", self.id))
-      .padding(padding)
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .background(PaletteColor::Foreground)
-      .rounded(RadiusSize::Sm);
-    panel = match &self.note {
-      Some(note) => panel.child(
-        Column::new().spacing(ExtraSpacing::Tight.role()).child(words).child(
-          Text::new(note)
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::PrimaryForeground)
-            .width(Dimension::Px(self.wrap_at)),
-        ),
-      ),
-      None => panel.child(words),
-    };
-    if let Some(keys) = &self.shortcut {
-      panel = panel.child(
-        Text::new(keys)
-          .variant(ExtraTypography::MonoSmall.role())
-          .color(PaletteColor::PrimaryForeground)
-          .opacity(SHORTCUT_OPACITY)
-          .nowrap(),
-      );
+      .offset(ExtraSpacing::Snug.value())
+      .max_width(widest)
+      .mono(self.mono);
+    if let Some(note) = &self.note {
+      tooltip = tooltip
+        .note(note)
+        .style(TooltipPart::Panel, |style| style.width(widest));
     }
-    panel
+    if let Some(keys) = &self.shortcut {
+      tooltip = tooltip.shortcut(keys);
+    }
+    tooltip
   }
 }
 
 struct TooltipHost {
   shown: Signal<bool>,
-  /// When it showed, the cut text was whole: it fits its room.
-  fits: Signal<bool>,
-  /// The pointer rests on the anchor: a cut text's whole copy is laid out to measure it.
+  /// The pointer rests on the anchor: a framed text's control shows it.
   resting: Signal<bool>,
   timer: Timeout,
   anchor: ElementRef,
-  /// A cut text as it is laid out, and as wide as it would be whole.
+  /// A cut text as it was last laid out.
   cut: ElementRef,
-  whole: ElementRef,
 }
 
 impl Component for TooltipHost {
   type Props = Tooltip;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let (shown, fits) = (ctx.signal(false), ctx.signal(false));
-    let (cut, whole) = (ctx.element_ref(), ctx.element_ref());
-    let (show, fit, measured, unmeasured) = (shown.clone(), fits.clone(), cut.clone(), whole.clone());
-    let timer = ctx.create_timeout(TOOLTIP_DELAY, move || {
-      // Without a cut text the copy that measures it is not laid out.
-      fit.set(unmeasured.is_attached() && unmeasured.width() <= measured.width() + CUT_TOLERANCE);
-      show.set(true);
-    });
+    let shown = ctx.signal(false);
+    let show = shown.clone();
     Self {
       shown,
-      fits,
       resting: ctx.signal(false),
-      timer,
+      timer: ctx.create_timeout(TOOLTIP_DELAY, move || show.set(true)),
       anchor: ctx.element_ref(),
-      cut,
-      whole,
+      cut: ctx.element_ref(),
     }
   }
 
@@ -322,84 +269,56 @@ impl Component for TooltipHost {
       Some(cut) => self.cut_text(anchor, &tooltip, cut),
       None => anchor.with_children(ctx.children().iter().cloned()),
     };
-    if let Some(words) = tooltip.words(self.fits.get()).filter(|_| self.shown.get()) {
-      let (placement, away) = self.placement(&tooltip);
-      anchor = anchor.child(tooltip.popup(self.anchor.clone(), tooltip.panel(words), (placement, away)));
+    // What the last layout drew of a cut text: whole, or ended by its ellipsis.
+    let fits = !self.cut.text_cut();
+    if let Some(words) = tooltip.words(fits).filter(|_| self.shown.get()) {
+      let hung = tooltip.lurq(words).placement(placement(&tooltip));
+      let hung = match &tooltip.over {
+        Some(Over(frame)) => hung.over(frame),
+        None => hung,
+      };
+      anchor = anchor.child(hung.hang(&self.anchor, true));
     }
     anchor
   }
 }
 
-impl TooltipHost {
-  /// Where `tooltip` opens from its anchor, and how far from it: under it, 6 away; over it, 6 clear of its box's top,
-  /// which is as far over the anchor's top as the box's top is (lurq counts the offset away from the anchor).
-  fn placement(&self, tooltip: &Tooltip) -> (Placement, f32) {
-    let gap = ExtraSpacing::Snug.value();
-    match &tooltip.over {
-      Some(Over(frame)) => {
-        let inset = if frame.is_attached() && self.anchor.is_attached() {
-          (self.anchor.y() - frame.y()).max(0.0)
-        } else {
-          0.0
-        };
-        let placement = if tooltip.end {
-          Placement::TopEnd
-        } else {
-          Placement::TopStart
-        };
-        (placement, gap + inset)
-      }
-      None if tooltip.end => (Placement::BottomEnd, gap),
-      None => (Placement::BottomStart, gap),
-    }
+/// Where `tooltip` opens from its anchor: under it, or over it clear of its frame, from its start or its end.
+const fn placement(tooltip: &Tooltip) -> Placement {
+  match (tooltip.over.is_some(), tooltip.end) {
+    (true, true) => Placement::TopEnd,
+    (true, false) => Placement::TopStart,
+    (false, true) => Placement::BottomEnd,
+    (false, false) => Placement::BottomStart,
   }
 }
 
-/// How much wider than its room a text must be to count as cut, for rounding.
-const CUT_TOLERANCE: f32 = 0.5;
-
 impl TooltipHost {
-  /// The cut text in `anchor`, which gives up room when its row runs out of it, and, while the pointer
-  /// rests on it, an unseen whole copy in an overlay that measures it without moving the row. A framed
-  /// text's anchor is the control it names.
+  /// The cut text in `anchor`, which gives up room when its row runs out of it. A framed text's anchor is the control
+  /// it names.
   fn cut_text(&self, anchor: Row, tooltip: &Tooltip, cut: &CutText) -> Row {
     let resting = self.resting.get();
     let color = match &cut.frame {
       Some(frame) if resting => Some(frame.hovered.clone()),
       _ => cut.color.clone(),
     };
-    let text = |text: Text| match color.clone() {
-      Some(color) => text.variant(cut.typography).color(color).nowrap(),
-      None => text.variant(cut.typography).nowrap(),
+    let text = Text::new(&tooltip.text).variant(cut.typography).nowrap();
+    let text = match color {
+      Some(color) => text.color(color),
+      None => text,
     };
     let anchor = match &cut.frame {
       Some(frame) => (frame.lay_out)(anchor, resting),
       None => anchor,
     };
-    anchor
-      .flex_shrink(1.0)
-      .min_width(Dimension::Px(0.0))
-      .child(
-        text(Text::new(&tooltip.text))
-          .id(tooltip.id.to_string())
-          .describe("a11y_name", tooltip.text.clone())
-          .ref_element(self.cut.clone())
-          .max_width(Dimension::Pct(100.0))
-          .text_overflow(TextOverflow::Elipsis),
-      )
-      // The copy is an overlay, out of the row's flow and out of its name: laid out whole, unseen.
-      .with_children(resting.then(|| {
-        let whole = text(Text::new(&tooltip.text))
-          .ref_element(self.whole.clone())
-          .opacity(0.0);
-        Popup::new(self.anchor.clone(), whole)
-          .open_when(true)
-          .placement(Placement::BottomStart)
-          .collision(CollisionStrategy::None)
-          .hit_test(HitTestBehavior::None)
-          .dismiss_on_outside_click(false)
-          .dismiss_on_escape(false)
-      }))
+    anchor.flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(
+      text
+        .id(tooltip.id.to_string())
+        .describe("a11y_name", tooltip.text.clone())
+        .ref_element(self.cut.clone())
+        .max_width(Dimension::Pct(100.0))
+        .text_overflow(TextOverflow::Elipsis),
+    )
   }
 }
 

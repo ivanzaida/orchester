@@ -227,9 +227,8 @@ impl MessageActions {
 
   /// The button of `action` with `glyph`, named `name`, saying `tip` in its tooltip while that shows: the `hover` fill
   /// under the pointer, which alone presses it (never a Tab stop, no focus ring); the line knows whether the pointer
-  /// is on it. The tooltip is the button's own child, out of the layout and always laid out, seen only while it shows:
-  /// a press under the pointer reaches the button it began on even when the pointer's arrival redraws the line in the
-  /// same frame.
+  /// is on it. The tooltip is the button's own child, out of the layout and taking no pointer: a press under the
+  /// pointer reaches the button it began on even when the pointer's arrival redraws the line in the same frame.
   fn button(
     &self,
     props: &MessageActionsProps,
@@ -243,7 +242,7 @@ impl MessageActions {
       Edge::End => Placement::Bottom,
     };
     let tooltip = Tooltip::new(format!("{}-{}", props.id, action.key()), tip.clone()).hung(
-      anchor.clone(),
+      &anchor,
       placement,
       self.tipped(props.hovered) == Some(action),
     );
