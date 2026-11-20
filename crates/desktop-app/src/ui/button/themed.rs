@@ -1,7 +1,8 @@
 //! A button drawn by lurq's `ui::Button` in the theme's recipe (`theme::kit::button`): its kind is the variant, its
 //! height the size, its hold and its look the states. A select's label takes its room before its chevron
-//! (`fill_label`); a stacked answer's consequence is the button's description, wrapping under its label. Its icons are the kit's, so the loader turns as it does
-//! everywhere, under the ids `<id>-icon` and, as lurq names its parts, `<id>-label`.
+//! (`fill_label`); a stacked answer's consequence is the button's description, wrapping under its label. Its icons are
+//! the kit's, so the loader turns as it does everywhere, under the ids `<id>-icon` and, as lurq names its parts,
+//! `<id>-label`.
 
 use lurq::{
   app::theme::PaletteColor,

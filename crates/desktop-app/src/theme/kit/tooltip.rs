@@ -1,8 +1,8 @@
 //! Tooltip (`Tooltip` `b6q3OZ`, `ui::tooltip`): lurq's `ui::Tooltip`, a label in 11/500 `text_inverse` on
-//! `text_primary`, radius 4, 4 over and under it and 8 at its sides, a shortcut 8 after it in Geist Mono 10 at 60 % with
-//! no cap of its own; one with a note (`oL5mO`) 6 over and under its title, the note 2 under it in 11 regular. A path
-//! or a command is in Geist Mono 11/500 (`C9Phsz`). A wrapping label keeps the one-line padding and leading. It stands
-//! 6 from what it describes, with no arrow and no fade.
+//! `text_primary`, radius 4, 4 over and under it and 8 at its sides, a shortcut 8 after it in Geist Mono 10 at 60 %
+//! with no cap of its own; one with a note (`oL5mO`) 6 over and under its title, the note 2 under it in 11 regular. A
+//! path or a command is in Geist Mono 11/500 (`C9Phsz`). A wrapping label keeps the one-line padding and leading. It
+//! stands 6 from what it describes, with no arrow and no fade.
 
 use lurq::{
   app::theme::{PaletteColor, RadiusSize, SpacingSize, Theme, TypographyStyle},

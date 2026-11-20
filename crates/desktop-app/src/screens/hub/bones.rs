@@ -2,7 +2,6 @@
 //! group's head with its title real and its count a bone, a list row with its tile, label, hint and end as bones, a
 //! sub-head, and a status, so the real rows replace them in place.
 
-use lurq::ui::Skeleton as UiSkeleton;
 use lurq::{
   app::{
     ctx::Ctx,
@@ -11,6 +10,7 @@ use lurq::{
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
+  ui::Skeleton as UiSkeleton,
 };
 
 use crate::{

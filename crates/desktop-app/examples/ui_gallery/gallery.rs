@@ -3,8 +3,6 @@
 
 use std::sync::Arc;
 
-use parking_lot::Mutex;
-
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -26,6 +24,7 @@ use orchester_app::{
     tabs::{PageTab, Segment, SegmentFace, page_tabs, segmented},
   },
 };
+use parking_lot::Mutex;
 
 use crate::sections;
 

@@ -1,5 +1,5 @@
-//! A skeleton pulses gently once its bones show: lurq plays its bones' pulse on the animation clock in the theme's steps,
-//! so the window asks for a frame only when a pose changes.
+//! A skeleton pulses gently once its bones show: lurq plays its bones' pulse on the animation clock in the theme's
+//! steps, so the window asks for a frame only when a pose changes.
 
 #[path = "skeleton_host/mod.rs"]
 mod skeleton_host;

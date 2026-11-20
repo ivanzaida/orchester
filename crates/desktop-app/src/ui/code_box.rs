@@ -3,8 +3,8 @@
 //! `text_primary` on `code_bg` inside a `border` stroke, radius 6, 8 over and under it and 10 at its
 //! sides. The value is never shortened: it wraps, it can be selected, and past twelve lines it scrolls
 //! inside its box. Copy is a Tab stop; it says Copied for a moment once the window's clipboard
-//! (`ui::clipboard`) holds the value, or that it could not copy. Inline (`Command` `SiCGv`), the box has no caption and Copy is a small
-//! icon button inside it at its end, 8 over and under and 12 at its sides; its tooltip says Copied.
+//! (`ui::clipboard`) holds the value, or that it could not copy. Inline (`Command` `SiCGv`), the box has no caption and
+//! Copy is a small icon button inside it at its end, 8 over and under and 12 at its sides; its tooltip says Copied.
 
 use std::{sync::Arc, time::Duration};
 

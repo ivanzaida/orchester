@@ -7,7 +7,6 @@
 
 use std::sync::Arc;
 
-use lurq::ui::Length;
 use lurq::{
   app::{
     ctx::Ctx,
@@ -16,6 +15,7 @@ use lurq::{
   components::{Column, Row, Spacer},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::Length,
 };
 
 use super::{

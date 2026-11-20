@@ -5,7 +5,6 @@
 //! instead (the project's feed keeps them) while it reads them anew, so this stands only for a run read for the first
 //! time.
 
-use lurq::ui::Skeleton as UiSkeleton;
 use lurq::{
   app::{
     ctx::Ctx,
@@ -14,6 +13,7 @@ use lurq::{
   components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::Skeleton as UiSkeleton,
 };
 use orchester_core::{integration::attempt::AttemptStage, project::TaskKey, run::RunNumber};
 

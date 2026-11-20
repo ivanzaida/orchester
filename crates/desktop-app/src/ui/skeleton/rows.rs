@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 
-use lurq::ui::{Length, Skeleton as UiSkeleton};
 use lurq::{
   app::{
     ctx::Ctx,
@@ -13,6 +12,7 @@ use lurq::{
   components::{Column, Row, Spacer, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::{Length, Skeleton as UiSkeleton},
 };
 
 use super::{bone, round_bone};

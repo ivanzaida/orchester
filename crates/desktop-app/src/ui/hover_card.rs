@@ -2,8 +2,9 @@
 //! `R2dWD6` in `e2DPHR`, the health dot's and the runner's cards `oagTL`, `ediuF` in `Status bar · redesign`): a
 //! popover's panel (`ui::popover`) that shows above its anchor, its end at the anchor's end (or its start at the
 //! anchor's start), once the pointer rested on the anchor as long as a tooltip waits, and goes when the pointer leaves.
-//! It lets the pointer through: lurq's `ui::HoverCard` with `pass_through`. [`card`] lays out what a card of words says: a title, a state with its dot, what it
-//! means and a hint; [`facts_card`] a card of facts: a state line, then a label and a value on each line.
+//! It lets the pointer through: lurq's `ui::HoverCard` with `pass_through`. [`card`] lays out what a card of words
+//! says: a title, a state with its dot, what it means and a hint; [`facts_card`] a card of facts: a state line, then a
+//! label and a value on each line.
 
 use std::sync::Arc;
 
