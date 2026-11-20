@@ -2,11 +2,13 @@
 //! primitive that renders a lurq component keeps its look here.
 
 mod button;
+mod icon_button;
 mod kbd;
 
 use lurq::app::theme::Theme;
 
 pub(super) fn install(theme: &Theme) {
   button::install(theme);
+  icon_button::install(theme);
   kbd::install(theme);
 }

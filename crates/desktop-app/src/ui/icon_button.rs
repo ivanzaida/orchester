@@ -1,29 +1,31 @@
 //! Icon button (`Button/icon` `JJEzp`): a 16 `text_secondary` glyph in a 28 square, radius 6, the
 //! `hover` fill under the pointer; the small one removes an entry from a row (`Remove` in `o6h0L5`, a 14
-//! `text_muted` cross in a 24 square). It has no words of its own, so its label is its tooltip.
+//! `text_muted` cross in a 24 square). It has no words of its own, so its label is its tooltip. lurq's `ui::Button`,
+//! its icon alone, draws it in the theme's recipe (`theme::kit::icon_button`); the tooltip is the kit's.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, RadiusSize},
-  },
-  components::Button,
+  app::{ctx::Ctx, theme::PaletteColor},
   core::ElementRef,
-  layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, Style, dimension::Dimension},
+  node::Element,
+  ui::{self, Styled},
 };
 
 use super::{
-  icon::{Icon, icon},
-  pressable::{Focus, Press, inert},
+  icon::Icon,
+  pressable::{Focus, Press},
   tooltip::Tooltip,
 };
 use crate::{
   navigation::link::Open,
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, IconSize},
+  theme::{ControlHeight, ExtraColor, IconSize},
 };
+
+/// The variant of lurq's `ui::Button` an icon button is in the theme's recipe.
+pub const VARIANT: &str = "icon";
+/// What it opened is open.
+pub const ACTIVE: &str = "active";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IconButtonSize {
@@ -41,18 +43,32 @@ pub enum IconButtonSize {
 }
 
 impl IconButtonSize {
-  /// Its width and height.
-  fn sides(self) -> (f32, f32) {
+  pub const ALL: [Self; 5] = [Self::Regular, Self::Small, Self::Inspector, Self::Compact, Self::Toggle];
+
+  /// Its size in the theme's recipe of lurq's `ui::Button` (`theme::kit::icon_button`).
+  pub const fn name(self) -> &'static str {
     match self {
-      Self::Regular => (ControlHeight::Md.value(), ControlHeight::Md.value()),
-      Self::Small => (ControlHeight::Sm.value(), ControlHeight::Sm.value()),
-      Self::Inspector => (ControlHeight::Inspector.value(), ControlHeight::Inspector.value()),
-      Self::Compact => (ControlHeight::Xs.value(), ControlHeight::Xs.value()),
-      Self::Toggle => (ControlHeight::Inspector.value(), ControlHeight::Sm.value()),
+      Self::Regular => "icon_regular",
+      Self::Small => "icon_small",
+      Self::Inspector => "icon_inspector",
+      Self::Compact => "icon_compact",
+      Self::Toggle => "icon_toggle",
     }
   }
 
-  fn glyph(self) -> (IconSize, PaletteColor) {
+  /// Its width and height.
+  pub const fn sides(self) -> (ControlHeight, ControlHeight) {
+    match self {
+      Self::Regular => (ControlHeight::Md, ControlHeight::Md),
+      Self::Small => (ControlHeight::Sm, ControlHeight::Sm),
+      Self::Inspector => (ControlHeight::Inspector, ControlHeight::Inspector),
+      Self::Compact => (ControlHeight::Xs, ControlHeight::Xs),
+      Self::Toggle => (ControlHeight::Inspector, ControlHeight::Sm),
+    }
+  }
+
+  /// The size and the color of its glyph.
+  pub fn glyph(self) -> (IconSize, PaletteColor) {
     match self {
       Self::Regular => (IconSize::Lg, ExtraColor::TextSecondary.role()),
       Self::Small | Self::Compact | Self::Toggle => (IconSize::Md, PaletteColor::MutedForeground),
@@ -150,41 +166,26 @@ impl IconButton {
   }
 
   pub fn render(self, ctx: &mut Ctx) -> Element {
-    let (width, height) = self.size.sides();
-    let (size, color) = self.size.glyph();
-    let color = if self.active { PaletteColor::Foreground } else { color };
-    let button = Button::empty()
+    let mut button = ui::Button::new(&self.label)
       .id(self.id.clone())
-      .width(Dimension::Px(width))
-      .height(Dimension::Px(height))
-      .align_items(Alignment::Center)
-      .justify(Justify::Center)
-      .rounded(RadiusSize::Md)
-      .describe("a11y_name", self.label.clone())
-      .child(icon(self.icon, size, color).id(format!("{}-icon", self.id)));
-    let button = if self.active {
-      button.background(ExtraColor::Pressed.role())
-    } else {
-      button
-    };
-    let button = match self.element {
-      Some(element) => button.ref_element(element),
-      None => button,
-    };
-    let button = match self.action {
-      Some(press) => press.on(
-        self
-          .focus
-          .apply(button)
-          .cursor(CursorIcon::Pointer)
-          .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-          .active_style(Style::new().background(ExtraColor::Pressed.role()))
-          .describe("state", "enabled"),
-      ),
-      None => inert(button).opacity(DISABLED_OPACITY).describe("state", "disabled"),
+      .variant(VARIANT)
+      .size(self.size.name())
+      .icon(self.icon.name())
+      .icon_only(true)
+      .state(ACTIVE, self.active)
+      .describe("a11y_name", self.label.clone());
+    if let Some(element) = self.element {
+      button = button.ref_element(element);
+    }
+    let button: Element = match self.action {
+      Some(press) => press
+        .on_ui(button.tab_stop(self.focus != Focus::Pointer))
+        .describe("state", "enabled")
+        .into(),
+      None => button.disabled(true).describe("state", "disabled").into(),
     };
     if self.active {
-      return button.into();
+      return button;
     }
     let tooltip = Tooltip::new(self.id, self.label);
     match self.shortcut {
