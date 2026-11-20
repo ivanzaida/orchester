@@ -8,28 +8,26 @@
 //! label in 13 `text_muted` and an 11 `text_muted` lock, 5 apart, with why in its tooltip (`Page tab/locked`
 //! `Smb4t`). Tabs are pointer-only.
 //!
-//! Segmented control (`Segmented/text` `S5Fsve`, `Segmented` `C9VsTA`): 26 high, `surface_input` inside
-//! a `border` stroke, radius 6, 2 inside and between segments. The chosen segment is filled with
-//! `pressed` and its label 12/500 `text_primary`, the others 12 `text_muted`; a text segment is 22 high,
-//! radius 4, 10 at its sides; an icon segment is 28 wide, radius 4, its 13 glyph `text_primary` when
-//! chosen and `text_muted` otherwise, the chosen one filled with `hover`.
+//! The segmented control is [`segments`].
+
+mod segments;
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, TypographyStyle},
   },
   components::{Button, Column, Row, Spacer, Stack, Text},
-  core::ElementRef,
-  layout::{Alignment, StackAlignment, layout_kind::Justify},
-  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  layout::{Alignment, StackAlignment},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
+pub use self::segments::{Segment, SegmentFace, face, segmented};
 use super::{
   icon::{Icon, icon},
-  pressable::{Focus, Press, inert, pressable},
+  pressable::{Press, inert},
   skeleton,
   tooltip::Tooltip,
 };
@@ -42,10 +40,6 @@ use crate::{
 const TAB_HEIGHT: f32 = 34.0;
 /// A compact page tab's height: the Agents hub's tabs and a tool's (`Tabs` `Cc3JP`).
 const COMPACT_TAB_HEIGHT: f32 = 32.0;
-/// `Segmented` height, and a text segment's (`c4p0b`) and an icon segment's width (`wsGU4`).
-const SEGMENTED_HEIGHT: f32 = 26.0;
-const TEXT_SEGMENT_HEIGHT: f32 = 22.0;
-const ICON_SEGMENT_WIDTH: f32 = 28.0;
 /// The height of what only holds a width.
 const NO_ROOM: f32 = 0.0;
 /// A tab's dot (`Dot` `JrkWf` in `cjvRr`).
@@ -418,177 +412,4 @@ fn tab_line(ctx: &Ctx, id: &str, tabs: Vec<Element>) -> Stack {
         .align_items(Alignment::Center)
         .with_children(tabs),
     )
-}
-
-/// What a segment shows.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SegmentFace {
-  Text(Arc<str>),
-  /// A label and its count, 6 apart, the count in 12 `text_muted` (`Segment · All` in `Agents · v2` A1).
-  Counted(Arc<str>, Arc<str>),
-  /// A glyph; the label names it for tools.
-  Icon(Icon, Arc<str>),
-  /// A 13 glyph before the label, 6 apart, both in the label's color (`System` `J9tyr` in Settings › General).
-  Labelled(Icon, Arc<str>),
-  /// A choice that warns: an 11 `triangle-alert` in `danger` before the label, 5 apart; chosen, on `danger_muted` with
-  /// its label in `danger` (`Segment · Dangerous auto-approve` `cky7h`, `vBuWb` in `v5d5r`).
-  Warned(Arc<str>),
-}
-
-pub struct Segment {
-  id: Arc<str>,
-  face: SegmentFace,
-  chosen: bool,
-  choose: Arc<dyn Fn() + Send + Sync>,
-  element: Option<ElementRef>,
-  /// The segments share the control's width equally.
-  fill: bool,
-}
-
-impl Segment {
-  pub fn new(
-    id: impl Into<Arc<str>>,
-    face: SegmentFace,
-    chosen: bool,
-    choose: impl Fn() + Send + Sync + 'static,
-  ) -> Self {
-    Self {
-      id: id.into(),
-      face,
-      chosen,
-      choose: Arc::new(choose),
-      element: None,
-      fill: false,
-    }
-  }
-
-  /// The segment's element, for a popup it opens to anchor to: lurq switches to that popup in one press, from
-  /// another open dropdown, only when the pressed segment is the popup's anchor itself.
-  pub fn element(mut self, element: ElementRef) -> Self {
-    self.element = Some(element);
-    self
-  }
-
-  /// The segment takes an equal share of a control as wide as its place (`Layout` `O1Xwma` in `J0ncJ`).
-  #[must_use]
-  pub const fn fill(mut self) -> Self {
-    self.fill = true;
-    self
-  }
-
-  fn render(self, focus: Focus) -> Element {
-    let choose = self.choose;
-    let label_id = format!("{}-label", self.id);
-    let count_id = format!("{}-count", self.id);
-    let mut button = focus
-      .apply(pressable(move || choose()))
-      .id(self.id)
-      .justify(Justify::Center)
-      .rounded(RadiusSize::Sm)
-      .describe("state", if self.chosen { "chosen" } else { "enabled" });
-    if let Some(element) = self.element {
-      button = button.ref_element(element);
-    }
-    if self.fill {
-      button = button.flex(1.0).min_width(Dimension::Px(0.0));
-    }
-    let (text, glyph) = if self.chosen {
-      (PaletteColor::Foreground, PaletteColor::Foreground)
-    } else {
-      (PaletteColor::MutedForeground, PaletteColor::MutedForeground)
-    };
-    let typography = if self.chosen {
-      TypographyStyle::Label
-    } else {
-      TypographyStyle::Description
-    };
-    button = match self.face {
-      SegmentFace::Text(label) => {
-        let button = button
-          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
-          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-          .describe("a11y_name", label.clone())
-          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
-        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
-      }
-      SegmentFace::Counted(label, count) => {
-        let button = button
-          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
-          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-          .spacing(ExtraSpacing::Snug.role())
-          .describe("a11y_name", label.clone())
-          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap())
-          .child(
-            Text::new(&count)
-              .id(count_id)
-              .variant(TypographyStyle::Description)
-              .color(PaletteColor::MutedForeground)
-              .nowrap(),
-          );
-        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
-      }
-      SegmentFace::Labelled(face, label) => {
-        let button = button
-          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
-          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .describe("a11y_name", label.clone())
-          .child(icon(face, IconSize::Base, glyph))
-          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
-        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
-      }
-      SegmentFace::Warned(label) => warned(button, (&label, label_id), typography, self.chosen),
-      SegmentFace::Icon(face, label) => {
-        let button = button
-          .width(Dimension::Px(ICON_SEGMENT_WIDTH))
-          .height(Dimension::Pct(100.0))
-          .describe("a11y_name", label)
-          .child(icon(face, IconSize::Base, glyph).id(label_id));
-        chosen_fill(button, self.chosen, ExtraColor::Hover.role())
-      }
-    };
-    button.into()
-  }
-}
-
-/// A choice that warns ([`SegmentFace::Warned`]): its triangle always in `danger`; chosen, its label in `danger` on
-/// `danger_muted`, else `text_muted`.
-fn warned(button: Button, (label, label_id): (&Arc<str>, String), typography: TypographyStyle, chosen: bool) -> Button {
-  let color = if chosen {
-    PaletteColor::Destructive
-  } else {
-    PaletteColor::MutedForeground
-  };
-  let button = button
-    .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
-    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .describe("a11y_name", label.clone())
-    .child(icon(Icon::TriangleAlert, IconSize::Xs, PaletteColor::Destructive))
-    .child(Text::new(label).id(label_id).variant(typography).color(color).nowrap());
-  chosen_fill(button, chosen, PaletteColor::DestructiveMuted)
-}
-
-fn chosen_fill(button: Button, chosen: bool, fill: PaletteColor) -> Button {
-  if chosen {
-    button.background(fill)
-  } else {
-    button.hovered_style(Style::new().background(ExtraColor::Hover.role()))
-  }
-}
-
-/// A segmented control of `segments`; in a form its segments are Tab stops.
-pub fn segmented(id: &str, segments: impl IntoIterator<Item = Segment>, focus: Focus) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .height(Dimension::Px(SEGMENTED_HEIGHT))
-    .padding(ExtraSpacing::Tight.role())
-    .spacing(ExtraSpacing::Tight.role())
-    .align_items(Alignment::Center)
-    .background(ExtraColor::InputSurface.role())
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .with_children(segments.into_iter().map(|segment| segment.render(focus)))
 }
