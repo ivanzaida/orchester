@@ -8,7 +8,6 @@ use lurq::{
   ui::{Callout, CalloutPart, Length, Recipe},
 };
 
-use super::plain::plain;
 use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
 
 /// The variants a callout's tone names.
@@ -44,7 +43,7 @@ fn recipe() -> Recipe {
     .base(CalloutPart::Text, |style| style.gap(SpacingSize::Xs))
     .base(CalloutPart::Title, |style| {
       style
-        .typography(plain(ExtraTypography::FormSection.role()))
+        .typography(ExtraTypography::FormSection.role())
         .foreground(PaletteColor::Foreground)
     });
   tones.into_iter().fold(recipe, |recipe, (tone, fill, mark)| {

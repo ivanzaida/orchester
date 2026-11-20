@@ -12,7 +12,6 @@ use lurq::{
   ui::{Length, Recipe, SegmentedControl, SegmentedControlPart, SegmentedControlState, Selector},
 };
 
-use super::plain::plain;
 use crate::{
   theme::{ExtraColor, ExtraShadow, ExtraSpacing, IconSize},
   ui::tabs::face,
@@ -51,12 +50,12 @@ fn recipe() -> Recipe {
     })
     .base(Label, |style| {
       style
-        .typography(plain(TypographyStyle::Description))
+        .typography(TypographyStyle::Description)
         .foreground(PaletteColor::MutedForeground)
     })
     .base(Count, |style| {
       style
-        .typography(plain(TypographyStyle::Description))
+        .typography(TypographyStyle::Description)
         .foreground(PaletteColor::MutedForeground)
     })
     .base(Icon, |style| style.square(IconSize::Base.size()))
@@ -72,7 +71,7 @@ fn recipe() -> Recipe {
     })
     .state(selected, Label, |style| {
       style
-        .typography(plain(TypographyStyle::Label))
+        .typography(TypographyStyle::Label)
         .foreground(PaletteColor::Foreground)
     })
     .state(SegmentedControlState::FullWidth, Root, |style| {

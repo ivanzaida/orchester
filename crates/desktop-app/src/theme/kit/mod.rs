@@ -8,7 +8,6 @@ pub mod chip;
 mod icon_button;
 mod kbd;
 pub mod meter;
-pub mod plain;
 mod segmented;
 pub mod spinner;
 mod status_label;

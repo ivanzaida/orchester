@@ -13,7 +13,6 @@ use lurq::{
   ui::{Button, ButtonPart, ButtonState, PartStyle, Recipe, Selector},
 };
 
-use super::plain::plain;
 use crate::{
   theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraShadow, ExtraSpacing, ExtraTypography},
   ui::button::{ButtonKind, ButtonSize, state},
@@ -48,9 +47,7 @@ fn kind(rules: Recipe, kind: ButtonKind) -> Recipe {
       dressed(style, kind)
     })
     .variant(name, ButtonPart::Label, |style| {
-      style
-        .typography(plain(TypographyStyle::Button))
-        .foreground(kind.content())
+      style.typography(TypographyStyle::Button).foreground(kind.content())
     })
     .when(Selector::new().variant(name).pressed(), ButtonPart::Root, |style| {
       pressed(style.veil(NO_VEIL), kind)
@@ -130,10 +127,10 @@ fn sizes(rules: Recipe) -> Recipe {
   });
   rules
     .size(ButtonSize::Helper.name(), ButtonPart::Label, |style| {
-      style.typography(plain(ExtraTypography::Note.role()))
+      style.typography(ExtraTypography::Note.role())
     })
     .size(ButtonSize::Large.name(), ButtonPart::Label, |style| {
-      style.typography(plain(ExtraTypography::ButtonLarge.role()))
+      style.typography(ExtraTypography::ButtonLarge.role())
     })
 }
 

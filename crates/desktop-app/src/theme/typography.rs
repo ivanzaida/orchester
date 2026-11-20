@@ -234,7 +234,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
     };
     (Arc::from(size.name()), glyph)
   });
-  let typography = document_roles(
+  document_roles(
     ThemeTypography {
       sans: Arc::from(SANS),
       mono_family: Arc::from(MONO),
@@ -300,8 +300,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       ..ThemeTypography::default()
     },
     primary,
-  );
-  super::kit::plain::with_plain_roles(typography)
+  )
 }
 
 /// `typography` with the roles of a Markdown document: its text where it names no style, in the body, and its
