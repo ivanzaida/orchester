@@ -1,14 +1,15 @@
-//! How wide the title bar's tabs are (`oHEGQ`, `YAOSy`). A labelled tab is as wide as what it shows, its label
-//! capped: the active tab's at [`LABEL_MAX_WIDTH`], the inactive ones' at a cap that shrinks as tabs open, from
-//! that down to [`LABEL_MIN_WIDTH`] (a 120 wide tab). Past that every inactive labelled tab is 120 wide, its label
-//! cut or not (`Tab 2 · Kontur · Overview` in `oHEGQ`), and the tabs keep their width and lurq's window tabs
-//! move the ones that do not fit, the tabs abutting,, the last first and never the active one, into the menu of the
-//! button after the tabs that counts them. The strip itself is never wider than the bar leaves it beside the room that
+//! How wide the title bar's tabs may get (`oHEGQ`, `YAOSy`). A labelled tab is as wide as what it shows (lurq's
+//! `WindowTab::fit_content`) up to a cap: the active tab's label up to [`LABEL_MAX_WIDTH`], the inactive ones' up to
+//! a cap that shrinks as tabs open, from that down to [`LABEL_MIN_WIDTH`] (a 120 wide tab). Past that every inactive
+//! labelled tab is capped at 120, its label cut or not (`Tab 2 · Kontur · Overview` in `oHEGQ`), and lurq's window tabs
+//! move the ones that do not fit, the last first and never the active one, into the menu of the button after the
+//! tabs that counts them. The caps count each label at its cap and each tab's marks as the design draws them, since
+//! no text is measured before layout. The strip itself is never wider than the bar leaves it beside the room that
 //! drags the window.
 
 use crate::{
   chrome::{BAR_GAP, END_RESERVE, LEAD_IN},
-  theme::kit::window_tabs::{CLOSE_SIDE, DOT_SIDE, NEW_TAB_SIDE},
+  theme::kit::window_tabs::{CLOSE_SIDE, DOT_SIDE, NEW_TAB_SIDE, gap},
 };
 
 /// A tab at the window's home but the active one at All projects (`Tab/Home` `qqzuJ`): the folders icon alone.
@@ -25,9 +26,14 @@ const INACTIVE_CHROME_WIDTH: f32 = 10.0 + 13.0 + 6.0 + 10.0;
 const ACTIVE_CHROME_WIDTH: f32 = 10.0 + 13.0 + 6.0 + 6.0 + CLOSE_SIDE + 6.0;
 /// An inactive labelled tab at its narrowest (`Tab 2 · Kontur · Overview` in `oHEGQ`).
 pub const TAB_MIN_WIDTH: f32 = LABEL_MIN_WIDTH + INACTIVE_CHROME_WIDTH;
-/// What a tab's unsaved dot adds with the gap before it, and the gap before a tab's mark.
+/// What a tab's unsaved dot adds with the gap before it.
 pub const DOT_WIDTH: f32 = 6.0 + DOT_SIDE;
-pub const MARK_GAP: f32 = 6.0;
+/// What a tab's red alert (11) adds with the gap before it.
+pub const MARK_WIDTH: f32 = 6.0 + 11.0;
+/// What a tab's ✋ count adds before its digits: the gap before it, the 12 hand and the 4 after it, as the Needs you
+/// panel's count of a project draws them (`Count` `ruG7r` in `o3xekF`); a digit in Inter 11.5 medium is about 0.62 em.
+const BADGE_CHROME_WIDTH: f32 = 6.0 + 12.0 + 4.0;
+const BADGE_DIGIT_WIDTH: f32 = 11.5 * 0.62;
 /// The *N need you* pill as the design draws it (`Needs you` `v2g7Gc`), for while the pill shows but has not been
 /// laid out yet.
 pub const NEEDS_YOU_WIDTH: f32 = 106.0;
@@ -41,34 +47,36 @@ const TITLE_BAR_RESERVE: f32 = LEAD_IN + 61.0 + 3.0 * BAR_GAP + MIN_DRAG_WIDTH +
 pub enum Slot {
   /// The folders icon alone.
   Icon,
-  /// A label after its icon, with marks this much wider than the bare tab ([`DOT_WIDTH`], a mark and
-  /// [`MARK_GAP`]).
+  /// A label after its icon, with marks this much wider than the bare tab ([`DOT_WIDTH`], [`MARK_WIDTH`],
+  /// [`badge_width`]).
   Labelled(f32),
-  /// A tab this wide: the active tab once its label has been measured, so it takes its real room.
-  Measured(f32),
 }
 
 impl Slot {
-  /// Its width with its label `label` wide; an active tab not measured yet counts at its widest.
+  /// Its width with its label `label` wide; the active tab counts at its widest.
   pub fn width(self, label: f32, active: bool) -> f32 {
     match self {
       Self::Icon => ICON_TAB_WIDTH,
-      Self::Measured(width) => width,
       Self::Labelled(marks) if active => LABEL_MAX_WIDTH + ACTIVE_CHROME_WIDTH + marks,
       Self::Labelled(marks) => label + INACTIVE_CHROME_WIDTH + marks,
     }
   }
 }
 
-/// How wide a labelled tab is: its label `measured` wide (or at the `cap` until it is measured) and capped there,
-/// its marks `marks` wide, and the close button where it has one.
-pub fn tab_width(measured: Option<f32>, cap: f32, marks: f32, close: bool) -> f32 {
+/// The most a labelled tab is wide: its label at `cap`, its marks `marks` wide, and the close button where it has
+/// one. Narrower content leaves it narrower.
+pub fn tab_max(cap: f32, marks: f32, close: bool) -> f32 {
   let chrome = if close {
     ACTIVE_CHROME_WIDTH
   } else {
     INACTIVE_CHROME_WIDTH
   };
-  chrome + measured.map_or(cap, |label| label.min(cap)) + marks
+  chrome + cap + marks
+}
+
+/// What a tab's ✋ count of `count` things waiting adds to it.
+pub fn badge_width(count: usize) -> f32 {
+  BADGE_CHROME_WIDTH + digits(count) as f32 * BADGE_DIGIT_WIDTH
 }
 
 /// The most the strip may be in a window `window_width` wide whose title bar ends in `trailing` (the *N need you*
@@ -77,20 +85,21 @@ pub fn strip_room(window_width: f32, trailing: f32) -> f32 {
   window_width - TITLE_BAR_RESERVE - trailing
 }
 
-/// The room for the tabs in a strip `strip` wide: what *New tab* after them leaves.
+/// The room for the tabs in a strip `strip` wide: what *New tab* and the gap before it leave.
 pub fn room(strip: f32) -> f32 {
-  strip - NEW_TAB_SIDE
+  strip - gap() - NEW_TAB_SIDE
 }
 
-/// How wide the inactive tabs' labels get when tabs shaped as `slots`, the one at `active` active, share `room`:
-/// the widest that lets them all fit, at most [`LABEL_MAX_WIDTH`]; `None` once they do not fit at
-/// [`LABEL_MIN_WIDTH`], when every inactive labelled tab is [`TAB_MIN_WIDTH`] wide and its marks.
+/// How wide the inactive tabs' labels get when tabs shaped as `slots`, the one at `active` active, share `room` with
+/// the gaps between them: the widest that lets them all fit, at most [`LABEL_MAX_WIDTH`]; `None` once they do not fit
+/// at [`LABEL_MIN_WIDTH`], when every inactive labelled tab is capped at [`TAB_MIN_WIDTH`] and its marks.
 pub fn label_cap(room: f32, slots: &[Slot], active: usize) -> Option<f32> {
+  let gaps = gap() * slots.len().saturating_sub(1) as f32;
   let (labelled, fixed) =
     slots
       .iter()
       .enumerate()
-      .fold((0_usize, 0.0), |(labelled, fixed), (index, slot)| match slot {
+      .fold((0_usize, gaps), |(labelled, fixed), (index, slot)| match slot {
         Slot::Labelled(_) if index != active => (labelled + 1, fixed + slot.width(0.0, false)),
         _ => (labelled, fixed + slot.width(LABEL_MAX_WIDTH, index == active)),
       });
@@ -99,4 +108,12 @@ pub fn label_cap(room: f32, slots: &[Slot], active: usize) -> Option<f32> {
   }
   let label = (room - fixed) / labelled as f32;
   (label >= LABEL_MIN_WIDTH).then_some(label.min(LABEL_MAX_WIDTH))
+}
+
+/// The digits of `count`, at least one.
+const fn digits(count: usize) -> u32 {
+  match count.checked_ilog10() {
+    Some(log) => log + 1,
+    None => 1,
+  }
 }

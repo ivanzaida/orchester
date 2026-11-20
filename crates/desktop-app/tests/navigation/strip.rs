@@ -157,20 +157,15 @@ fn the_button_counts_the_hidden_tabs() {
 }
 
 #[test]
-fn inactive_tabs_stay_120_wide_and_the_active_one_keeps_its_label() {
+fn inactive_tabs_are_at_most_120_wide_and_the_active_one_keeps_its_label() {
   let (mut window, navigation) = crowded_window();
-  // Kontur's Overview active, and the last inactive tab that shows at Kontur's Instructions, a label
+  // Kontur's Overview active, and Kontur's Tasks, which shows beside it, at Kontur's Project settings, a label
   // longer than an inactive tab's 81.
   let kontur = navigation.tabs_now().tabs()[1].id();
-  navigation.select(kontur);
+  let other = navigation.tabs_now().tabs()[4].id();
+  navigation.select(other);
   settle(&mut window);
-  let other = in_strip(&mut window, &navigation)
-    .into_iter()
-    .rev()
-    .find(|id| *id != format!("tab-{kontur}"))
-    .expect("another tab shows");
-  super::press(&mut window, &other, MouseButton::Left);
-  navigation.go(super::project(ProjectPage::Instructions(Default::default())));
+  navigation.go(super::project(ProjectPage::Settings(Default::default())));
   navigation.select(kontur);
   let active = active_id(&navigation);
   window.until("Kontur's name", |window| window.text(&active).contains("Kontur"));
@@ -186,6 +181,10 @@ fn inactive_tabs_stay_120_wide_and_the_active_one_keeps_its_label() {
   assert!(
     inactive.iter().any(|width| (width - 120.0).abs() < 0.5),
     "a cut label leaves its tab 120 wide: {inactive:?}"
+  );
+  assert!(
+    inactive.iter().any(|width| *width < 119.5),
+    "a short label leaves its tab narrower: {inactive:?}"
   );
   assert!(
     bounds(&mut window, &active).width > 120.0,
@@ -283,4 +282,33 @@ fn the_strip_is_never_a_tab_stop() {
   }
   super::press(&mut window, NEW_TAB, MouseButton::Left);
   assert_ne!(focused(&window).as_deref(), Some(NEW_TAB), "nor after a press");
+}
+
+#[test]
+fn tabs_stand_2_apart_and_new_tab_2_after_them() {
+  let (mut window, navigation) = crowded_window();
+  let strip = in_strip(&mut window, &navigation);
+  for pair in strip.windows(2) {
+    let (left, right) = (bounds(&mut window, &pair[0]), bounds(&mut window, &pair[1]));
+    assert!(
+      (right.x - (left.x + left.width) - 2.0).abs() < 0.5,
+      "{} and {}: {left:?} {right:?}",
+      pair[0],
+      pair[1]
+    );
+  }
+  let last = bounds(&mut window, strip.last().expect("a tab shows"));
+  let button = bounds(&mut window, MORE);
+  assert!(
+    (button.x - (last.x + last.width) - 2.0).abs() < 0.5,
+    "the button 2 after the last tab: {last:?} {button:?}"
+  );
+  window.tree.resize(3000, 640);
+  settle(&mut window);
+  let last = bounds(&mut window, tab_ids(&navigation).last().expect("tabs"));
+  let new_tab = bounds(&mut window, NEW_TAB);
+  assert!(
+    (new_tab.x - (last.x + last.width) - 2.0).abs() < 0.5,
+    "New tab 2 after the last tab: {last:?} {new_tab:?}"
+  );
 }

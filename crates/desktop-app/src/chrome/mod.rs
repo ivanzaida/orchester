@@ -7,7 +7,6 @@
 mod app_menu;
 pub mod tab_fit;
 mod tab_label;
-mod tab_measure;
 mod tab_strip;
 mod title_bar;
 

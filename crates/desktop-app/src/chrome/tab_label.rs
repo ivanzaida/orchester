@@ -14,6 +14,7 @@ use lurq::{
   node::Element,
 };
 
+use super::tab_fit::{MARK_WIDTH, badge_width};
 use crate::{
   navigation::tabs::Tab,
   project::Projects,
@@ -74,6 +75,22 @@ pub fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab, id: String) -> O
       .into(),
   };
   Some(Tooltip::new(id, text).wrap(ctx, marker))
+}
+
+/// The room `tab`'s mark takes with the gap before it, as [`attention`] draws it; none without one.
+pub fn mark_width(projects: &Projects, tab: &Tab) -> f32 {
+  let Some(project) = tab
+    .route()
+    .project()
+    .filter(|project| projects.name(*project).is_some())
+  else {
+    return 0.0;
+  };
+  match needs_you::attention(projects, project) {
+    Some(Attention::Waiting(count)) => badge_width(count),
+    Some(Attention::RunnerOffline | Attention::TasksUnread) => MARK_WIDTH,
+    None => 0.0,
+  }
 }
 
 /// Whether the task form `route` shows holds edits that are not saved.

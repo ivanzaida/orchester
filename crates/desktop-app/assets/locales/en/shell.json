@@ -32,7 +32,7 @@
     "tabs": {
       "strip": "Open tabs",
       "close": "Close",
-      "hidden": "Show the hidden tabs",
+      "list": "All open tabs",
       "inProject": "{{project}} · {{label}}",
       "attention": "{{project}} · {{waiting}}",
       "runnerOffline": "runner offline",

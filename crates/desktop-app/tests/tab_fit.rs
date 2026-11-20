@@ -1,11 +1,14 @@
-//! How wide the title bar's tabs are (`oHEGQ`, `YAOSy`): a tab is as wide as what it shows, its label capped;
-//! inactive labels' cap shrinks as tabs open down to a 120 wide tab while the active tab keeps its width. Which tabs
-//! leave the strip once they do not fit is lurq's window tabs' (their list mode), tested there.
+//! How wide the title bar's tabs may get (`oHEGQ`, `YAOSy`): a tab is as wide as what it shows, its label capped;
+//! inactive labels' cap shrinks as tabs open down to a 120 wide tab while the active tab keeps its own, the tabs 2
+//! apart. Which tabs leave the strip once they do not fit is lurq's window tabs' (their list mode), tested there.
 
 use orchester_app::chrome::tab_fit::{
-  DOT_WIDTH, ICON_TAB_WIDTH, LABEL_MAX_WIDTH, LABEL_MIN_WIDTH, Slot, TAB_MIN_WIDTH, label_cap, room, strip_room,
-  tab_width,
+  DOT_WIDTH, ICON_TAB_WIDTH, LABEL_MAX_WIDTH, LABEL_MIN_WIDTH, Slot, TAB_MIN_WIDTH, badge_width, label_cap, room,
+  strip_room, tab_max,
 };
+
+/// The room between two tabs.
+const GAP: f32 = 2.0;
 
 /// The active tab at its widest: a 160 label, the 13 icon, the 18 close button, their gaps and padding
 /// (`Tab/Active` `jhz5t`).
@@ -15,9 +18,9 @@ fn labelled(count: usize) -> Vec<Slot> {
   vec![Slot::Labelled(0.0); count]
 }
 
-/// The room `inactive` tabs at 120 take beside the active tab.
+/// The room `inactive` tabs at 120 take beside the active tab, 2 apart.
 fn narrowest(inactive: usize) -> f32 {
-  inactive as f32 * TAB_MIN_WIDTH + ACTIVE_WIDTH
+  inactive as f32 * (TAB_MIN_WIDTH + GAP) + ACTIVE_WIDTH
 }
 
 #[test]
@@ -37,7 +40,7 @@ fn a_few_tabs_keep_their_widest_labels_and_they_shrink_as_tabs_open() {
 #[test]
 fn a_tab_is_120_wide_at_its_narrowest() {
   assert_eq!(TAB_MIN_WIDTH, 120.0);
-  assert_eq!(tab_width(None, LABEL_MIN_WIDTH, 0.0, false), 120.0);
+  assert_eq!(tab_max(LABEL_MIN_WIDTH, 0.0, false), 120.0);
 }
 
 #[test]
@@ -74,36 +77,23 @@ fn icon_tabs_and_marks_take_their_own_room() {
 }
 
 #[test]
-fn a_measured_active_tab_leaves_its_unused_room_to_the_others() {
-  let room = narrowest(5) + 50.0;
-  let mut slots = labelled(6);
-  let widest = label_cap(room, &slots, 0).expect("they fit");
-  slots[0] = Slot::Measured(tab_width(Some(60.0), LABEL_MAX_WIDTH, 0.0, true));
-  assert!(
-    label_cap(room, &slots, 0).is_some_and(|cap| cap > widest),
-    "a short active label leaves room"
-  );
-}
-
-#[test]
-fn a_tab_is_as_wide_as_its_label_up_to_the_cap() {
-  let short = tab_width(Some(50.0), LABEL_MAX_WIDTH, 0.0, false);
-  assert_eq!(short, 50.0 + 39.0, "a short label, the icon and the padding");
+fn a_tab_is_capped_at_its_label_cap_with_its_chrome_and_marks() {
   assert_eq!(
-    tab_width(Some(300.0), LABEL_MAX_WIDTH, 0.0, true),
+    tab_max(LABEL_MAX_WIDTH, 0.0, false),
+    LABEL_MAX_WIDTH + 39.0,
+    "the icon and the padding"
+  );
+  assert_eq!(
+    tab_max(LABEL_MAX_WIDTH, 0.0, true),
     ACTIVE_WIDTH,
-    "a long one is cut"
+    "and the close button"
   );
   assert_eq!(
-    tab_width(None, LABEL_MAX_WIDTH, 0.0, true),
-    ACTIVE_WIDTH,
-    "counted at its widest until measured"
-  );
-  assert_eq!(
-    tab_width(Some(50.0), LABEL_MIN_WIDTH, DOT_WIDTH, false),
-    short + DOT_WIDTH,
+    tab_max(LABEL_MIN_WIDTH, DOT_WIDTH, false),
+    TAB_MIN_WIDTH + DOT_WIDTH,
     "the unsaved dot adds its room"
   );
+  assert!(badge_width(12) > badge_width(3), "a count of two digits is wider");
 }
 
 #[test]
@@ -113,5 +103,5 @@ fn the_strip_leaves_the_drag_area_and_new_tab_their_room() {
     strip < 1440.0 - 106.0 - 48.0,
     "the drag area and the pill stay: {strip}"
   );
-  assert_eq!(room(strip), strip - 26.0, "New tab after the tabs");
+  assert_eq!(room(strip), strip - GAP - 26.0, "New tab 2 after the tabs");
 }

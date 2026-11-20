@@ -11,29 +11,28 @@
 //! form holds edits that are not saved shows a dot after its label (`Dirty` `TfKtF` in `Fd1ai`), beside its close
 //! button.
 //!
-//! Each tab is as wide as what it shows (`tab_fit`, from the widths `tab_measure` learns); the tabs that do not fit
-//! go into the menu of the button after the last tab that shows, which counts them. The tabs, *New tab* and that
-//! button are for the pointer only, never a Tab stop: the Tab that comes with Alt+Tab back into the window must not
-//! land on them, where Space would open a tab. The window's own shortcuts (`navigation::shortcuts`) switch, open and
-//! close tabs.
+//! Each tab is as wide as what it shows up to its cap (`tab_fit`); the tabs that do not fit go into the menu of the
+//! button after the last tab that shows, which counts them and opens the list of every open tab (`Tab list` `pB0VB`:
+//! search above eight tabs, a close button on each row, Ctrl+Shift+A, Cmd+Shift+A on macOS, to open and close it). The
+//! tabs, *New tab* and that button are for the pointer only, never a Tab stop: the Tab that comes with Alt+Tab back
+//! into the window must not land on them, where Space would open a tab. The window's own shortcuts
+//! (`navigation::shortcuts`) switch, open and close tabs.
 
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::TypographyStyle,
   },
   components::Row,
   core::ElementRef,
   layout::Alignment,
   node::{Element, HitTestBehavior, dimension::Dimension},
-  ui::{WindowTab, WindowTabs, WindowTabsDirtyMark, WindowTabsOverflow},
+  ui::{WindowTab, WindowTabs, WindowTabsDirtyMark, WindowTabsMenu, WindowTabsOverflow},
 };
 
 use super::{
-  tab_fit::{self, DOT_WIDTH, ICON_TAB_WIDTH, LABEL_MAX_WIDTH, LABEL_MIN_WIDTH, MARK_GAP, Slot},
-  tab_label::{attention, label, tab_icon, unsaved},
-  tab_measure::TabWidths,
+  tab_fit::{self, DOT_WIDTH, LABEL_MAX_WIDTH, LABEL_MIN_WIDTH, Slot},
+  tab_label::{attention, label, mark_width, tab_icon, unsaved},
 };
 use crate::{
   navigation::{
@@ -48,12 +47,10 @@ use crate::{
 };
 
 /// The strip's id: its tabs are `tab-<id>`, *New tab* `tab-strip-add`, the button of the tabs that do not fit
-/// `tab-strip-more`.
+/// `tab-strip-more`, its list `tab-strip-panel` with `tab-strip-search` and a row `tab-<id>-item` for each tab.
 const STRIP_ID: &str = "tab-strip";
 
-pub struct TabStrip {
-  widths: TabWidths,
-}
+pub struct TabStrip;
 
 /// The title bar's *N need you* pill, as it was laid out last.
 #[derive(Clone)]
@@ -87,23 +84,15 @@ struct Shown<'a> {
   icon_only: bool,
   unsaved: bool,
   mark: Option<Element>,
-}
-
-impl Shown<'_> {
-  /// The room its unsaved dot and its mark take, `mark` wide.
-  fn marks(&self, mark: f32) -> f32 {
-    let dot = if self.unsaved { DOT_WIDTH } else { 0.0 };
-    dot + if self.mark.is_some() { MARK_GAP + mark } else { 0.0 }
-  }
+  /// The room its unsaved dot and its mark take.
+  marks: f32,
 }
 
 impl Component for TabStrip {
   type Props = TabStripProps;
 
-  fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      widths: TabWidths::new(ctx),
-    }
+  fn create(_: &mut Ctx) -> Self {
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -117,24 +106,11 @@ impl Component for TabStrip {
       .iter()
       .map(|tab| shown(ctx, &projects, &tabs, tab))
       .collect();
-    let cap = self.label_cap(&shown, strip);
+    let cap = label_cap(&shown, strip);
     let active = tabs.active();
     let title = label(ctx, &projects, active.route());
     window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", title)]).to_string());
-    let unseen = self.widths.unseen(
-      &shown
-        .iter()
-        .filter(|shown| !shown.icon_only)
-        .map(|shown| (shown.tab.id(), shown.label.clone(), typography(shown.active)))
-        .collect::<Vec<_>>(),
-    );
-    let strip_tabs: Vec<WindowTab<TabId>> = shown
-      .into_iter()
-      .map(|shown| {
-        let width = self.width(&shown, cap);
-        self.tab(shown, width)
-      })
-      .collect();
+    let strip_tabs: Vec<WindowTab<TabId>> = shown.into_iter().map(|shown| tab(shown, cap)).collect();
     let tabs = window_tabs(ctx, &navigation, active.id(), strip_tabs);
     let closing = ctx.props::<TabStripProps>().closing;
     Row::new()
@@ -148,69 +124,56 @@ impl Component for TabStrip {
       } else {
         HitTestBehavior::Auto
       })
-      .child(unseen)
       .child(tabs)
   }
 }
 
-impl TabStrip {
-  /// How wide the inactive labels get beside the others in a strip `strip` wide; `None` once the tabs do not fit.
-  fn label_cap(&self, shown: &[Shown], strip: f32) -> Option<f32> {
-    let slots: Vec<Slot> = shown
-      .iter()
-      .map(|shown| {
-        let marks = shown.marks(self.widths.mark(shown.tab.id()));
-        match (shown.icon_only, shown.active, self.widths.label(shown.tab.id())) {
-          (true, ..) => Slot::Icon,
-          (false, true, Some(label)) => {
-            Slot::Measured(tab_fit::tab_width(Some(label), LABEL_MAX_WIDTH, marks, shown.closable))
-          }
-          (false, ..) => Slot::Labelled(marks),
-        }
-      })
-      .collect();
-    let active = shown
-      .iter()
-      .position(|shown| shown.active)
-      .expect("the active tab is one of the tabs");
-    tab_fit::label_cap(tab_fit::room(strip), &slots, active)
-  }
+/// How wide the inactive labels get beside the others in a strip `strip` wide; `None` once the tabs do not fit.
+fn label_cap(shown: &[Shown], strip: f32) -> Option<f32> {
+  let slots: Vec<Slot> = shown
+    .iter()
+    .map(|shown| {
+      if shown.icon_only {
+        Slot::Icon
+      } else {
+        Slot::Labelled(shown.marks)
+      }
+    })
+    .collect();
+  let active = shown
+    .iter()
+    .position(|shown| shown.active)
+    .expect("the active tab is one of the tabs");
+  tab_fit::label_cap(tab_fit::room(strip), &slots, active)
+}
 
-  /// How wide `shown`'s tab is: while it is inactive its label capped at `cap`, or `TAB_MIN_WIDTH` and its marks
-  /// once the tabs do not fit.
-  fn width(&self, shown: &Shown, cap: Option<f32>) -> f32 {
-    if shown.icon_only {
-      return ICON_TAB_WIDTH;
-    }
-    let id = shown.tab.id();
-    let marks = shown.marks(self.widths.mark(id));
-    let (label, cap) = match (shown.active, cap) {
-      (true, _) => (self.widths.label(id), LABEL_MAX_WIDTH),
-      (false, Some(cap)) => (self.widths.label(id), cap),
-      (false, None) => (None, LABEL_MIN_WIDTH),
-    };
-    tab_fit::tab_width(label, cap, marks, shown.active && shown.closable)
+/// The window tab of `shown`, as wide as what it shows: its label up to `LABEL_MAX_WIDTH` while it is active, else
+/// up to `cap`, or `LABEL_MIN_WIDTH` once the tabs do not fit.
+fn tab(shown: Shown, cap: Option<f32>) -> WindowTab<TabId> {
+  let id = shown.tab.id();
+  let route = shown.tab.route();
+  let tab = WindowTab::new(id, &shown.label)
+    .id(format!("tab-{id}"))
+    .describe("state", if shown.active { "active" } else { "inactive" })
+    .describe("route", route.screen().name())
+    .closable(shown.closable)
+    .close_button(shown.active)
+    .dirty(shown.unsaved);
+  if shown.icon_only {
+    return tab.icon(Icon::Folders.name()).icon_only(true);
   }
-
-  /// The window tab of `shown`, `width` wide.
-  fn tab(&self, shown: Shown, width: f32) -> WindowTab<TabId> {
-    let id = shown.tab.id();
-    let route = shown.tab.route();
-    let tab = WindowTab::new(id, &shown.label)
-      .id(format!("tab-{id}"))
-      .describe("state", if shown.active { "active" } else { "inactive" })
-      .describe("route", route.screen().name())
-      .closable(shown.closable)
-      .close_button(shown.active)
-      .dirty(shown.unsaved);
-    if shown.icon_only {
-      return tab.icon(Icon::Folders.name()).icon_only(true);
-    }
-    let tab = tab.icon(tab_icon(route).name()).width(width);
-    match shown.mark {
-      Some(mark) => tab.trailing(self.widths.watch_mark(id, mark)),
-      None => tab,
-    }
+  let label = match (shown.active, cap) {
+    (true, _) => LABEL_MAX_WIDTH,
+    (false, Some(cap)) => cap,
+    (false, None) => LABEL_MIN_WIDTH,
+  };
+  let close = shown.active && shown.closable;
+  let tab = tab
+    .icon(tab_icon(route).name())
+    .fit_content(tab_fit::tab_max(label, shown.marks, close));
+  match shown.mark {
+    Some(mark) => tab.trailing(mark),
+    None => tab,
   }
 }
 
@@ -222,8 +185,10 @@ fn window_tabs(ctx: &mut Ctx, navigation: &Navigation, active: TabId, tabs: Vec<
     .label(&ctx.t("shell.tabs.strip"))
     .add_label(&ctx.t("common.newTab"))
     .close_label(&ctx.t("shell.tabs.close"))
-    .more_label(&ctx.t("shell.tabs.hidden"))
+    .more_label(&ctx.t("shell.tabs.list"))
     .overflow(WindowTabsOverflow::List)
+    .menu(WindowTabsMenu::All)
+    .list_shortcut(true)
     .dirty_mark(WindowTabsDirtyMark::AfterLabel)
     .tab_stop(false)
     // The window's own shortcuts switch and close tabs, by the app's rules.
@@ -236,23 +201,17 @@ fn window_tabs(ctx: &mut Ctx, navigation: &Navigation, active: TabId, tabs: Vec<
 /// What `tab` shows.
 fn shown<'a>(ctx: &mut Ctx, projects: &Projects, tabs: &TabSet, tab: &'a Tab) -> Shown<'a> {
   let active = tab.id() == tabs.active().id();
+  let unsaved = unsaved(projects, tab.route());
+  let dot = if unsaved { DOT_WIDTH } else { 0.0 };
   Shown {
     tab,
     label: label(ctx, projects, tab.route()),
     active,
     closable: tabs.can_close(tab.id()),
     icon_only: icon_only(tab, active),
-    unsaved: unsaved(projects, tab.route()),
+    unsaved,
     mark: attention(ctx, projects, tab, format!("tab-{}-attention", tab.id())),
-  }
-}
-
-/// The typography of a tab's label: the active one's, or another's.
-const fn typography(active: bool) -> TypographyStyle {
-  if active {
-    TypographyStyle::Label
-  } else {
-    TypographyStyle::Description
+    marks: dot + mark_width(projects, tab),
   }
 }
 
