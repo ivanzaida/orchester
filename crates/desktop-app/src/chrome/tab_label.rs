@@ -1,33 +1,28 @@
-//! What a tab shows in the strip and in the tab list alike: its label, the mark of a project that needs
-//! the person or has an unresolved failure, whether its task form holds edits that are not saved, and
-//! its close button. A project that waits for the person marks each of its tabs, the active one too, with a
-//! ✋ and how many wait, the count of its Needs you, as the Needs you panel counts a project (`Count` `ruG7r` in
-//! `o3xekF`; the design's tab mark `Tab/attention` `iJNwr` draws the hand without its count).
+//! What a tab shows: its label and icon, the mark of a project that needs the person or has an unresolved
+//! failure, and whether its task form holds edits that are not saved. A project that waits for the person marks each of
+//! its tabs, the active one too, with a ✋ and how many wait, the count of its Needs you, as the Needs you panel counts
+//! a project (`Count` `ruG7r` in `o3xekF`; the design's tab mark `Tab/attention` `iJNwr` draws the hand without its
+//! count).
 
 use lurq::{
   app::{
     ctx::Ctx,
-    events::MouseEvent,
-    theme::{PaletteColor, RadiusSize, SpacingSize},
+    theme::{PaletteColor, SpacingSize},
   },
-  components::{Button, Row, Text},
+  components::{Row, Text},
   layout::Alignment,
-  node::{CursorIcon, Element, Style},
+  node::Element,
 };
 
 use super::tab_fit::{MARK_WIDTH, badge_width};
 use crate::{
-  navigation::{
-    Navigation,
-    tabs::{Tab, TabId},
-  },
+  navigation::tabs::Tab,
   project::Projects,
   routes::{ProjectPage, Route, Screen},
   shell::needs_you::{self, Attention, count_words},
-  theme::{ExtraColor, IconSize, NeedsYouText},
+  theme::{IconSize, NeedsYouText},
   ui::{
     icon::{Icon, file_icon, icon, screen_icon},
-    pressable::in_title_bar,
     tooltip::Tooltip,
   },
 };
@@ -82,7 +77,7 @@ pub fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab, id: String) -> O
   Some(Tooltip::new(id, text).wrap(ctx, marker))
 }
 
-/// The room `tab`'s mark ([`attention`]) takes, with the gap before it; none without one.
+/// The room `tab`'s mark takes with the gap before it, as [`attention`] draws it; none without one.
 pub fn mark_width(projects: &Projects, tab: &Tab) -> f32 {
   let Some(project) = tab
     .route()
@@ -128,7 +123,7 @@ pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
 /// The page a tab shows: its screen's name, a task by its key and its Edit task as `Edit <key>`
 /// (`Qp1B0`), a pipeline by its name, a file by its name (`Orchester · plan_limits.rs` in `o1Uea4`); Memory, a
 /// filter of the Agents hub, as the hub (`Kontur · Agents` in Y1 `tsfxN`).
-pub fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
+fn page(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   match route {
     Route::Project(_, ProjectPage::Task(key, _) | ProjectPage::KeptTask(key, _)) => key.to_string(),
     Route::Project(_, ProjectPage::NewPipeline | ProjectPage::CopyPipeline(_)) => ctx.t("pipeline_hub.new").to_string(),
@@ -164,27 +159,9 @@ pub fn tab_icon(route: &Route) -> Icon {
 }
 
 /// The name of the project `route` is in, once it is known to be in the list.
-pub fn project_name(projects: &Projects, route: &Route) -> Option<String> {
+fn project_name(projects: &Projects, route: &Route) -> Option<String> {
   route
     .project()
     .and_then(|project| projects.name(project))
     .map(|name| name.as_str().to_owned())
-}
-
-/// The close button of the tab `id` (`Close` `hfcCG`), with the element id `element`.
-pub fn close_button(ctx: &mut Ctx, navigation: Navigation, id: TabId, element: String) -> Element {
-  in_title_bar(Button::empty())
-    .id(element)
-    .describe("a11y_name", ctx.t("shell.tabs.close"))
-    .focusable(false)
-    .cursor(CursorIcon::Pointer)
-    .align_items(Alignment::Center)
-    .on_click(move |event: MouseEvent| {
-      event.stop_propagation();
-      navigation.close(id);
-    })
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .rounded(RadiusSize::Sm)
-    .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground))
-    .into()
 }

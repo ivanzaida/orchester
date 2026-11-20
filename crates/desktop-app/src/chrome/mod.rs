@@ -7,8 +7,6 @@
 mod app_menu;
 pub mod tab_fit;
 mod tab_label;
-mod tab_list;
-mod tab_measure;
 mod tab_strip;
 mod title_bar;
 
@@ -28,6 +26,8 @@ use crate::theme::ExtraRadius;
 
 /// `Title bar` height, on Windows and macOS alike: what the content's top is under.
 pub const TITLE_BAR_HEIGHT: f32 = 36.0;
+/// A tab's height, and the button's of the tabs that do not fit (`Tab/*`).
+pub const TAB_HEIGHT: f32 = 26.0;
 /// The room between the bar's parts (`Gap` `gwMHL`).
 pub const BAR_GAP: f32 = 8.0;
 /// A Windows control's width (`Minimize` `F195WT`).
@@ -65,17 +65,25 @@ pub fn bare(ctx: &mut Ctx, screen: Element) -> Element {
 }
 
 fn window(ctx: &mut Ctx, screen: Element, kind: Bar, closing: bool) -> Element {
-  let (leading, trailing) = title_bar::content(ctx, (kind, closing));
-  framed(ctx, screen, leading, trailing)
+  let parts = title_bar::content(ctx, (kind, closing));
+  framed(ctx, screen, parts)
 }
 
 /// A secondary window around `screen` (the Browser window), `leading` at the start of its title bar. Its close
 /// controls ask this window to close, as the system's close does.
 pub fn secondary(ctx: &mut Ctx, screen: Element, leading: Element) -> Element {
-  framed(ctx, screen, leading, None)
+  framed(
+    ctx,
+    screen,
+    title_bar::Parts {
+      leading,
+      tabs: None,
+      trailing: None,
+    },
+  )
 }
 
-fn framed(ctx: &mut Ctx, screen: Element, leading: Element, trailing: Option<Element>) -> Element {
+fn framed(ctx: &mut Ctx, screen: Element, parts: title_bar::Parts) -> Element {
   let outline = ctx.mount_keyed::<WindowOutline>("window-outline", ());
   let chrome = WindowChrome::new()
     .id(BAR_ID)
@@ -85,10 +93,14 @@ fn framed(ctx: &mut Ctx, screen: Element, leading: Element, trailing: Option<Ele
     // instead.
     .border(ChromeBorderPolicy::Hidden)
     .controls(controls(ctx))
-    .leading(leading)
+    .leading(parts.leading)
     .content(screen)
     .overlay(outline);
-  match trailing {
+  let chrome = match parts.tabs {
+    Some(tabs) => chrome.tabs(tabs),
+    None => chrome,
+  };
+  match parts.trailing {
     Some(trailing) => chrome.trailing(trailing),
     None => chrome,
   }
