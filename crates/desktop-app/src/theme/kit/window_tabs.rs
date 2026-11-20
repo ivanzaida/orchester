@@ -211,6 +211,8 @@ fn list(rules: Recipe) -> Recipe {
     })
     .base(Part::Search, |style| style.padding_bottom(SpacingSize::Xs))
     .base(Part::Items, |style| style.gap(ExtraSpacing::Tight.role()))
+    // lurq's rows abut under the search field; the design's stay 2 apart.
+    .state(State::Searchable, Part::Items, |style| style.gap(ExtraSpacing::Tight.role()))
     .base(Part::Empty, |style| {
       style
         .padding_x(ExtraSpacing::Loose.role())

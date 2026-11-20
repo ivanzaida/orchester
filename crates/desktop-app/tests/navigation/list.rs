@@ -99,10 +99,12 @@ fn the_list_holds_every_tab_in_order_marking_the_current_and_hidden_ones() {
     .filter(|tab| shown(&mut window, &row(*tab)))
     .collect();
   assert_eq!(listed, tabs(&navigation), "a row for every tab, in order");
+  assert!(shown(&mut window, SEARCH), "a long list leads with its search");
   for pair in listed.windows(2) {
+    let (above, below) = (bounds(&mut window, &row(pair[0])), bounds(&mut window, &row(pair[1])));
     assert!(
-      bounds(&mut window, &row(pair[1])).y > bounds(&mut window, &row(pair[0])).y,
-      "one under the other"
+      (below.y - (above.y + above.height) - 2.0).abs() < 0.5,
+      "one under the other, 2 apart under the search: {above:?} {below:?}"
     );
   }
   for tab in listed {
@@ -125,27 +127,34 @@ fn the_list_holds_every_tab_in_order_marking_the_current_and_hidden_ones() {
 }
 
 #[test]
-fn the_list_opens_under_the_button_with_its_first_rows_in_view() {
-  // 1440 wide: the list fits under the button's start.
+fn the_list_opens_under_the_title_bar_with_the_current_row_in_view() {
+  // 1440 wide: the list fits under the button's start, unless that would cross 8 inside the right edge.
   let (mut window, navigation) = window_with(1440, 20);
   open_list(&mut window);
   let (button, menu) = (bounds(&mut window, MORE), bounds(&mut window, PANEL));
-  // Under the button's start, or as far right as the window lets it.
-  let start = button.x.min(1440.0 - 320.0);
+  let start = button.x.min(1440.0 - 8.0 - 320.0);
   assert!(
     (menu.x - start).abs() < 0.5,
     "its start under the button's: {menu:?} {button:?}"
   );
-  assert!(
-    (menu.y - (button.y + button.height + 4.0)).abs() < 0.5,
-    "4 under the button: {menu:?}"
-  );
+  assert!((menu.y - 40.0).abs() < 0.5, "4 under the title bar: {menu:?}");
   assert!((menu.width - 320.0).abs() < 0.5);
-  // The search field has the focus, and the rows show from the first.
-  let first = bounds(&mut window, &row(tabs(&navigation)[0]));
+  let current = bounds(&mut window, &row(navigation.tabs_now().active().id()));
   assert!(
-    first.y >= menu.y && first.y + first.height <= menu.y + menu.height + 0.5,
-    "the first row is in view: {first:?} {menu:?}"
+    current.y >= menu.y && current.y + current.height <= menu.y + menu.height + 0.5,
+    "the current row is in view: {current:?} {menu:?}"
+  );
+}
+
+#[test]
+fn the_list_stays_8_inside_the_window_near_its_right_edge() {
+  let (mut window, _navigation) = window_with(600, 5);
+  open_list(&mut window);
+  let (button, menu) = (bounds(&mut window, MORE), bounds(&mut window, PANEL));
+  assert!(button.x + 320.0 > 592.0, "the button is close to the edge: {button:?}");
+  assert!(
+    (menu.x + menu.width - 592.0).abs() < 0.5,
+    "the list ends 8 inside the window: {menu:?}"
   );
 }
 
@@ -331,26 +340,42 @@ fn keys_the_list_takes_do_not_reach_the_page_under_it() {
 }
 
 #[test]
-fn a_list_taller_than_the_window_scrolls() {
+fn a_list_taller_than_the_window_less_48_scrolls_and_keeps_its_place() {
   let (mut window, navigation) = crowded_window();
   window.tree.resize(960, 400);
   settle(&mut window);
   open_list(&mut window);
   let menu = bounds(&mut window, PANEL);
-  assert!(menu.y + menu.height <= 400.0, "the list stays in the window: {menu:?}");
+  assert!(
+    menu.height <= 400.0 - 48.0 + 0.5,
+    "the list is at most the window less 48: {menu:?}"
+  );
   let all = tabs(&navigation);
+  let (first, current) = (row(all[0]), row(*all.last().expect("tabs")));
   let inside = |window: &mut Window, id: &str| {
     let (row, menu) = (bounds(window, id), bounds(window, PANEL));
     row.y >= menu.y - 0.5 && row.y + row.height <= menu.y + menu.height + 0.5
   };
-  let last = row(*all.last().expect("tabs"));
-  assert!(!inside(&mut window, &last), "the last row is out of view at first");
-  let at = bounds(&mut window, &row(all[0]));
+  assert!(
+    inside(&mut window, &current),
+    "the current row, last, is scrolled into view"
+  );
+  assert!(!inside(&mut window, &first), "so the first one is out of it");
+  let at = bounds(&mut window, &current);
   window
     .tree
-    .scroll(at.x, at.y, 0.0, -5000.0, lurq::app::events::ScrollPhase::Scroll);
+    .scroll(at.x, at.y, 0.0, 5000.0, lurq::app::events::ScrollPhase::Scroll);
   settle(&mut window);
-  assert!(inside(&mut window, &last), "the wheel scrolls to it");
+  assert!(inside(&mut window, &first), "the wheel scrolled to the top");
+  let button = bounds(&mut window, MORE);
+  window
+    .tree
+    .mouse_move(button.x + button.width / 2.0, button.y + button.height / 2.0);
+  settle(&mut window);
+  assert!(
+    inside(&mut window, &first),
+    "and the list stays there as it renders again"
+  );
 }
 
 /// The Tab that comes with Alt+Tab back into the window must not land on the list's button, where Space would open

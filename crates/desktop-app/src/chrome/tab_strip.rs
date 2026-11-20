@@ -35,6 +35,7 @@ use super::{
   tab_label::{attention, in_project, label, mark_width, page, project_name, tab_icon, unsaved},
 };
 use crate::{
+  chrome::TITLE_BAR_HEIGHT,
   navigation::{
     Navigation,
     tabs::{Tab, TabId, TabSet},
@@ -49,6 +50,9 @@ use crate::{
 /// The strip's id: its tabs are `tab-<id>`, *New tab* `tab-strip-add`, the button of the tabs that do not fit
 /// `tab-strip-more`, its list `tab-strip-panel` with `tab-strip-search` and a row `tab-<id>-item` for each tab.
 const STRIP_ID: &str = "tab-strip";
+/// How far the list of every open tab stays inside the window's edges: 8 inside its right edge, and its rows end 8
+/// above its bottom, so it is at most the window less 48 under the bar (`pB0VB`).
+const LIST_INSET: f32 = 8.0;
 
 pub struct TabStrip;
 
@@ -116,9 +120,13 @@ impl Component for TabStrip {
     let title = label(ctx, &projects, active.route());
     window.set_title(ctx.t_args("shell.app.windowTitle", [("tab", title)]).to_string());
     let strip_tabs: Vec<WindowTab<TabId>> = shown.into_iter().map(|shown| tab(shown, cap)).collect();
-    let tabs = window_tabs(ctx, &navigation, active.id(), strip_tabs);
+    // The strip's row is as high as the title bar: the list of every tab stands 4 under it.
+    let bar = ctx.element_ref();
+    let tabs = window_tabs(ctx, &navigation, (active.id(), bar.clone()), strip_tabs);
     let closing = ctx.props::<TabStripProps>().closing;
     Row::new()
+      .ref_element(bar)
+      .height(Dimension::Px(TITLE_BAR_HEIGHT))
       .max_width(Dimension::Px(strip.max(0.0)))
       .flex_shrink(1.0)
       .min_width(Dimension::Px(0.0))
@@ -191,8 +199,13 @@ fn tab(shown: Shown, cap: Option<f32>) -> WindowTab<TabId> {
   }
 }
 
-/// The strip of `tabs`, the one `active` selected.
-fn window_tabs(ctx: &mut Ctx, navigation: &Navigation, active: TabId, tabs: Vec<WindowTab<TabId>>) -> Element {
+/// The strip of `tabs`, the one `active` selected, its list of every tab under the title bar `bar`.
+fn window_tabs(
+  ctx: &mut Ctx,
+  navigation: &Navigation,
+  (active, bar): (TabId, ElementRef),
+  tabs: Vec<WindowTab<TabId>>,
+) -> Element {
   let (select, close, open) = (navigation.clone(), navigation.clone(), navigation.clone());
   WindowTabs::controlled(active, tabs, move |id| select.select(*id))
     .id(STRIP_ID)
@@ -203,6 +216,8 @@ fn window_tabs(ctx: &mut Ctx, navigation: &Navigation, active: TabId, tabs: Vec<
     .overflow(WindowTabsOverflow::List)
     .menu(WindowTabsMenu::All)
     .list_shortcut(true)
+    .list_clear_of(bar)
+    .list_inset(LIST_INSET)
     .dirty_mark(WindowTabsDirtyMark::AfterLabel)
     .tab_stop(false)
     // The window's own shortcuts switch and close tabs, by the app's rules.
