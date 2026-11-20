@@ -1,5 +1,5 @@
 //! The shapes skeletons share: a line of words in bones, a count, a state, a switch, and a row group's heading,
-//! outline and rows in the geometry of `ui::row_group` (`Published` `pnnmh` in `x1lmXb`), so the real rows replace
+//! outline and rows in the geometry of grouped rows (`Published` `pnnmh` in `x1lmXb`), so the real rows replace
 //! them in place (`D · Bones` in `13 · Patterns` `AOQZ3`: count 14×8, 13 px words 10 high, 12 px 9, 11 px 8).
 
 use std::sync::Arc;
@@ -133,7 +133,7 @@ impl Words {
   }
 }
 
-/// A row group's outline around `rows`, a line between them (`ui::row_group`).
+/// A row group's outline around `rows`, a line between them (`pnnmh`).
 pub fn outline(id: &str, rows: Vec<Element>) -> Column {
   let lines = rows.into_iter().enumerate().map(|(index, row)| {
     let line = Column::new().width(Dimension::Pct(100.0)).child(row);
@@ -200,7 +200,7 @@ pub fn group(ctx: &Ctx, id: &str, (title, counted): (Words, bool), end: Option<E
     .child(outline(id, rows))
 }
 
-/// How a row stands in its group, as `ui::row_group::GroupRow` spaces it.
+/// How a row stands in its group, as grouped rows space it (`pnnmh`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Shape {
   /// A label over a hint, a control or a chevron at its end.
