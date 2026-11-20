@@ -93,8 +93,12 @@ impl From<TagChip> for Element {
       tag = tag.icon(glyph.name());
     }
     if let Some(Remove { label, action }) = chip.remove {
-      // Pointer-only, as the kit's other controls: Tab passes the cross by.
-      tag = tag.remove_label(&label).tab_stop(false).on_remove(move || action());
+      // Pointer-only, as the kit's other controls: Tab passes the cross by. The press is the cross's alone: a row a
+      // press opens around the tag hears nothing of it.
+      tag = tag.remove_label(&label).tab_stop(false).on_remove_event(move |event| {
+        event.stop_propagation();
+        action();
+      });
     }
     tag.into()
   }

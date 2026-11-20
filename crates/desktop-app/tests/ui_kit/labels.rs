@@ -1,6 +1,12 @@
 //! Status, priority and workflow labels, chips, badges, avatars, breadcrumbs and detail rows.
 
-use std::collections::BTreeSet;
+use std::{
+  collections::BTreeSet,
+  sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+  },
+};
 
 use lurq::{
   app::theme::{PaletteColor, SpacingSize},
@@ -13,6 +19,7 @@ use orchester_app::ui::{
   chip::{BadgeTone, TagChip, badge},
   detail_row::{DetailValue, detail_row},
   icon::Icon,
+  pressable::pressable,
   status::{Status, StatusChip, priority_chip, workflow_chip},
 };
 use orchester_core::{
@@ -132,6 +139,31 @@ fn a_tag_is_a_pill_2_over_and_8_beside_its_name_and_a_badge_3_and_8() {
   assert_close(word.y - pill.y, 3.0, "badge top");
   assert_close(gap_after(dot, word), 6.0, "dot to word");
   assert_eq!((dot.width, dot.height), (6.0, 6.0));
+}
+
+#[test]
+fn a_press_of_a_tags_cross_removes_it_and_leaves_the_row_around_it_alone() {
+  let (removed, opened) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+  let (remove, open) = (removed.clone(), opened.clone());
+  let mut kit = Kit::show(move |_| {
+    let remove = remove.clone();
+    pressable({
+      let open = open.clone();
+      move || {
+        open.fetch_add(1, Ordering::SeqCst);
+      }
+    })
+    .id("row")
+    .child(TagChip::new("removable", "backend").removable("Remove backend", move || {
+      remove.fetch_add(1, Ordering::SeqCst);
+    }))
+    .into()
+  });
+  kit.click("removable-remove");
+  assert_eq!(removed.load(Ordering::SeqCst), 1, "the tag is removed");
+  assert_eq!(opened.load(Ordering::SeqCst), 0, "the row hears nothing of the press");
+  kit.click("row");
+  assert_eq!(opened.load(Ordering::SeqCst), 1, "a press beside the tag opens the row");
 }
 
 #[test]
