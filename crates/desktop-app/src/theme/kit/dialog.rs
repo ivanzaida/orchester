@@ -45,10 +45,7 @@ fn base() -> Recipe {
         .shadow(ShadowStyle::Lg)
     })
     .base(DialogPart::Header, |style| {
-      style
-        .gap(SpacingSize::Md)
-        .padding_top(side)
-        .padding_x(side)
+      style.gap(SpacingSize::Md).padding_top(side).padding_x(side)
     })
     .base(DialogPart::Mark, |style| {
       style
@@ -92,8 +89,12 @@ fn base() -> Recipe {
 
 fn states(rules: Recipe) -> Recipe {
   rules
-    .state(DialogState::Mark, DialogPart::Header, |style| style.gap(SpacingSize::Md))
-    .state(BODILESS, DialogPart::Header, |style| style.padding_bottom(SpacingSize::Lg))
+    .state(DialogState::Mark, DialogPart::Header, |style| {
+      style.gap(SpacingSize::Md)
+    })
+    .state(BODILESS, DialogPart::Header, |style| {
+      style.padding_bottom(SpacingSize::Lg)
+    })
     .state(BARE, DialogPart::Panel, |style| {
       style
         .width(Length::Auto)
@@ -102,10 +103,7 @@ fn states(rules: Recipe) -> Recipe {
         .padding_y(DialogSpacing::Side.role())
     })
     .state(BARE, DialogPart::Body, |style| {
-      style
-        .padding_top(0.0)
-        .padding_x(0.0)
-        .padding_bottom(0.0)
+      style.padding_top(0.0).padding_x(0.0).padding_bottom(0.0)
     })
 }
 

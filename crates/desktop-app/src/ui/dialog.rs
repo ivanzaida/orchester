@@ -29,9 +29,7 @@ use super::{
   button::{ActionButton, ButtonKind},
   icon::{Icon, icon},
 };
-use crate::theme::{
-  DIALOG_WIDTH, DialogText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, kit::dialog as kit,
-};
+use crate::theme::{DIALOG_WIDTH, DialogText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, kit::dialog as kit};
 
 /// A line of what it does: its glyph is 18 high, as the line's first line is (`Icon box` `EyPBp`).
 const LINE_GLYPH_BOX: f32 = 18.0;
@@ -194,7 +192,11 @@ impl Dialog {
     let cancel = if self.plain_footer {
       ActionButton::new(format!("{}-cancel", self.id), ButtonKind::Ghost, self.cancel.clone()).icon(Icon::X)
     } else {
-      ActionButton::new(format!("{}-cancel", self.id), ButtonKind::Secondary, self.cancel.clone())
+      ActionButton::new(
+        format!("{}-cancel", self.id),
+        ButtonKind::Secondary,
+        self.cancel.clone(),
+      )
     }
     .in_form()
     .on_click(move || shut.set(false));
@@ -216,9 +218,7 @@ impl Dialog {
     dialog = self.note(ctx, dialog);
     if let Some((_, confirm)) = &self.enter {
       let confirm = confirm.clone();
-      dialog = dialog
-        .initial_focus(DialogFocus::Panel)
-        .on_confirm(move || confirm());
+      dialog = dialog.initial_focus(DialogFocus::Panel).on_confirm(move || confirm());
     }
     let person = self.person_only.as_ref().map(|words| person_only(&self.id, words));
     let dialog = dialog

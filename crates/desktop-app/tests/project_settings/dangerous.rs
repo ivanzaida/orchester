@@ -103,8 +103,15 @@ fn approve_mode_dangerous_asks_first_and_cancel_esc_and_enter_leave_it() {
     assert!(page.exists(&format!("settings-dangerous-dialog-risk-{index}")));
   }
   // The footer's caps are lurq's `<id>-note_key_cap`, `-2`, …: Esc's alone, no Enter hint.
-  assert_eq!(page.text("settings-dangerous-dialog-note_key_cap"), "Esc", "no Enter hint");
-  assert!(!page.exists("settings-dangerous-dialog-note_key_cap-2"), "no Enter hint");
+  assert_eq!(
+    page.text("settings-dangerous-dialog-note_key_cap"),
+    "Esc",
+    "no Enter hint"
+  );
+  assert!(
+    !page.exists("settings-dangerous-dialog-note_key_cap-2"),
+    "no Enter hint"
+  );
   page.until("Cancel has the focus", |p| {
     focused(p).as_deref() == Some("settings-dangerous-dialog-cancel")
   });

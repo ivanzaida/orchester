@@ -12,7 +12,10 @@ fn a_skeleton_pulses_once_its_bones_show() {
   let motion = host.app.theme().skeleton_motion();
   assert_eq!(motion.steps_per_second(), Some(10), "16 poses in a pulse of 1.6 s");
   assert_eq!(motion.period_length(), orchester_app::theme::SKELETON_PULSE);
-  assert!((motion.dimmed() - orchester_app::theme::SKELETON_DIM).abs() < 0.005, "a pulse dims to the design's 0.55");
+  assert!(
+    (motion.dimmed() - orchester_app::theme::SKELETON_DIM).abs() < 0.005,
+    "a pulse dims to the design's 0.55"
+  );
   assert!(!host.has_bones(), "no bones before the delay");
   assert!(!host.tree.has_active_timeline(), "nothing pulses before the bones show");
   host.after_delay();

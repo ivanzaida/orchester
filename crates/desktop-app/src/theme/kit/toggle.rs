@@ -14,8 +14,8 @@ use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, Theme, TypographyStyle},
   node::{CursorIcon, border::Border},
   ui::{
-    Checkbox, CheckboxPart, CheckboxState, Length, Name, PartStyle, Radio, RadioPart, RadioState, Recipe, Selector, Switch,
-    SwitchPart, SwitchState,
+    Checkbox, CheckboxPart, CheckboxState, Length, Name, PartStyle, Radio, RadioPart, RadioState, Recipe, Selector,
+    Switch, SwitchPart, SwitchState,
   },
 };
 
@@ -61,13 +61,19 @@ fn ring(mut style: PartStyle) -> PartStyle {
 }
 
 /// The whole, its label and its states, the same in the three: `root`, `label`, and the states' names.
-fn whole<P: Into<Name> + Copy, S: Into<Name> + Copy>(rules: Recipe, (root, label): (P, P), (whole, disabled): (S, S)) -> Recipe {
+fn whole<P: Into<Name> + Copy, S: Into<Name> + Copy>(
+  rules: Recipe,
+  (root, label): (P, P),
+  (whole, disabled): (S, S),
+) -> Recipe {
   rules
     .base(root, |style| {
       style.gap(SpacingSize::Sm).foreground(PaletteColor::Foreground)
     })
     .base(label, |style| {
-      style.typography(TypographyStyle::Description).cursor(CursorIcon::Pointer)
+      style
+        .typography(TypographyStyle::Description)
+        .cursor(CursorIcon::Pointer)
     })
     .state(PLAIN_LABEL, label, |style| style.foreground(PaletteColor::Foreground))
     .state(RING_ROOM, root, |style| style.padding_end(ExtraSpacing::Snug.role()))
@@ -93,7 +99,9 @@ fn checkbox() -> Recipe {
         .foreground(ExtraColor::OnAccent.role())
     })
     .state(CheckboxState::Checked, CheckboxPart::Box, |style| {
-      style.background(PaletteColor::Primary).border(edge(PaletteColor::Primary))
+      style
+        .background(PaletteColor::Primary)
+        .border(edge(PaletteColor::Primary))
     });
   whole(
     rules,
@@ -104,7 +112,9 @@ fn checkbox() -> Recipe {
 
 fn radio() -> Recipe {
   let rules = Recipe::new()
-    .base(RadioPart::Mark, |style| off_mark(style).radius(ExtraRadius::Full.role()))
+    .base(RadioPart::Mark, |style| {
+      off_mark(style).radius(ExtraRadius::Full.role())
+    })
     .base(RadioPart::Dot, |style| {
       style
         .square(Length::Px(RADIO_DOT))
@@ -112,7 +122,9 @@ fn radio() -> Recipe {
         .background(ExtraColor::OnAccent.role())
     })
     .state(RadioState::Selected, RadioPart::Mark, |style| {
-      style.background(PaletteColor::Primary).border(edge(PaletteColor::Primary))
+      style
+        .background(PaletteColor::Primary)
+        .border(edge(PaletteColor::Primary))
     });
   whole(
     rules,

@@ -5,8 +5,7 @@ use lurq::{
   app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   components::{Row, Text},
   layout::Alignment,
-  node::dimension::Dimension,
-  node::padding::Padding,
+  node::{dimension::Dimension, padding::Padding},
 };
 
 use super::icon::{Icon, icon};

@@ -112,7 +112,10 @@ fn project_settings_turn_on_repository_files_by_client_input_only_under_the_pers
   // setting; its label is hidden, its row says what it is.
   let shows_switch = |s: &mut super::Served, on: bool| {
     let mut bounds = |id: &str| s.tree.get_element_by_id_mut(id).and_then(|element| element.bounds());
-    let (Some(track), Some(knob)) = (bounds("settings-agent-files-track"), bounds("settings-agent-files-thumb")) else {
+    let (Some(track), Some(knob)) = (
+      bounds("settings-agent-files-track"),
+      bounds("settings-agent-files-thumb"),
+    ) else {
       return false;
     };
     (knob.x + knob.width / 2.0 > track.x + track.width / 2.0) == on
