@@ -10,6 +10,7 @@ pub mod detail_row;
 mod icon_button;
 mod kbd;
 pub mod meter;
+pub mod notice;
 mod segmented;
 pub mod spinner;
 mod status_label;
@@ -28,6 +29,7 @@ pub(super) fn install(theme: &Theme) {
   icon_button::install(theme);
   kbd::install(theme);
   meter::install(theme);
+  notice::install(theme);
   segmented::install(theme);
   spinner::install(theme);
   status_label::install(theme);

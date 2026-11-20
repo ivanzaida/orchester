@@ -145,7 +145,7 @@ fn team_qa_hub_edit_no_longer_an_admin_is_said_in_place_and_keeps_what_was_typed
   typed(&mut window);
   window.press(SAVE);
   window.until("the refusal", |window| window.texts("team-hub-edit-refused").is_some());
-  let body = window.text("team-hub-edit-refused-body");
+  let body = window.text("team-hub-edit-refused-description");
   assert!(
     body.contains("Only the project's owner or the server's admin"),
     "{body}"
@@ -201,7 +201,7 @@ fn team_qa_hub_edit_a_rejected_content_says_why_in_place_and_keeps_what_was_type
     window.text("team-hub-edit-refused-title"),
     "The team's server refused v2"
   );
-  let body = window.text("team-hub-edit-refused-body");
+  let body = window.text("team-hub-edit-refused-description");
   assert!(body.contains("does not accept its content"), "{body}");
   assert!(body.contains("What you typed is kept"), "{body}");
   assert!(window.texts(SAVE).is_some(), "the form stays, to fix it and save again");

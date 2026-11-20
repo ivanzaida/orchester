@@ -238,7 +238,7 @@ fn empty_loading_and_failed_states_never_look_alike() {
   );
   let (failed, words, again) = (
     kit.bounds("failed"),
-    kit.bounds("failed-text"),
+    kit.bounds("failed-description"),
     kit.bounds("failed-retry"),
   );
   assert_close(gap_under(words, again), 10.0, "Try again under the words");

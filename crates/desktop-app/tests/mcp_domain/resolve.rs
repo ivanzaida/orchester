@@ -167,8 +167,9 @@ fn domain_window_input_merges_into_the_worktree_but_starts_no_editor_a_person_di
   );
   served.until("the merge waiting in the worktree", |served| {
     served.tree.tick_timers();
-    served.shows("task-resolving-body")
-      && super::tools_window::text(served, "task-resolving-body").contains("Window input does not start an editor")
+    served.shows("task-resolving-description")
+      && super::tools_window::text(served, "task-resolving-description")
+        .contains("Window input does not start an editor")
   });
   let worktree = seeded.repo.join(".orchester/worktrees").join(run.id().to_string());
   assert!(

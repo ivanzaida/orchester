@@ -174,7 +174,7 @@ fn browser_not_found_says_what_was_looked_for_and_looks_again() {
     page.window.text("settings-browser-not-found-title"),
     "No Chromium-based browser found"
   );
-  let looked = page.window.text("settings-browser-not-found-body");
+  let looked = page.window.text("settings-browser-not-found-description");
   assert!(looked.starts_with("Orchester looked for"), "{looked}");
   assert!(looked.contains("look again, or choose"), "how to fix it: {looked}");
   assert_eq!(page.window.text("settings-browser-choose"), "Choose a program…");

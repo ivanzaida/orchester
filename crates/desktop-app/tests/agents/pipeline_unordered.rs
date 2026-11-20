@@ -78,7 +78,7 @@ fn two_steps_that_wait_for_each_other_are_named_and_a_line_is_offered() {
     "These steps have no order to draw"
   );
   assert_eq!(
-    agents.text(&format!("{NOTICE}-body")),
+    agents.text(&format!("{NOTICE}-description")),
     format!("05 Review and 06 Write notes wait for each other, so neither can start. {MAKE_A_LINE}")
   );
   assert!(agents.text(LINE).contains("Make it a line"));
@@ -100,7 +100,7 @@ fn a_longer_circle_names_every_step_in_it() {
   });
 
   assert_eq!(
-    agents.text(&format!("{NOTICE}-body")),
+    agents.text(&format!("{NOTICE}-description")),
     format!("01 A, 02 B and 03 C wait for each other in a circle, so none of them can start. {MAKE_A_LINE}")
   );
   assert!(agents.exists(LINE));
@@ -116,7 +116,7 @@ fn a_step_that_waits_for_a_step_that_is_not_there_is_offered_a_line() {
   });
 
   assert_eq!(
-    agents.text(&format!("{NOTICE}-body")),
+    agents.text(&format!("{NOTICE}-description")),
     format!(
       "A step waits for a step that is not there, or returns on failure to a step that runs after it. {MAKE_A_LINE}"
     )
@@ -136,7 +136,7 @@ fn two_steps_with_one_key_say_no_line_puts_them_right_and_offer_none() {
   });
 
   assert_eq!(
-    agents.text(&format!("{NOTICE}-body")),
+    agents.text(&format!("{NOTICE}-description")),
     "The steps break a rule no order puts right, such as two steps with one key. Cancel puts the saved steps back."
   );
   assert!(!agents.exists(LINE), "no line to offer");
@@ -195,7 +195,7 @@ fn the_qa_apps_marker_puts_the_same_steps_into_the_panel() {
   agents.until("the notice", |s| s.exists(NOTICE));
 
   assert_eq!(
-    agents.text(&format!("{NOTICE}-body")),
+    agents.text(&format!("{NOTICE}-description")),
     format!("01 A and 02 B wait for each other, so neither can start. {MAKE_A_LINE}")
   );
 }

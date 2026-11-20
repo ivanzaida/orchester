@@ -163,7 +163,7 @@ fn pipeline_versions_the_notice_says_what_restore_does_and_back_says_where_it_go
   let (mut agents, _) = two_versions();
   view_version(&mut agents, 1);
   assert_eq!(
-    agents.text("pipeline-hub-version-viewing-body"),
+    agents.text("pipeline-hub-version-viewing-description"),
     "Restore puts v1 in the editor as unsaved changes · Save makes v3"
   );
   assert_eq!(

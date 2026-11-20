@@ -119,7 +119,7 @@ fn settings_accounts_shows_why_an_account_does_not_run_and_the_login_to_copy() {
       let command = joined(&mut window, "account-sign-in-command").replace(' ', "");
       assert!(command.contains("claudeauthlogin"), "{command}");
       // The sign-in and Check again are the notice's actions under the head (`M32Lv`), not the folder's.
-      let actions = joined(&mut window, "account-state-sentence-actions");
+      let actions = joined(&mut window, "account-state-sentence-action");
       assert!(
         actions.contains("Sign in in a terminal") && actions.contains("Check again"),
         "{actions}"
