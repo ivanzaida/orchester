@@ -11,11 +11,8 @@
 //! press it in a cap; the caller handles them.
 //!
 //! lurq's `ui::Button` draws it in the theme's recipe (`theme::kit::button`, `themed`), Tab passing it by unless it is
-//! [`ActionButton::in_form`]. A select, a stacked answer and an answer that says what it does when focused keep the
-//! kit's own frame (`frame`): lurq's label does not grow to put a chevron at the end, its description is one cut line
-//! under another id, and it has no focus handler.
+//! [`ActionButton::in_form`]. A stacked answer's consequence is its description, `<id>-description`.
 
-mod frame;
 mod kind;
 mod themed;
 
@@ -420,10 +417,6 @@ pub fn as_wide_as_widest(id: &str, button: ActionButton, sizes: impl IntoIterato
 
 impl From<ActionButton> for Element {
   fn from(button: ActionButton) -> Self {
-    if button.themed() {
-      button.drawn()
-    } else {
-      button.framed()
-    }
+    button.drawn()
   }
 }

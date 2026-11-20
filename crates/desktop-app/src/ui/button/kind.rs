@@ -1,10 +1,7 @@
-//! The look of a button: its fill, stroke and content color, and how it answers the pointer.
+//! The look of a button: its content color; its fill, stroke and how it answers the pointer are the recipe's
+//! (`theme::kit::button`).
 
-use lurq::{
-  app::theme::{BorderSize, PaletteColor},
-  components::Button,
-  node::{Style, border::Border},
-};
+use lurq::app::theme::PaletteColor;
 
 use crate::theme::ExtraColor;
 
@@ -44,40 +41,6 @@ impl ButtonKind {
       Self::Secondary | Self::Select => PaletteColor::Foreground,
       Self::Ghost => ExtraColor::TextSecondary.role(),
       Self::Danger | Self::DangerGhost => PaletteColor::Destructive,
-    }
-  }
-
-  pub(super) fn dressed(self, button: Button) -> Button {
-    match self {
-      Self::Primary => button.background(PaletteColor::Primary),
-      Self::Secondary => button
-        .background(PaletteColor::Card)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Input)),
-      Self::Ghost | Self::DangerGhost => button,
-      Self::Select => button
-        .background(ExtraColor::InputSurface.role())
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Border)),
-      Self::Danger => button.background(PaletteColor::DestructiveMuted),
-    }
-  }
-
-  /// Under the pointer and while pressed. The design draws neither; they follow the shell's `hover` and
-  /// `pressed` overlays and the accent's own hover.
-  pub(super) fn interactive(self, button: Button) -> Button {
-    let fill = |color: PaletteColor| Style::new().background(color);
-    match self {
-      Self::Primary => button
-        .hovered_style(fill(PaletteColor::PrimaryHover))
-        .active_style(fill(PaletteColor::PrimaryHover)),
-      Self::Secondary | Self::Select => button
-        .hovered_style(fill(PaletteColor::Border))
-        .active_style(fill(PaletteColor::Input)),
-      Self::Ghost | Self::DangerGhost => button
-        .hovered_style(fill(ExtraColor::Hover.role()))
-        .active_style(fill(ExtraColor::Pressed.role())),
-      Self::Danger => button
-        .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Destructive)))
-        .active_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))),
     }
   }
 }
@@ -142,4 +105,6 @@ pub mod state {
   pub const APPLIED: &str = "applied";
   /// What it holds is refused.
   pub const INVALID: &str = "invalid";
+  /// As wide as its parent, its label and what a press leads to at its start (`wWuSM`).
+  pub const STACKED: &str = "stacked";
 }

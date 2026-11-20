@@ -1,5 +1,6 @@
 //! A button drawn by lurq's `ui::Button` in the theme's recipe (`theme::kit::button`): its kind is the variant, its
-//! height the size, its hold and its look the states. Its icons are the kit's, so the loader turns as it does
+//! height the size, its hold and its look the states. A select's label takes its room before its chevron
+//! (`fill_label`); a stacked answer's consequence is the button's description, wrapping under its label. Its icons are the kit's, so the loader turns as it does
 //! everywhere, under the ids `<id>-icon` and, as lurq names its parts, `<id>-label`.
 
 use lurq::{
@@ -9,14 +10,15 @@ use lurq::{
 };
 
 use super::{ActionButton, ButtonKind, ButtonSize, Hold, state};
-use crate::ui::{icon::icon, pressable::Focus};
+use crate::{
+  theme::IconSize,
+  ui::{
+    icon::{Icon, icon},
+    pressable::Focus,
+  },
+};
 
 impl ActionButton {
-  /// Whether lurq's button draws it: all but a select, a stacked answer and one that says what it does when focused.
-  pub(super) const fn themed(&self) -> bool {
-    !self.stacked && self.on_focus.is_none() && !matches!(self.kind, ButtonKind::Select)
-  }
-
   fn size(&self) -> ButtonSize {
     if self.in_heading {
       ButtonSize::Heading
@@ -41,7 +43,10 @@ impl ActionButton {
       .id(self.id.clone())
       .variant(self.kind.name())
       .size(self.size().name())
-      .full_width(self.fill)
+      .full_width(self.fill || self.stacked || self.kind == ButtonKind::Select)
+      // A select's label takes its room, its chevron at the end.
+      .fill_label(self.kind == ButtonKind::Select)
+      .state(state::STACKED, self.stacked)
       .state(state::TIGHT, self.tight && !self.large)
       .state(state::ROOMY, self.roomy)
       .state(state::HELD, self.held)
@@ -64,6 +69,9 @@ impl ActionButton {
     if let Some(Hold::Unavailable(reason) | Hold::UnavailableWithIcon(reason)) = &self.hold {
       button = button.describe("reason", reason.clone());
     }
+    if let Some(consequence) = self.consequence.as_ref().filter(|_| self.stacked) {
+      button = button.description(consequence).description_wraps(true);
+    }
     button
   }
 
@@ -80,6 +88,12 @@ impl ActionButton {
     }
     if let Some(after) = self.after.filter(|_| self.hold.is_none()) {
       button = button.trailing(icon(after, glyph, color));
+    }
+    if self.kind == ButtonKind::Select {
+      button = button.trailing(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::MutedForeground));
+    }
+    if let Some(on_focus) = self.on_focus {
+      button = button.on_focus(move || on_focus());
     }
     if let Some(element) = self.element {
       button = button.ref_element(element);

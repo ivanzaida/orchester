@@ -82,7 +82,7 @@ fn decision_card_draws_its_words_question_answers_with_keys_and_meta_line() {
     "an answer with a consequence fills the card",
   );
   assert_close(gap_under(first, second), 6.0, "stacked answers");
-  assert!(kit.exists("d-answer-1-consequence"));
+  assert!(kit.exists("d-answer-1-description"));
   assert_close(kit.bounds("d-answer-3").height, 28.0, "a short answer is a 28 button");
   assert!(kit.exists("d-answer-3-icon"), "own words lead with a pencil");
   assert_close(gap_under(card, kit.bounds("d-meta")), 8.0, "card to meta line");
@@ -201,7 +201,7 @@ fn answered_line_opens_the_card_with_the_chosen_answer_checked() {
   assert!(kit.exists("d-answer-1-icon"), "the chosen answer is checked");
   assert!(!kit.exists("d-answer-2-icon"), "the others are not");
   assert!(!kit.exists("d-answer-1-key"), "an answered card shows no keys");
-  assert!(!kit.exists("d-answer-1-consequence"));
+  assert!(!kit.exists("d-answer-1-description"));
   assert!(!kit.exists("d-answer-3"), "own words are left out once answered");
   assert!(!kit.exists("d-fold") && !kit.exists("d-meta"));
   kit.click("d-line");

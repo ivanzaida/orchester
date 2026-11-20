@@ -4,27 +4,31 @@
 //! primary. The design draws no hover or press: they follow the shell's `hover` and `pressed` overlays and the
 //! accent's own hover, with no fade, no veil and the focus ring as the kit's inset shadow.
 //!
+//! A select (`LWah7`) is `input_surface` in a `border` stroke, its label taking its room before a 14 `text_muted`
+//! chevron.
+//!
 //! The kit's kinds keep their names: `primary`, `secondary` and `ghost` are lurq's variants too, laid over here, so a
 //! lurq component's button of those draws as the kit's.
 
 use lurq::{
   app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, Theme, TypographyStyle},
   node::{CursorIcon, border::Border, color::Color},
-  ui::{Button, ButtonPart, ButtonState, PartStyle, Recipe, Selector},
+  ui::{Button, ButtonPart, ButtonState, Length, PartStyle, Recipe, Selector},
 };
 
 use crate::{
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraShadow, ExtraSpacing, ExtraTypography},
+  theme::{CONSEQUENCE_ON_ACCENT_OPACITY, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraShadow, ExtraSpacing, ExtraTypography},
   ui::button::{ButtonKind, ButtonSize, state},
 };
 
-/// The kinds drawn by lurq's button: a select and a stacked answer keep the kit's own frame (`ui::button`).
-const KINDS: [ButtonKind; 5] = [
+/// The kinds, each a variant of lurq's button.
+const KINDS: [ButtonKind; 6] = [
   ButtonKind::Primary,
   ButtonKind::Secondary,
   ButtonKind::Ghost,
   ButtonKind::Danger,
   ButtonKind::DangerGhost,
+  ButtonKind::Select,
 ];
 
 /// No veil over a pressed fill: each kind has a pressed fill of its own.
@@ -177,4 +181,37 @@ fn states(rules: Recipe) -> Recipe {
     .state(state::INVALID, ButtonPart::Root, |style| {
       style.border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))
     })
+    .extend(&stacked())
+}
+
+/// A stacked answer (`Option · Skip the exports` `wWuSM`): as high as its words, 8 over and under and 12 at its sides,
+/// 12 between its icon and its words; its label 12/500 `text_primary` and, 2 under it, what a press leads to in 12
+/// `text_muted` at 1.4, wrapping, on a primary in `on_accent` at its own opacity.
+fn stacked() -> Recipe {
+  Recipe::new()
+    .state(state::STACKED, ButtonPart::Root, |style| {
+      style
+        .height(Length::Auto)
+        .padding_x(SpacingSize::Md)
+        .padding_y(SpacingSize::Sm)
+        .gap(SpacingSize::Md)
+    })
+    .state(state::STACKED, ButtonPart::Label, |style| {
+      style.typography(ExtraTypography::ButtonStacked.role())
+    })
+    .state(state::STACKED, ButtonPart::Description, |style| {
+      style
+        .typography(ExtraTypography::ButtonConsequence.role())
+        .foreground(PaletteColor::MutedForeground)
+        .opacity(1.0)
+    })
+    .when(
+      Selector::new().variant(ButtonKind::Primary.name()).state(state::STACKED),
+      ButtonPart::Description,
+      |style| {
+        style
+          .foreground(ExtraColor::OnAccent.role())
+          .opacity(CONSEQUENCE_ON_ACCENT_OPACITY)
+      },
+    )
 }
