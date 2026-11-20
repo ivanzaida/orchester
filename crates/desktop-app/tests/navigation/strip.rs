@@ -154,6 +154,12 @@ fn the_button_counts_the_hidden_tabs() {
   let (mut window, navigation) = crowded_window();
   let hidden = tab_ids(&navigation).len() - in_strip(&mut window, &navigation).len();
   assert_eq!(window.text(COUNT), hidden.to_string());
+  // The words of its tooltip, which lurq follows with the keys of the list.
+  let says = window
+    .tree
+    .get_element_by_id_mut("tab-strip-more")
+    .and_then(|element| element.description("a11y_description"));
+  assert_eq!(says, Some(format!("{hidden} more tabs")));
 }
 
 #[test]

@@ -207,6 +207,7 @@ fn window_tabs(
   tabs: Vec<WindowTab<TabId>>,
 ) -> Element {
   let (select, close, open) = (navigation.clone(), navigation.clone(), navigation.clone());
+  let i18n = ctx.i18n().clone();
   WindowTabs::controlled(active, tabs, move |id| select.select(*id))
     .id(STRIP_ID)
     .label(&ctx.t("shell.tabs.strip"))
@@ -218,6 +219,15 @@ fn window_tabs(
     .list_shortcut(true)
     .list_clear_of(bar)
     .list_inset(LIST_INSET)
+    // "3 more tabs"; lurq puts the keys of the list shortcut after it.
+    .more_tooltip(move |count| {
+      let key = if count == 1 {
+        "shell.tabs.more.one"
+      } else {
+        "shell.tabs.more.other"
+      };
+      i18n.t_args(key, [("count", count.to_string())]).to_string()
+    })
     .dirty_mark(WindowTabsDirtyMark::AfterLabel)
     .tab_stop(false)
     // The window's own shortcuts switch and close tabs, by the app's rules.

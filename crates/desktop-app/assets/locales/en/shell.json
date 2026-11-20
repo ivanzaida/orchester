@@ -33,6 +33,10 @@
       "strip": "Open tabs",
       "close": "Close",
       "list": "All open tabs",
+      "more": {
+        "one": "{{count}} more tab",
+        "other": "{{count}} more tabs"
+      },
       "inProject": "{{project}} · {{label}}",
       "attention": "{{project}} · {{waiting}}",
       "runnerOffline": "runner offline",
