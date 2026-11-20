@@ -1,4 +1,5 @@
-//! A headless window with the app's theme, locales and skeleton pulse, showing one skeleton of a few bones.
+//! A headless window with the app's theme (its skeletons' stepped pulse) and locales, showing one skeleton of a few
+//! bones, with motion reduced or not.
 
 use std::time::{Duration, Instant};
 
@@ -31,18 +32,19 @@ impl Component for Shown {
 }
 
 pub struct Host {
-  app: App,
+  pub app: App,
   pub tree: Tree,
 }
 
 impl Host {
-  pub fn show() -> Self {
+  /// The skeleton, with motion `reduced` or not, whatever the system says.
+  pub fn show(reduced: bool) -> Self {
     let mut app = App::new();
     theme::install(&mut app, Mode::Dark);
     i18n::install(&app).expect("bundled locales load");
+    app.theme().set_reduced_motion(Some(reduced));
     let mut tree = Tree::new();
     tree.resize(800, 600);
-    skeleton::install(&mut tree);
     tree.mount_root::<Shown>(&mut app, ());
     tree.pass_headless(&mut app);
     Self { app, tree }

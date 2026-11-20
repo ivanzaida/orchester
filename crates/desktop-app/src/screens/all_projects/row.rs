@@ -105,7 +105,7 @@ pub(super) fn bones(ctx: &Ctx, (name, folder): (f32, f32), last: bool) -> Row {
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(bone(TILE, TILE).rounded(RadiusSize::Md))
+    .child(bone(TILE, TILE).radius(RadiusSize::Md))
     .child(text);
   let cell = |width: f32| Row::new().width(Dimension::Px(width)).align_items(Alignment::Center);
   let row = Row::new()

@@ -14,7 +14,7 @@ use orchester_core::orchestrator::change::Change;
 use super::{super::decision::FACT_KEY_WIDTH as KEY_WIDTH, words::View};
 use crate::{
   theme::{ExtraSpacing, OrchestratorText},
-  ui::skeleton::{bone, pulsing},
+  ui::skeleton::bone,
 };
 
 /// A bone's height, as a line of 12 text (`C8Z6Wd`'s key bone), a key's width and each value's.
@@ -52,7 +52,7 @@ pub(super) fn column(id: &str, links: &[bool], shown: bool) -> Option<Column> {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .with_children(rows);
-  Some(if shown { pulsing(room) } else { room })
+  Some(room)
 }
 
 /// One fact's room: an empty line of a fact's text, with a link's underline under it for a `link`, holds its height;

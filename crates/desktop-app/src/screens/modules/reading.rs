@@ -74,7 +74,7 @@ pub(super) fn page(
   let status = header::status_line(
     "module-status-row",
     vec![
-      bone(CHIP.0, CHIP.1).rounded(ExtraRadius::Full.role()).into(),
+      bone(CHIP.0, CHIP.1).radius(ExtraRadius::Full.role()).into(),
       skeleton::line(ctx, TypographyStyle::Description, FACTS).into(),
     ],
   );

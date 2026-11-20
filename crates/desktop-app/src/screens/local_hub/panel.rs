@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use lurq::ui::Length;
 use lurq::{
   app::{
     ctx::Ctx,
@@ -202,10 +203,7 @@ pub(super) fn bones_with(
     .map(|(index, row)| bone_row(ctx, &format!("{prefix}-bone-{index}"), row))
     .collect();
   let section = rows::section(&format!("{prefix}-bones"), &ctx.t(title), Vec::new(), rows);
-  let body = body()
-    .child(known.head)
-    .child(known.chips)
-    .child(skeleton::pulsing(section));
+  let body = body().child(known.head).child(known.chips).child(section);
   frame(what, body, Some(known.bar))
 }
 
@@ -215,7 +213,7 @@ fn bone_row(ctx: &Ctx, id: &str, row: &BoneRow) -> Row {
     Bone::Field => skeleton::field(ctx, BONE_WORDS, BONE_VALUE)
       .width(Dimension::Pct(100.0))
       .into(),
-    Bone::Area(height) => skeleton::bone(BONE_WORDS, height).width(Dimension::Pct(100.0)).into(),
+    Bone::Area(height) => skeleton::bone(BONE_WORDS, height).width(Length::Fill).into(),
   };
   let row_of = rows::row(id, &ctx.t(row.label), row.sub.map(|sub| Sub::quiet(ctx.t(sub))), value);
   match row.bone {

@@ -154,9 +154,11 @@ fn a_press_of_a_tags_cross_removes_it_and_leaves_the_row_around_it_alone() {
       }
     })
     .id("row")
-    .child(TagChip::new("removable", "backend").removable("Remove backend", move || {
-      remove.fetch_add(1, Ordering::SeqCst);
-    }))
+    .child(
+      TagChip::new("removable", "backend").removable("Remove backend", move || {
+        remove.fetch_add(1, Ordering::SeqCst);
+      }),
+    )
     .into()
   });
   kit.click("removable-remove");

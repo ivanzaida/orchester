@@ -92,12 +92,7 @@ fn run(ctx: &Ctx) -> Column {
     .align_items(Alignment::Center);
   for (at, name) in STEPS.iter().enumerate() {
     if at > 0 {
-      steps = steps.child(
-        Row::new()
-          .flex(1.0)
-          .height(Dimension::Px(1.0))
-          .background(PaletteColor::Border),
-      );
+      steps = steps.child(bone(0.0, 1.0).flex(1.0));
     }
     steps = steps.child(
       Row::new()

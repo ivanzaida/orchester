@@ -5,6 +5,7 @@
 //! instead (the project's feed keeps them) while it reads them anew, so this stands only for a run read for the first
 //! time.
 
+use lurq::ui::Skeleton as UiSkeleton;
 use lurq::{
   app::{
     ctx::Ctx,
@@ -181,8 +182,8 @@ fn strip() -> Row {
 }
 
 /// A bone that gives way when the room is short.
-fn shrinking(width: f32) -> Column {
-  bone(width, BONE_HEIGHT).flex_shrink(1.0).min_width(Dimension::Px(0.0))
+fn shrinking(width: f32) -> UiSkeleton {
+  bone(width, BONE_HEIGHT).flex_shrink(1.0).min_width(0.0)
 }
 
 /// The facts' keys with a bone for each value, and *Runner log folder*, which needs nothing read.

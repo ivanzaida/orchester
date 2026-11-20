@@ -16,7 +16,7 @@ use crate::{
   root::{Root, RootProps},
   startup::{Launch, WindowPosition},
   system_icon, theme,
-  ui::{clipboard::Clipboard, skeleton},
+  ui::clipboard::Clipboard,
 };
 
 /// For agents that drive the app over MCP while the person works in other windows: `1` opens the
@@ -43,8 +43,7 @@ pub fn open_showing(runtime: &Runtime, launch: &Launch, position: Option<WindowP
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  skeleton::install(&mut tree);
-  hold_still(runtime);
+  hold_still(runtime, app.theme().clone());
   let link = WindowLink::default();
   link.attach_appearance(appearance.clone());
   let window_control = stored(workspace, Workspace::mcp_window_control, "window control").flatten();
@@ -157,11 +156,12 @@ fn appearance(runtime: &Runtime, workspace: Option<&Workspace>) -> Appearance {
   Appearance::new(theme, system, workspace.cloned())
 }
 
-/// Reads on the runtime's blocking pool whether the operating system asks for reduced motion, for the skeletons'
-/// pulse; until it is read, and when it cannot be, they pulse.
-fn hold_still(runtime: &Runtime) {
-  runtime.spawn_blocking(|| match motion::reduced() {
-    Ok(reduced) => skeleton::hold_still(reduced),
+/// Reads on the runtime's blocking pool whether the operating system asks for reduced motion, and gives it to `theme`:
+/// skeletons' bones and the typing dots stand still then. Until it is read, and when it cannot be, lurq's own reading
+/// of the system holds.
+fn hold_still(runtime: &Runtime, theme: lurq::app::theme::Theme) {
+  runtime.spawn_blocking(move || match motion::reduced() {
+    Ok(reduced) => theme.set_reduced_motion(Some(reduced)),
     Err(error) => tracing::info!(%error, "cannot read whether the system asks for reduced motion"),
   });
 }

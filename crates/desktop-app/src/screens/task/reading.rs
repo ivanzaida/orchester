@@ -219,7 +219,7 @@ fn conversation(ctx: &Ctx) -> Column {
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(Spacer::new().flex(1.0))
-    .child(bone(CHIP.0, CHIP.1).rounded(ExtraRadius::Full.role()));
+    .child(bone(CHIP.0, CHIP.1).radius(ExtraRadius::Full.role()));
   let composer = Column::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::all(SpacingSize::Md))
@@ -234,7 +234,7 @@ fn conversation(ctx: &Ctx) -> Column {
         .spacing(SpacingSize::Md)
         .align_items(Alignment::Center)
         .child(icon(Icon::Paperclip, IconSize::Md, PaletteColor::MutedForeground))
-        .child(bone(150.0, 22.0).rounded(ExtraRadius::Full.role()))
+        .child(bone(150.0, 22.0).radius(ExtraRadius::Full.role()))
         .child(Spacer::new().flex(1.0))
         .child(skeleton::line(ctx, TypographyStyle::Description, 200.0))
         .child(skeleton::button(148.0)),

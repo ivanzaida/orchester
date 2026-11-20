@@ -109,7 +109,7 @@ fn detail(ctx: &Ctx) -> Element {
     .child(bone(name, name_height));
   let chips = Row::new()
     .spacing(SpacingSize::Sm)
-    .with_children(CHIPS.map(|width| bone(width, CHIP_HEIGHT).rounded(ExtraRadius::Full.role())));
+    .with_children(CHIPS.map(|width| bone(width, CHIP_HEIGHT).radius(ExtraRadius::Full.role())));
   let body = panel::body()
     .spacing(ExtraSpacing::SettingsHead.role())
     .child(head)

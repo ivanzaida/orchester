@@ -2,6 +2,7 @@
 //! group's head with its title real and its count a bone, a list row with its tile, label, hint and end as bones, a
 //! sub-head, and a status, so the real rows replace them in place.
 
+use lurq::ui::Skeleton as UiSkeleton;
 use lurq::{
   app::{
     ctx::Ctx,
@@ -38,8 +39,8 @@ pub(crate) fn head(ctx: &Ctx, id: &str, title: &str, count: Option<f32>) -> Row 
 }
 
 /// A tile not known yet: a bone of its size.
-pub(crate) fn tile() -> Column {
-  bone(TILE, TILE).rounded(RadiusSize::Md)
+pub(crate) fn tile() -> UiSkeleton {
+  bone(TILE, TILE).radius(RadiusSize::Md)
 }
 
 /// A status not known yet: its dot and its words, `width` long.

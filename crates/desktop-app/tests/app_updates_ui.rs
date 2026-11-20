@@ -81,7 +81,6 @@ impl Section {
     i18n::install(&app).expect("bundled locales load");
     let mut tree = Tree::new();
     tree.resize(720, 900);
-    orchester_app::ui::skeleton::install(&mut tree);
     let asked = Arc::new(Mutex::new(Vec::new()));
     let record = asked.clone();
     let dispatch = Arc::new(move |action| record.lock().push(action));

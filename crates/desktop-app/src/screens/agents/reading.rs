@@ -40,7 +40,7 @@ pub(super) fn profile(ctx: &mut Ctx, nav: &AgentsNav) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(bone(MARK, MARK).rounded(RadiusSize::Lg))
+    .child(bone(MARK, MARK).radius(RadiusSize::Lg))
     .child(
       Column::new()
         .spacing(ExtraSpacing::Snug.role())

@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use lurq::ui::{Length, Skeleton as UiSkeleton};
 use lurq::{
   app::{
     ctx::Ctx,
@@ -39,17 +40,14 @@ pub fn line(ctx: &Ctx, style: impl Into<TypographyStyle>, width: f32) -> Row {
 }
 
 /// A count beside a title.
-pub fn count() -> Column {
+pub fn count() -> UiSkeleton {
   bone(COUNT.0, COUNT.1)
 }
 
 /// A count's bone as high as [`count`]'s and as wide as the place it stands in: a count that keeps the room of the
 /// count it stands for (a tab's).
-pub fn count_in_room() -> Column {
-  Column::new()
-    .height(Dimension::Px(COUNT.1))
-    .rounded(RadiusSize::Sm)
-    .background(PaletteColor::Border)
+pub fn count_in_room() -> UiSkeleton {
+  UiSkeleton::block(Length::Fill, COUNT.1)
 }
 
 /// A state at a row's end: its dot and its words, `width` long, in 12.
@@ -63,7 +61,7 @@ pub fn status(ctx: &Ctx, width: f32) -> Row {
 }
 
 /// A switch whose state is not known yet: a bone the size of its track.
-pub fn switch() -> Column {
+pub fn switch() -> UiSkeleton {
   bone(SWITCH.0, SWITCH.1)
 }
 
@@ -110,8 +108,8 @@ pub fn select(ctx: &Ctx, width: f32, value: f32) -> Row {
   ))
 }
 /// A button that comes with the data: a bone of its size.
-pub fn button(width: f32) -> Column {
-  bone(width, ControlHeight::Md.value()).rounded(RadiusSize::Md)
+pub fn button(width: f32) -> UiSkeleton {
+  bone(width, ControlHeight::Md.value()).radius(RadiusSize::Md)
 }
 
 /// A row's chevron, real: the row will open a page.

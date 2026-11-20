@@ -17,7 +17,10 @@ use lurq::{
 };
 
 use crate::{
-  theme::{CONSEQUENCE_ON_ACCENT_OPACITY, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraShadow, ExtraSpacing, ExtraTypography},
+  theme::{
+    CONSEQUENCE_ON_ACCENT_OPACITY, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraShadow, ExtraSpacing,
+    ExtraTypography,
+  },
   ui::button::{ButtonKind, ButtonSize, state},
 };
 
@@ -206,7 +209,9 @@ fn stacked() -> Recipe {
         .opacity(1.0)
     })
     .when(
-      Selector::new().variant(ButtonKind::Primary.name()).state(state::STACKED),
+      Selector::new()
+        .variant(ButtonKind::Primary.name())
+        .state(state::STACKED),
       ButtonPart::Description,
       |style| {
         style

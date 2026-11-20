@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use lurq::ui::Length;
 use lurq::{
   app::{
     ctx::Ctx,
@@ -128,10 +129,12 @@ fn chart(names: &[Option<AxisName>]) -> Column {
     .align_items(Alignment::End)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .with_children(names.iter().map(|_| {
+      // 60 % of its slot, at most a bar's width.
       slot().child(
-        bone(BAR.0, BAR.1)
+        Row::new()
           .width(Dimension::Pct(60.0))
-          .max_width(Dimension::Px(BAR.0)),
+          .max_width(Dimension::Px(BAR.0))
+          .child(bone(BAR.0, BAR.1).width(Length::Fill)),
       )
     }));
   let days = Row::new()
@@ -187,7 +190,7 @@ pub(super) fn limits(ctx: &mut Ctx) -> Element {
             .child(Spacer::new().flex(1.0))
             .child(skeleton::line(ctx, TypographyStyle::Caption, 36.0)),
         )
-        .child(bone(1.0, 6.0).width(Dimension::Pct(100.0)))
+        .child(bone(1.0, 6.0).width(Length::Fill))
         .child(skeleton::line(ctx, TypographyStyle::Caption, 162.0))
     })
     .collect();

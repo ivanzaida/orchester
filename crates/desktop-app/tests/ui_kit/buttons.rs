@@ -354,8 +354,16 @@ fn a_stacked_answer_fills_its_parent_its_consequence_2_under_its_label() {
   assert_close(label.x - frame.x, 12.0, "12 at its side");
   assert_close(label.y - frame.y, 8.0, "8 over its label");
   assert_close(gap_under(label, words), 2.0, "the consequence 2 under the label");
-  assert_close(frame.y + frame.height - words.y - words.height, 8.0, "8 under its consequence");
-  assert!(words.height > label.height * 1.5, "the consequence wraps: {}", words.height);
+  assert_close(
+    frame.y + frame.height - words.y - words.height,
+    8.0,
+    "8 under its consequence",
+  );
+  assert!(
+    words.height > label.height * 1.5,
+    "the consequence wraps: {}",
+    words.height
+  );
   kit.click("skip");
   assert!(focused.load(Ordering::SeqCst) >= 1, "it says what it does when focused");
 }
