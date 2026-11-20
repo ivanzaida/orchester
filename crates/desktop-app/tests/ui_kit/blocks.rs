@@ -267,6 +267,7 @@ fn a_code_box_holds_the_whole_value_8_over_and_10_beside_it_with_copy() {
   assert_close(value.x - frame.x, 10.0, "side");
   assert_close(value.y - frame.y, 8.0, "top");
   assert_eq!(kit.texts("command"), [command]);
+  assert!(kit.exists("command-code"), "the value is lurq's code block");
   assert_close(gap_under(kit.bounds("command-copy"), frame), 6.0, "label row to box");
   assert!(kit.texts("command-copy").contains(&"Copy".to_owned()));
 }

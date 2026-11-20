@@ -1,10 +1,12 @@
 //! A long value in Geist Mono with Copy (`Command` `MOPAN` in `Approval card` `gwOaJ`): its label in
 //! 11/500 `text_secondary` with a ghost Copy at the row's end, and 6 under them the value in 12
 //! `text_primary` on `code_bg` inside a `border` stroke, radius 6, 8 over and under it and 10 at its
-//! sides. The value is never shortened: it wraps, it can be selected, and past twelve lines it scrolls
-//! inside its box. Copy is a Tab stop; it says Copied for a moment once the window's clipboard
-//! (`ui::clipboard`) holds the value, or that it could not copy. Inline (`Command` `SiCGv`), the box has no caption and
-//! Copy is a small icon button inside it at its end, 8 over and under and 12 at its sides; its tooltip says Copied.
+//! sides. The value is lurq's `ui::CodeBlock` with no bar (`theme::kit::code_box`): never shortened, it wraps, it
+//! can be selected, and past twelve lines it scrolls inside its box. Copy is the kit's, with its word: a Tab stop that
+//! says Copied for a moment once the window's clipboard (`ui::clipboard`) holds the value, or that it could not
+//! copy. Inline (`Command` `SiCGv`), the box has no caption and Copy is a small icon button inside it at its end, 8
+//! over and under and 12 at its sides; its tooltip says Copied. The value's ids are lurq's: the block `<id>`, its
+//! code `<id>-code`; the box is `<id>-box` and Copy `<id>-copy`.
 
 use std::{sync::Arc, time::Duration};
 
@@ -14,10 +16,11 @@ use lurq::{
     ctx::{Ctx, Timeout},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, Row, Text},
   core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::CodeBlock,
 };
 
 use super::{
@@ -26,7 +29,10 @@ use super::{
   icon::Icon,
   icon_button::IconButton,
 };
-use crate::theme::{ExtraColor, ExtraSpacing};
+use crate::theme::{
+  ExtraColor, ExtraSpacing,
+  kit::code_box::{CODE_BOX, ROW_HEIGHT},
+};
 
 /// How long Copy says what happened before it offers to copy again.
 const COPY_FEEDBACK: Duration = Duration::from_secs(2);
@@ -54,7 +60,7 @@ pub struct CodeBox {
 impl DevtoolsInspectable for CodeBox {}
 
 impl CodeBox {
-  /// `value` under `label`; the value's element id is `id`, Copy's `<id>-copy`.
+  /// `value` under `label`; the value's element id is `id` (its code `<id>-code`), Copy's `<id>-copy`.
   pub fn new(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, value: impl Into<Arc<str>>) -> Self {
     Self {
       id: id.into(),
@@ -109,15 +115,18 @@ impl Component for CodeBoxView {
       });
       reset.restart();
     };
-    let text = ScrollVertical::new(
-      Text::new(&props.value)
-        .id(props.id.to_string())
-        .variant(TypographyStyle::Mono)
-        .selectable(true)
-        .width(Dimension::Pct(100.0)),
-    )
-    .max_height(Dimension::Px(VALUE_MAX_HEIGHT))
-    .flex(1.0);
+    let block = CodeBlock::new(&props.value)
+      .id(props.id.clone())
+      .key(props.id.clone())
+      .label(&props.label)
+      .header(false)
+      .copy_button(false)
+      .framed(false)
+      .wrap(true)
+      .row_height(ROW_HEIGHT)
+      .max_height(VALUE_MAX_HEIGHT)
+      .state(CODE_BOX, true);
+    let text = Column::new().flex(1.0).child(block);
     let value = Row::new()
       .id(format!("{}-box", props.id))
       .width(Dimension::Pct(100.0))
