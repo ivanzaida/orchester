@@ -230,8 +230,8 @@ impl From<FilterChip> for Element {
 
 /// A filter's option `id` saying `label`, `chosen` or not, with its value's swatch where it has one (`u1ZxRL`): an
 /// item of lurq's menu that a choice, a press or Enter, toggles with `toggle` and leaves the menu open
-/// (`MenuItem::keeps_open`); the arrows and typing reach it. A `mono` label is an identifier, such as a model, in mono 11
-/// (`claude-opus-5-5` `aQCL8`).
+/// (`MenuItem::keeps_open`); the arrows and typing reach it. A `mono` label is an identifier, such as a model, in mono
+/// 11 (`claude-opus-5-5` `aQCL8`).
 pub fn filter_option(
   id: impl Into<Arc<str>>,
   (label, chosen, mono): (&str, bool, bool),

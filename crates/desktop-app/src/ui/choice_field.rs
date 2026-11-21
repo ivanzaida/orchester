@@ -182,11 +182,10 @@ impl Component for Picker {
         GROUPED_MENU_WIDTH
       })
       .scrolling(rows, (MENU_MAX_HEIGHT, Some(ExtraSpacing::Hair)));
-    Row::new().width(Dimension::Px(props.width)).child(trigger).child(menu(
-      self.anchor.clone(),
-      props.open.clone(),
-      panel,
-    ))
+    Row::new()
+      .width(Dimension::Px(props.width))
+      .child(trigger)
+      .child(menu(self.anchor.clone(), props.open, panel))
   }
 }
 
