@@ -15,9 +15,10 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::{Column, Placement, Popup, ScrollVertical},
+  components::Placement,
   core::ElementRef,
-  node::{Element, dimension::Dimension},
+  node::Element,
+  ui,
 };
 use parking_lot::Mutex;
 
@@ -30,7 +31,7 @@ use crate::{
   theme::{ControlHeight, ExtraSpacing},
   ui::{
     icon::Icon,
-    menu::{held_panel, menu_panel, separator_line},
+    menu::{Entry, MenuPanel, menu_panel, separator},
     message::message_text,
   },
 };
@@ -122,15 +123,10 @@ struct SkillSection<'a> {
   unreadable: Option<Arc<str>>,
 }
 
-/// What the menu showed last: what was typed after the `/`, and what each row chooses and whether it can be.
-struct Seen {
-  typed: String,
-  rows: Vec<(Pick, bool)>,
-}
-
 struct SlashMenu {
-  /// What the menu showed last: its focus goes back to the first row that can be chosen when it changes.
-  last: Mutex<Option<Seen>>,
+  /// The rows the menu showed last, what each chooses and whether it can be: lurq's active row goes back to the first
+  /// that can be chosen when they change.
+  last: Mutex<Option<Vec<(Pick, bool)>>>,
 }
 
 impl Component for SlashMenu {
@@ -179,13 +175,16 @@ impl Component for SlashMenu {
       .chain(&matched_skills)
       .map(|(face, _)| (face.pick.clone(), face.runs))
       .collect();
-    let focused = self.focused(field, typed, &rows);
+    let focused = self.focused(field, &rows);
     let any = !rows.is_empty();
-    *field.shown.lock() = Some(Shown { rows, focused });
-    let content = if !any && matches!(skills, SkillRows::Shown(_)) {
-      vec![nothing(ctx, typed), footer(ctx, typed, false)]
+    *field.shown.lock() = Some(Shown { rows });
+    let panel = menu_panel(&format!("{}-slash-menu", props.id))
+      .width(WIDTH)
+      .keeps_focus(&field.keys);
+    let panel = if !any && matches!(skills, SkillRows::Shown(_)) {
+      panel.child(nothing(ctx, typed)).child(footer(ctx, typed, false))
     } else {
-      let mut content = commands_section(ctx, &props, (typed, &commands), focused);
+      let panel = panel.with_children(commands_section(ctx, &props, (typed, &commands), focused));
       let section = SkillSection {
         total: skill_faces.len(),
         matched: &matched_skills,
@@ -195,47 +194,43 @@ impl Component for SlashMenu {
         },
       };
       let skill_focus = focused.and_then(|at| at.checked_sub(commands.len()));
-      content.extend(skills_section(ctx, &props, (typed, section), skill_focus));
-      content.push(footer(ctx, typed, any));
-      content
+      skills_section(ctx, &props, (typed, section), skill_focus, panel).child(footer(ctx, typed, any))
     };
-    let panel = menu_panel(&format!("{}-slash-menu", props.id))
-      .width(WIDTH)
-      .with_children(content);
-    let gap = ctx.theme().spacing_value(SpacingSize::Sm).to_px();
-    Popup::new(props.anchor.clone(), held_panel(panel))
-      .open_when(true)
-      .dismiss_on_outside_click(false)
-      .dismiss_on_escape(false)
-      .switch_on_anchor_press(false)
-      .placement(Placement::TopStart)
-      .offset(0.0, gap)
-      .into()
+    hung(ctx, (&props.anchor, field), panel)
   }
 }
 
+/// `panel` as lurq's menu over the composer's box `anchor`, its bottom 8 over it, open while the draft asks for it: the
+/// focus stays in the field, whose keys move the active row and choose it (`MenuPanel::keeps_focus`), and Esc closes
+/// it until the draft no longer starts with `/`. A press elsewhere leaves it, as the field keeps it while it has the
+/// focus.
+fn hung(ctx: &Ctx, (anchor, field): (&ElementRef, &SlashField), panel: MenuPanel) -> Element {
+  let closes = field.clone();
+  // Held open by what the draft says: what a person does to close it is Esc, which `on_dismiss` hears.
+  let menu = ui::Menu::controlled(true, anchor.clone(), |_| {}).on_dismiss(move || closes.close());
+  panel
+    .hang(menu)
+    .placement(Placement::TopStart)
+    .offset(ctx.theme().spacing_value(SpacingSize::Sm))
+    .dismiss_on_outside_press(false)
+    .dismiss_on_escape(false)
+    .into()
+}
+
 impl SlashMenu {
-  /// The row with the focus among `rows` for `typed`: the first that can be chosen once either changed, as when the
-  /// skills arrive after the menu opened. The focus is read tracked on every path, so the arrow keys draw the menu
-  /// again.
-  fn focused(&self, field: &SlashField, typed: &str, rows: &[(Pick, bool)]) -> Option<usize> {
-    let focus = field.focus.get();
+  /// lurq's active row among `rows`, which shows *Enter* at its end: the first that can be chosen once they changed,
+  /// as when the skills arrive after the menu opened, as lurq's menu sets it then; else where the keys or the pointer
+  /// moved it. lurq draws the menu again when it moves.
+  fn focused(&self, field: &SlashField, rows: &[(Pick, bool)]) -> Option<usize> {
     let mut last = self.last.lock();
-    if last
-      .as_ref()
-      .is_none_or(|seen| seen.typed != typed || seen.rows != rows)
-    {
-      *last = Some(Seen {
-        typed: typed.to_owned(),
-        rows: rows.to_vec(),
-      });
-      let first = rows.iter().position(|(_, runs)| *runs);
-      if focus != first {
-        field.focus.set(first);
-      }
-      return first;
+    if last.as_deref() != Some(rows) {
+      *last = Some(rows.to_vec());
+      return rows.iter().position(|(_, runs)| *runs);
     }
-    focus.filter(|&at| rows.get(at).is_some_and(|(_, runs)| *runs))
+    field
+      .keys
+      .active()
+      .filter(|&at| rows.get(at).is_some_and(|(_, runs)| *runs))
   }
 }
 
@@ -295,7 +290,7 @@ fn commands_section(
   props: &Props,
   (typed, commands): (&str, &[Matched<'_>]),
   focused: Option<usize>,
-) -> Vec<Element> {
+) -> Vec<Entry> {
   if commands.is_empty() {
     return Vec::new();
   }
@@ -305,65 +300,53 @@ fn commands_section(
   } else {
     props.note.clone()
   };
-  let mut content = vec![heading(ctx, ("commands", "composer.slash.commands"), end)];
+  let mut content = vec![Entry::from(heading(ctx, ("commands", "composer.slash.commands"), end))];
   content.extend(commands.iter().enumerate().map(|(at, (face, letters))| {
+    Entry::from(row(
+      ctx,
+      (props.id, &props.field),
+      (face, letters.clone(), filtered),
+      focused == Some(at),
+    ))
+  }));
+  content
+}
+
+/// `panel` with a line after the commands, *Skills* and the skills that match `typed`, the focus at `focused` among
+/// them, in a section that scrolls after 8 rows; or why they could not be read. Nothing when no skill matches, or none
+/// is published.
+fn skills_section(
+  ctx: &Ctx,
+  props: &Props,
+  (typed, section): (&str, SkillSection<'_>),
+  focused: Option<usize>,
+  panel: MenuPanel,
+) -> MenuPanel {
+  let filtered = !typed.is_empty();
+  let skills = section.matched;
+  let end = match section.unreadable {
+    Some(why) => why,
+    None if skills.is_empty() => return panel,
+    None if filtered => count(ctx, skills.len(), section.total),
+    None => ctx.t_args("composer.slash.published", [("count", section.total.to_string())]),
+  };
+  let shown_commands = props.faces.iter().any(|face| face_matched(face, typed).is_some());
+  let panel = if shown_commands { panel.child(separator()) } else { panel };
+  let panel = panel.child(heading(ctx, ("skills", "composer.slash.skills"), Some(end)));
+  if skills.is_empty() {
+    return panel;
+  }
+  let rows = skills.iter().enumerate().map(|(at, (face, letters))| {
     row(
       ctx,
       (props.id, &props.field),
       (face, letters.clone(), filtered),
       focused == Some(at),
     )
-  }));
-  content
-}
-
-/// A line after the commands, *Skills* and the skills that match `typed`, the focus at `focused` among them; or why
-/// they could not be read. Nothing when no skill matches, or none is published.
-fn skills_section(
-  ctx: &Ctx,
-  props: &Props,
-  (typed, section): (&str, SkillSection<'_>),
-  focused: Option<usize>,
-) -> Vec<Element> {
-  let filtered = !typed.is_empty();
-  let skills = section.matched;
-  let end = match section.unreadable {
-    Some(why) => why,
-    None if skills.is_empty() => return Vec::new(),
-    None if filtered => count(ctx, skills.len(), section.total),
-    None => ctx.t_args("composer.slash.published", [("count", section.total.to_string())]),
-  };
-  let shown_commands = props.faces.iter().any(|face| face_matched(face, typed).is_some());
-  let mut content: Vec<Element> = shown_commands.then(|| separator_line(ctx)).into_iter().collect();
-  content.push(heading(ctx, ("skills", "composer.slash.skills"), Some(end)));
-  if skills.is_empty() {
-    return content;
-  }
-  let rows = Column::new()
-    .id(format!("{}-slash-skills", props.id))
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Tight.role())
-    .with_children(skills.iter().enumerate().map(|(at, (face, letters))| {
-      row(
-        ctx,
-        (props.id, &props.field),
-        (face, letters.clone(), filtered),
-        focused == Some(at),
-      )
-    }));
-  if skills.len() <= usize::from(SKILL_ROWS) {
-    content.push(rows.into());
-    return content;
-  }
+  });
   let rows_high = f32::from(SKILL_ROWS) * ControlHeight::Md.value();
   let gaps = f32::from(SKILL_ROWS - 1) * ExtraSpacing::Tight.value();
-  content.push(
-    ScrollVertical::new(rows)
-      .width(Dimension::Pct(100.0))
-      .max_height(Dimension::Px(rows_high + gaps))
-      .into(),
-  );
-  content
+  panel.scrolling(rows, (rows_high + gaps, Some(ExtraSpacing::Tight)))
 }
 
 /// *2 of 4*: how many of a section's rows match.

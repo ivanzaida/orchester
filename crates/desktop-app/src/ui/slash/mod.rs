@@ -23,6 +23,7 @@ use std::{
 use lurq::{
   app::{ctx::Ctx, events::KeyboardEvent},
   core::{ElementRef, Signal},
+  ui::MenuKeys,
 };
 use orchester_core::id::ResourceId;
 use orchester_workspace::skills::offered::OfferedSkill;
@@ -67,12 +68,10 @@ enum Pick {
   Skill(ResourceId),
 }
 
-/// The rows the menu shows now, as the keys read them: what each chooses and whether it can be chosen, in order, and
-/// the one with the focus.
+/// The rows the menu shows now: what each chooses and whether it can be chosen, in order.
 #[derive(Clone, Debug, Default)]
 struct Shown {
   rows: Vec<(Pick, bool)>,
-  focused: Option<usize>,
 }
 
 /// What the composer offers now: its commands, the skills read last, and what sends the draft as typed when nothing
@@ -94,8 +93,9 @@ pub struct SlashField {
   focused: Signal<bool>,
   /// The skill the composer's chip holds: a message carries one.
   skill: Signal<Option<OfferedSkill>>,
-  /// The row with the keyboard's focus, among the rows shown.
-  focus: Signal<Option<usize>>,
+  /// The menu's keys while the composer's field has the focus: lurq's active row, which Up and Down move and Enter
+  /// chooses.
+  keys: MenuKeys,
   /// Esc closed the menu: it stays closed until the draft no longer starts with `/`.
   closed: Signal<bool>,
   offered: Arc<Mutex<Offered>>,
@@ -122,18 +122,18 @@ impl PartialEq for SlashField {
 }
 
 impl SlashField {
-  /// The menu of `draft`, whose composer keeps whether its field has the focus in `focused` and the skill its chip
-  /// holds in `skill`.
+  /// The menu of `draft`, typed in the composer's `field`, whose composer keeps whether that field has the focus in
+  /// `focused` and the skill its chip holds in `skill`.
   pub fn new(
     ctx: &mut Ctx,
-    draft: Signal<String>,
+    (draft, field): (Signal<String>, ElementRef),
     (focused, skill): (Signal<bool>, Signal<Option<OfferedSkill>>),
   ) -> Self {
     Self {
       draft,
       focused,
       skill,
-      focus: ctx.signal(None),
+      keys: MenuKeys::new(field),
       closed: ctx.signal(false),
       offered: Arc::default(),
       shown: Arc::default(),
@@ -175,20 +175,15 @@ impl SlashField {
     let Some(shown) = self.shown.lock().clone() else {
       return false;
     };
+    // lurq's menu: Up and Down move its active row, Enter chooses it, Esc closes the menu (`on_dismiss`).
+    if self.keys.key_down(event) {
+      return true;
+    }
     match event.key.as_str() {
-      "Escape" => {
-        self.closed.set(true);
-        *self.shown.lock() = None;
-      }
-      "ArrowDown" | "ArrowUp" => {
-        let choosable: Vec<bool> = shown.rows.iter().map(|(_, can)| *can).collect();
-        let next = step(&choosable, shown.focused, event.key == "ArrowDown");
-        if next != shown.focused {
-          self.focus.set(next);
-        }
-      }
+      // No row can be chosen: the keys still stay the menu's.
+      "ArrowDown" | "ArrowUp" => {}
       "Enter" if !event.shift && !event.ctrl && !event.meta => {
-        if !self.choose(&shown) {
+        if !self.send_as_typed(&shown) {
           return false;
         }
       }
@@ -198,20 +193,23 @@ impl SlashField {
     true
   }
 
-  /// Enter: chooses the row with the focus, or, with nothing that matches, sends the text as typed. Whether the menu
-  /// took the key: not when the field's own Enter sends.
-  fn choose(&self, shown: &Shown) -> bool {
-    if shown.rows.is_empty() {
-      let send = self.offered.lock().send.clone();
-      return send.is_some_and(|send| {
-        send();
-        true
-      });
+  /// Enter with no row to choose: with nothing that matches, sends the text as typed. Whether the menu took the key:
+  /// not when the field's own Enter sends.
+  fn send_as_typed(&self, shown: &Shown) -> bool {
+    if !shown.rows.is_empty() {
+      return true;
     }
-    if let Some((pick, true)) = shown.focused.and_then(|at| shown.rows.get(at)) {
-      self.run(pick);
-    }
-    true
+    let send = self.offered.lock().send.clone();
+    send.is_some_and(|send| {
+      send();
+      true
+    })
+  }
+
+  /// Esc closed the menu: it stays closed until the draft no longer starts with `/`.
+  fn close(&self) {
+    self.closed.set(true);
+    *self.shown.lock() = None;
   }
 
   /// Chooses `pick` while it can be chosen: the typed `/` goes, and the menu with it; a command runs or becomes the
@@ -249,7 +247,6 @@ impl SlashField {
       return;
     };
     *self.shown.lock() = None;
-    self.focus.set(None);
     self.draft.set(String::new());
     run();
   }

@@ -232,7 +232,7 @@ impl Component for Composer {
     let focused = ctx.signal(false);
     let (draft, skill) = (props.composing.state.draft, props.composing.state.skill);
     let mention = MentionField::new(ctx, draft.clone(), focused.clone());
-    let slash = SlashField::new(ctx, draft, (focused.clone(), skill));
+    let slash = SlashField::new(ctx, (draft, mention.element()), (focused.clone(), skill));
     Self {
       menu: ctx.signal(false),
       focused,

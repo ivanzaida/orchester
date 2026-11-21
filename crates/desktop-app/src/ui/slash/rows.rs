@@ -10,20 +10,20 @@ use std::{ops::Range, sync::Arc};
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Button, Column, Row, Spacer, Text, TextOverflow},
+  components::{Column, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
-  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::{self, Styled},
 };
 
 use super::{Pick, SlashField};
 use crate::{
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize, SlashText},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize, SlashText},
   ui::{
     icon::{Icon, icon},
     kbd::key_cap,
-    pressable::{inert, pressable},
   },
 };
 
@@ -70,13 +70,14 @@ pub(super) fn heading(ctx: &Ctx, (name, key): (&str, &str), end: Option<Arc<str>
     .into()
 }
 
-/// A row of the menu `id`: chosen by a click while it can be, faded with why while it cannot.
+/// A row of the menu `id` as lurq's menu item: chosen by a click or Enter while it can be, faded with why while it
+/// cannot; lurq's active row (`focused`) shows *Enter* at its end, on the `hover` fill the menu's recipe gives it.
 pub(super) fn row(
   ctx: &Ctx,
   (id, field): (&str, &SlashField),
   (face, letters, filtered): (&Face, Range<usize>, bool),
   focused: bool,
-) -> Element {
+) -> ui::MenuItem {
   let detail_color = if face.runs {
     PaletteColor::MutedForeground
   } else {
@@ -97,35 +98,27 @@ pub(super) fn row(
       .into(),
   ];
   let enter = focused.then(|| key_cap("slash-enter", &ctx.t("composer.slash.keys.enter")));
-  let surface = |button: Button| {
-    button
-      .id(format!("{id}-slash-{name}"))
-      .describe("a11y_name", face.label.clone())
-      .describe("focused", focused.to_string())
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ControlHeight::Md.value()))
-      .padding(Padding::horizontal(SpacingSize::Sm))
-      .spacing(SpacingSize::Sm)
-      .rounded(RadiusSize::Sm)
-      .with_children(children)
-      .with_children(enter)
-  };
+  let content = Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ControlHeight::Md.value()))
+    .padding(Padding::horizontal(SpacingSize::Sm))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .with_children(children)
+    .with_children(enter);
+  let item = ui::MenuItem::new(&face.label)
+    .id(format!("{id}-slash-{name}"))
+    .content(content)
+    .describe("focused", focused.to_string());
   if !face.runs {
-    return surface(inert(Button::empty()))
+    // Faded by the menu's recipe, as a disabled item is.
+    return item
+      .unavailable(&face.detail)
       .describe("state", "unavailable")
-      .describe("reason", face.detail.clone())
-      .opacity(DISABLED_OPACITY)
-      .into();
+      .describe("reason", face.detail.clone());
   }
   let (field, pick) = (field.clone(), face.pick.clone());
-  let button = surface(pressable(move || field.run(&pick)))
-    .describe("state", "enabled")
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()));
-  if focused {
-    button.background(ExtraColor::Hover.role()).into()
-  } else {
-    button.into()
-  }
+  item.on_select(move || field.run(&pick)).describe("state", "enabled")
 }
 
 /// The name in its column: whole in `text_primary` while nothing is typed; once something is, the matched `letters`

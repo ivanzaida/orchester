@@ -137,6 +137,12 @@ impl MenuPanel {
     self.fill(ui::Menu::new(open, anchor))
   }
 
+  /// `menu` holding this panel's entries in its look, for a menu the kit's functions do not make: one held open by
+  /// what its app shows (`ui::Menu::controlled`).
+  pub fn hang(self, menu: ui::Menu) -> ui::Menu {
+    self.fill(menu)
+  }
+
   /// `menu` holding this panel's entries in its look.
   fn fill(self, menu: ui::Menu) -> ui::Menu {
     let mut menu = menu.id(self.id);
