@@ -185,7 +185,11 @@ fn browser_overflow_arrows_move_through_the_rows_and_enter_chooses_one_with_the_
   type_keys(&mut browser, "rust");
   browser.until("the rows to be filtered", |browser| rows(browser).len() == 2);
   tap(&mut browser, "ArrowDown", "ArrowDown");
-  assert_eq!(browser.focused().as_deref(), FILTER, "the arrows leave the focus in the filter");
+  assert_eq!(
+    browser.focused().as_deref(),
+    FILTER,
+    "the arrows leave the focus in the filter"
+  );
   tap(&mut browser, "Enter", "Enter");
   browser.until("the menu to close", |browser| !browser.shows("browser-overflow-menu"));
   browser.pass();

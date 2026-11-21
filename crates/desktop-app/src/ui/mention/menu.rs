@@ -13,9 +13,10 @@ use lurq::{
     ctx::Ctx,
     theme::SpacingSize,
   },
-  components::{Placement, Popup},
+  components::Placement,
   core::ElementRef,
   node::Element,
+  ui,
 };
 use orchester_core::{id::RunId, project::TaskKey, run::RunNumber};
 use orchester_workspace::{
@@ -32,7 +33,7 @@ use super::{
 use crate::{
   services::Services,
   ui::{
-    menu::{held_panel, menu_panel},
+    menu::{MenuPanel, menu_panel},
     message::message_text,
   },
 };
@@ -82,8 +83,8 @@ type Kept = (Folder, FileIndex);
 type ListingKey = Option<(u64, u64)>;
 
 struct MentionMenu {
-  /// The `@` and the words typed after it the menu showed last: its focus goes back to the first row when they change.
-  last: Mutex<Option<(usize, String)>>,
+  /// The rows the menu showed last: lurq's active row goes back to the first when they change.
+  last: Mutex<Option<Vec<String>>>,
   /// Whether the menu was open at its last render, and how many times it opened: each opening lists the files again.
   opens: Mutex<(bool, u64)>,
   /// The files listed last, shown while they are listed again.
@@ -130,7 +131,7 @@ impl Component for MentionMenu {
         *field.shown.lock() = None;
         let reason = message_text(ctx, &reason);
         let words = ctx.t_args("composer.mention.unreadable", [("reason", reason)]);
-        vec![nothing((&ctx.t("composer.mention.unreadableTitle"), &words))]
+        vec![nothing((&ctx.t("composer.mention.unreadableTitle"), &words)).into()]
       }
       Read::Ready(catalog) => {
         let own = props.own.as_ref().map(|(key, number)| (key, *number));
@@ -138,7 +139,8 @@ impl Component for MentionMenu {
         if let (Files::Listed, Some(index)) = &files {
           offer = offer.with_files(index.offer(typed.query));
         }
-        let focused = self.focused(field, (typed.at, typed.query), offer.mentions().len());
+        let mentions: Vec<String> = offer.mentions().iter().map(|mention| mention.written()).collect();
+        let focused = self.focused(field, mentions);
         *field.shown.lock() = Some(Shown {
           replaces: typed.range(),
           rows: offer.mentions(),
@@ -148,37 +150,43 @@ impl Component for MentionMenu {
     };
     let panel = menu_panel(&format!("{}-mention-menu", props.id))
       .width(WIDTH)
+      .keeps_focus(&field.keys)
       .with_children(content);
-    // Its left edge at the `@` (the field's marker), its bottom 8 over the box: the marker sits at the top of the
-    // field, as far under the box's top as the last layout put it.
-    let marker = field.marker();
-    let under_top = (marker.y() - props.anchor.y()).max(0.0);
-    let gap = ctx.theme().spacing_value(SpacingSize::Sm).to_px();
-    Popup::new(marker, held_panel(panel))
-      .open_when(true)
-      .dismiss_on_outside_click(false)
-      .dismiss_on_escape(false)
-      .switch_on_anchor_press(false)
-      .placement(Placement::TopStart)
-      .offset(0.0, gap + under_top)
-      .into()
+    hung(ctx, (&props.anchor, field), panel)
   }
 }
 
+/// `panel` as lurq's menu with its left edge at the `@` (the field's marker) and its bottom 8 over the box `anchor`,
+/// open while the `@` asks for it: the focus stays in the field, whose keys move the active row and insert it
+/// (`MenuPanel::keeps_focus`), and Esc closes it until that `@` types no more. The marker sits at the top of the field,
+/// as far under the box's top as the last layout put it.
+fn hung(ctx: &Ctx, (anchor, field): (&ElementRef, &MentionField), panel: MenuPanel) -> Element {
+  let marker = field.marker();
+  let under_top = (marker.y() - anchor.y()).max(0.0);
+  let gap = ctx.theme().spacing_value(SpacingSize::Sm).to_px();
+  let closes = field.clone();
+  // Held open by what the draft says: what a person does to close it is Esc, which `on_dismiss` hears.
+  let menu = ui::Menu::controlled(true, marker, |_| {}).on_dismiss(move || closes.close());
+  panel
+    .hang(menu)
+    .placement(Placement::TopStart)
+    .offset(gap + under_top)
+    .dismiss_on_outside_press(false)
+    .dismiss_on_escape(false)
+    .into()
+}
+
 impl MentionMenu {
-  /// The row with the focus among `rows` for what was typed after the `@` at `at`: the first once that changed. The
-  /// focus is read tracked on every path, so ↑ ↓ draw the menu again.
-  fn focused(&self, field: &MentionField, (at, query): (usize, &str), rows: usize) -> usize {
-    let focus = field.focus.get();
+  /// lurq's active row among `mentions`, which shows *Enter* at its end: the first once they changed, as lurq's menu
+  /// sets it then; else where the keys or the pointer moved it. lurq draws the menu again when it moves.
+  fn focused(&self, field: &MentionField, mentions: Vec<String>) -> usize {
+    let rows = mentions.len();
     let mut last = self.last.lock();
-    if last.as_ref().is_none_or(|(was_at, was)| *was_at != at || was != query) {
-      *last = Some((at, query.to_owned()));
-      if focus != 0 {
-        field.focus.set(0);
-      }
+    if last.as_ref() != Some(&mentions) {
+      *last = Some(mentions);
       return 0;
     }
-    focus.min(rows.saturating_sub(1))
+    field.keys.active().unwrap_or(0).min(rows.saturating_sub(1))
   }
 
   /// How many times the menu opened, now that it is `open` or not.

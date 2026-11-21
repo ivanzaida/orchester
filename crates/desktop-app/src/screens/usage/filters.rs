@@ -160,11 +160,15 @@ pub fn menu(
       search.focus.set(false);
       ctx.focus(search.field);
     }
-    let field = FieldInput::new(format!("{id}-search"), ctx.t("usage.filters.search"), search.words.clone())
-      .search()
-      .placeholder(ctx.t("usage.filters.search"))
-      .element(search.field.clone())
-      .render(ctx);
+    let field = FieldInput::new(
+      format!("{id}-search"),
+      ctx.t("usage.filters.search"),
+      search.words.clone(),
+    )
+    .search()
+    .placeholder(ctx.t("usage.filters.search"))
+    .element(search.field.clone())
+    .render(ctx);
     panel.keeps_focus(search.keys).child(field)
   } else {
     panel
@@ -208,14 +212,8 @@ fn option_row(
 /// *Provider*'s menu (in the look of `Account menu` `JoCR3`): the agent providers as the Connections page lists them,
 /// by name, each with its series' swatch; then, past a line, *Earlier runs* and what it holds.
 fn provider_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Requery) -> MenuPanel {
-  let mut rows: Vec<Entry> = vec![
-    filter_group(
-      format!("{id}-group"),
-      Icon::Bot,
-      &ctx.t("usage.providers.heading"),
-    )
-    .into(),
-  ];
+  let mut rows: Vec<Entry> =
+    vec![filter_group(format!("{id}-group"), Icon::Bot, &ctx.t("usage.providers.heading")).into()];
   for (index, option) in dashboard.options(Facet::Provider).into_iter().enumerate() {
     let (requery, query) = (requery.clone(), dashboard.toggled(Facet::Provider, &option.value));
     let choose = move || requery.show(query.clone());

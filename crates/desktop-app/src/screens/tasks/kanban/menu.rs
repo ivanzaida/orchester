@@ -92,13 +92,21 @@ impl Lists {
   }
 
   fn of(&self, page: MenuPage) -> (ElementRef, Signal<bool>) {
-    let index = LISTS.iter().position(|list| *list == page).expect("a list is one of LISTS");
+    let index = LISTS
+      .iter()
+      .position(|list| *list == page)
+      .expect("a list is one of LISTS");
     (self.anchors[index].clone(), self.open[index].clone())
   }
 }
 
 /// The menu of `card`, open while `open` holds, beside `anchor`, its rows opening their lists beside them.
-pub fn card_menu(ctx: &mut Ctx, card: &CardModel, (open, anchor): (&Signal<bool>, &ElementRef), lists: &Lists) -> ui::Menu {
+pub fn card_menu(
+  ctx: &mut Ctx,
+  card: &CardModel,
+  (open, anchor): (&Signal<bool>, &ElementRef),
+  lists: &Lists,
+) -> ui::Menu {
   let id = format!("task-menu-{}", card.row.key);
   let rows = commands(ctx, card, lists);
   let panel = menu_panel(&id).width(MENU_WIDTH).with_children(rows);

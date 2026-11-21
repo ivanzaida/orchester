@@ -255,32 +255,32 @@ impl Overflow {
     let (hooks, picked) = (showing.person.clone(), tab.id.clone());
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     let row = Row::new()
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ControlHeight::Md.value()))
-    .flex_shrink(0.0)
-    .padding(Padding::horizontal(SpacingSize::Sm))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .on_mouse_enter(move || enter.set(Some(index)))
-    .on_mouse_leave(move || {
-      leave.update(|hovered| {
-        if *hovered == Some(index) {
-          *hovered = None;
-        }
-      });
-    })
-    .child(tab_icon(tab, PaletteColor::MutedForeground, &id))
-    .child(
-      Text::new(&label)
-        .variant(TypographyStyle::Description)
-        .color(PaletteColor::Foreground)
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis)
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-    .with_children(run.map(|run| Text::new(&run).variant(ExtraTypography::Note.role()).nowrap()))
-    .with_children(close);
+      .width(Dimension::Pct(100.0))
+      .height(Dimension::Px(ControlHeight::Md.value()))
+      .flex_shrink(0.0)
+      .padding(Padding::horizontal(SpacingSize::Sm))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .on_mouse_enter(move || enter.set(Some(index)))
+      .on_mouse_leave(move || {
+        leave.update(|hovered| {
+          if *hovered == Some(index) {
+            *hovered = None;
+          }
+        });
+      })
+      .child(tab_icon(tab, PaletteColor::MutedForeground, &id))
+      .child(
+        Text::new(&label)
+          .variant(TypographyStyle::Description)
+          .color(PaletteColor::Foreground)
+          .nowrap()
+          .text_overflow(TextOverflow::Elipsis)
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0)),
+      )
+      .with_children(run.map(|run| Text::new(&run).variant(ExtraTypography::Note.role()).nowrap()))
+      .with_children(close);
     let row = if shown {
       row.rounded(RadiusSize::Sm).background(ExtraColor::Hover.role())
     } else {

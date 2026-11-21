@@ -47,9 +47,14 @@ fn usage_filter_menu_keeps_the_focus_in_its_search_where_the_arrows_and_enter_ch
   page.key("ArrowDown");
   page.key("Enter");
   assert_eq!(page.query().filter.models, [second.as_str().into()]);
-  assert!(page.shows("usage-filter-model-menu"), "a checked value keeps the menu open");
+  assert!(
+    page.shows("usage-filter-model-menu"),
+    "a checked value keeps the menu open"
+  );
   page.key("Escape");
-  page.until("the menu to close", |page| !page.shows("usage-filter-model-menu-search"));
+  page.until("the menu to close", |page| {
+    !page.shows("usage-filter-model-menu-search")
+  });
 }
 
 #[test]

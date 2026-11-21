@@ -73,7 +73,12 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
 /// `panel` opened 6 from `anchor` on `side` while `open` holds, which a press on `anchor` never opens: the app alone
 /// opens it (a card's question), and a press of the anchor only closes it, as a press elsewhere does. It is
 /// [`popover`] otherwise.
-pub fn popup_by_app(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> ui::Popover {
+pub fn popup_by_app(
+  anchor: ElementRef,
+  open: Signal<bool>,
+  side: PopoverSide,
+  panel: impl Into<Element>,
+) -> ui::Popover {
   popover(anchor, open, side, panel).switch_on_anchor_press(false)
 }
 

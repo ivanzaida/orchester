@@ -331,7 +331,11 @@ fn skills_section(
     None => ctx.t_args("composer.slash.published", [("count", section.total.to_string())]),
   };
   let shown_commands = props.faces.iter().any(|face| face_matched(face, typed).is_some());
-  let panel = if shown_commands { panel.child(separator()) } else { panel };
+  let panel = if shown_commands {
+    panel.child(separator())
+  } else {
+    panel
+  };
   let panel = panel.child(heading(ctx, ("skills", "composer.slash.skills"), Some(end)));
   if skills.is_empty() {
     return panel;

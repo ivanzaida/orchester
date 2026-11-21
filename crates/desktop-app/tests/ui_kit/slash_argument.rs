@@ -127,7 +127,8 @@ impl Component for Composer {
   fn create(ctx: &mut Ctx) -> Self {
     let (draft, focused, skill) = (ctx.signal(String::new()), ctx.signal(false), ctx.signal(None));
     let input = ElementRef::new();
-    let slash = SlashField::new(ctx, draft.clone(), (focused.clone(), skill)).returns_focus_to(input.clone());
+    let slash =
+      SlashField::new(ctx, (draft.clone(), input.clone()), (focused.clone(), skill)).returns_focus_to(input.clone());
     Self {
       draft,
       focused,
