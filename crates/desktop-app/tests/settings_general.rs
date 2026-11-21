@@ -74,9 +74,9 @@ fn settings_general_keeps_a_path_rows_label_beside_a_long_path() {
         .and_then(|element| element.bounds())
         .unwrap_or_else(|| panic!("{id}{part} is laid out"))
     };
-    let label = bounds("-label");
+    let label = bounds("-title");
     let path = bounds("-path");
-    let row = bounds("-row");
+    let row = bounds("");
     assert!(label.width > 30.0, "{id}'s label keeps its width: {label:?}");
     assert!(
       path.x >= label.x + label.width,
@@ -189,9 +189,9 @@ fn settings_general_saves_the_computers_services_at_once_and_reads_it_back() {
     field_value(window, FIELD).as_deref() == Some("8")
   });
   assert_eq!(window.text("settings-services-title"), "Services");
-  assert_eq!(window.text("settings-service-slots-label"), "Services at once");
+  assert_eq!(window.text("settings-service-slots-title"), "Services at once");
   assert_eq!(
-    window.text("settings-service-slots-hint"),
+    window.text("settings-service-slots-description"),
     "On this computer, for every project · a stack takes one per service · 1 to 32"
   );
   window.set(FIELD, "12");
@@ -266,9 +266,9 @@ fn settings_general_error_reports_show_the_stored_setting_and_keep_a_change() {
     window.tree.get_element_by_id(SWITCH).is_some()
   });
   assert_eq!(window.text("settings-privacy-title"), "Privacy");
-  assert_eq!(window.text(&format!("{SWITCH}-label")), "Send error reports");
+  assert_eq!(window.text(&format!("{SWITCH}-row-title")), "Send error reports");
   assert_eq!(
-    window.text(&format!("{SWITCH}-hint")),
+    window.text(&format!("{SWITCH}-row-description")),
     "Errors and crashes go to Orchester's error tracker, without secrets, prompts, file contents or project names"
   );
   assert!(workspace.sends_error_reports().expect("read"), "on until turned off");

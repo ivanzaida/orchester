@@ -97,12 +97,15 @@ impl Component for ErrorReportsRow {
       );
       field_error(&format!("{ID}-not-opened"), &words).into()
     });
-    SettingRow::new(ID, ctx.t("settings.general.privacy.errorReports.label"))
-      .hint(ctx.t("settings.general.privacy.errorReports.hint"))
-      .link(self.link(ctx))
-      .control(control)
-      .below_all(problem.into_iter().chain(unopened))
-      .render(ctx)
+    SettingRow::new(
+      format!("{ID}-row"),
+      ctx.t("settings.general.privacy.errorReports.label"),
+    )
+    .hint(ctx.t("settings.general.privacy.errorReports.hint"))
+    .link(self.link(ctx))
+    .control(control)
+    .below_all(problem.into_iter().chain(unopened))
+    .render(ctx)
   }
 }
 

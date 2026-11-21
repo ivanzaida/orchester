@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, Breakpoint, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Stack, Text},
+  components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -146,7 +146,7 @@ fn head(ctx: &Ctx, (prefix, title): (&str, &str), (status, new): (Vec<Element>, 
 
 /// The kinds as the app's page tabs (as on Tasks), nothing else on the line. A tab whose count is still read shows the
 /// count's bone, so the tabs keep their place when the counts arrive.
-fn tabs(ctx: &mut Ctx, prefix: &str, current: &str, tabs: Vec<Tab>) -> Stack {
+fn tabs(ctx: &mut Ctx, prefix: &str, current: &str, tabs: Vec<Tab>) -> Element {
   let (apart, kinds): (Vec<Tab>, Vec<Tab>) = tabs.into_iter().partition(|tab| tab.apart);
   let shown = |ctx: &mut Ctx, tabs: Vec<Tab>| -> Vec<PageTab> {
     tabs

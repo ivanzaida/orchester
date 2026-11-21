@@ -49,7 +49,7 @@ pub fn head(ctx: &mut Ctx, view: &View, nav: &Nav) -> Element {
     .into()
 }
 
-fn crumbs(ctx: &mut Ctx, view: &View, nav: &Nav) -> Row {
+fn crumbs(ctx: &mut Ctx, view: &View, nav: &Nav) -> Element {
   let tasks = Crumb::to(ctx.t("task_form.crumbs.tasks"), nav.to_tasks());
   let here = match view.subject.task() {
     None => Crumb::here(ctx.t("task_form.crumbs.newTask")),

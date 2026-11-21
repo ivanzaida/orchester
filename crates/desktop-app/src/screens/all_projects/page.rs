@@ -240,7 +240,7 @@ fn tabs(ctx: &mut Ctx, usage: bool) -> Element {
     usage,
     navigation.to(Route::Usage(Box::default())),
   );
-  page_tabs(ctx, "all-projects-tabs", [projects, usage]).into()
+  page_tabs(ctx, "all-projects-tabs", [projects, usage])
 }
 
 /// Why an action of the page did nothing (`FV5pQ`).

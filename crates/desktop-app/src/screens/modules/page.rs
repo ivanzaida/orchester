@@ -259,7 +259,7 @@ pub(super) fn tabs(ctx: &mut Ctx, (project, module): (ProjectId, ModuleId), chos
       PageTab::to(format!("module-tab-{}", tab.name()), label, tab == chosen, open)
     })
     .collect();
-  page_tabs(ctx, "module-tabs", tabs).into()
+  page_tabs(ctx, "module-tabs", tabs)
 }
 
 /// The page's body under its header: 24 over it, 28 at its sides and under it.

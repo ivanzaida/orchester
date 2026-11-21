@@ -70,7 +70,7 @@ pub(super) fn page(
       PageTab::to(format!("module-tab-{}", shown.name()), label, shown == tab, open)
     })
     .collect();
-  let tabs = page_tabs(ctx, "module-tabs", tabs).into();
+  let tabs = page_tabs(ctx, "module-tabs", tabs);
   let status = header::status_line(
     "module-status-row",
     vec![

@@ -6,7 +6,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Row, Stack},
+  components::{Column, Row},
   node::Element,
 };
 use orchester_app::ui::{
@@ -111,7 +111,7 @@ fn toggles(state: &State) -> [Column; 3] {
   ]
 }
 
-fn tabs(ctx: &mut Ctx, state: &State) -> Stack {
+fn tabs(ctx: &mut Ctx, state: &State) -> Element {
   let current = state.tab.get();
   let tab = |id: &'static str, label: &str, count: usize| {
     let set = state.tab.clone();
@@ -250,7 +250,7 @@ fn avatars() -> Row {
     .child(agent_avatar("g-agent", Icon::Hammer))
 }
 
-fn crumbs(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, state: &State) -> Row {
+fn crumbs(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, state: &State) -> Element {
   let link = |label: &'static str| {
     let pressed = state.pressed.clone();
     Crumb::link(label, move || pressed.set(label.to_owned()))
@@ -268,7 +268,7 @@ fn crumbs(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, state: &State) -> 
 }
 
 /// Crumbs longer than their cell: each is cut with an ellipsis and says the whole in its tooltip.
-fn cut_crumbs(ctx: &mut Ctx, state: &State) -> Row {
+fn cut_crumbs(ctx: &mut Ctx, state: &State) -> Element {
   let pressed = state.pressed.clone();
   let crumbs = vec![
     Crumb::link("Kontur platform, billing and the partner portal", move || {

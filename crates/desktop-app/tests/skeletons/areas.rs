@@ -111,11 +111,11 @@ fn skeletons_app_settings_browser_shows_its_groups_bones_while_the_browser_is_lo
   held.skeleton_at_once("settings-browser-reading");
   for real in [
     "settings-browser-program-reading-title",
-    "settings-browser-found-reading-label",
-    "settings-browser-found-reading-hint",
-    "settings-browser-program-reading-hint",
-    "settings-browser-profiles-reading-hint",
-    "settings-browser-window-reading-label",
+    "settings-browser-found-reading-title",
+    "settings-browser-found-reading-description",
+    "settings-browser-program-reading-row-description",
+    "settings-browser-profiles-reading-description",
+    "settings-browser-window-reading-title",
   ] {
     assert!(held.exists(real), "{real}: headings, labels and help lines stay real");
   }
@@ -150,7 +150,7 @@ fn skeletons_app_settings_daily_report_shows_no_switch_before_its_setting_is_rea
   held.release("settings-daily-report");
   assert!(!held.exists("settings-daily-report-reading"));
   assert!(
-    !held.exists("settings-daily-report-at-row"),
+    !held.exists("settings-daily-report-at"),
     "off until turned on: no time once it is read"
   );
 }

@@ -176,7 +176,7 @@ fn automatic(ctx: &mut Ctx, settings: Option<UpdateSettings>, dispatch: &UpdateD
     }
     None => reading(ctx, ID),
   };
-  SettingRow::new(ID, label)
+  SettingRow::new(format!("{ID}-row"), label)
     .hint(ctx.t("settings.general.updates.automatic.hint"))
     .control(control)
     .render(ctx)

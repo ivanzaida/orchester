@@ -38,7 +38,7 @@ fn skeletons_a_value_still_read_keeps_the_rest_of_its_page() {
     "the theme, read already, stays as it is"
   );
   assert!(
-    held.exists("settings-threshold-row"),
+    held.exists("settings-threshold"),
     "the threshold's row stands round its bone"
   );
   held.release("settings-threshold-value");

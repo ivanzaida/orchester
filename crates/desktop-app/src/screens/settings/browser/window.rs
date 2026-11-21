@@ -83,7 +83,7 @@ impl Component for WindowSwitch {
       )
       .into()
     });
-    let row = SettingRow::new(ID, title)
+    let row = SettingRow::new(format!("{ID}-row"), title)
       .hint(ctx.t("settings.browser.window.hint"))
       .control(toggle)
       .below_all(problem)

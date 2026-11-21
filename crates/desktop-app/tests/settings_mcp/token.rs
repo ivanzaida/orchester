@@ -51,7 +51,7 @@ fn settings_mcp_show_hides_the_window_from_clients_until_hidden() {
   assert!(gate.token_shown(), "clients stop reading the window");
   assert!(shown.says("settings-mcp-token-show", "Hide"));
   assert!(shown.says(
-    "settings-mcp-token-hint",
+    "settings-mcp-token-description",
     "Hidden again in 30 s. While it shows, the MCP server refuses screenshots and the window's text, so no agent \
      reads it."
   ));

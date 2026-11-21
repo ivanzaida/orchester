@@ -2,6 +2,7 @@
 //! primitive that renders a lurq component keeps its look here.
 
 pub mod avatar;
+pub mod breadcrumb;
 mod button;
 pub mod calendar;
 pub mod callout;
@@ -19,9 +20,11 @@ pub mod meter;
 pub mod notice;
 mod popover;
 mod segmented;
+pub mod setting_row;
 mod skeleton;
 pub mod spinner;
 pub mod status_label;
+pub mod tabs;
 pub mod toggle;
 mod tooltip;
 mod trigger;
@@ -32,6 +35,7 @@ use lurq::app::theme::Theme;
 
 pub(super) fn install(theme: &Theme) {
   avatar::install(theme);
+  breadcrumb::install(theme);
   button::install(theme);
   calendar::install(theme);
   callout::install(theme);
@@ -49,9 +53,11 @@ pub(super) fn install(theme: &Theme) {
   notice::install(theme);
   popover::install(theme);
   segmented::install(theme);
+  setting_row::install(theme);
   skeleton::install(theme);
   spinner::install(theme);
   status_label::install(theme);
+  tabs::install(theme);
   toggle::install(theme);
   tooltip::install(theme);
   trigger::install(theme);

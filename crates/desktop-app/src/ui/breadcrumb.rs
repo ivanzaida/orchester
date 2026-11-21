@@ -1,33 +1,30 @@
-//! Breadcrumb (`Crumbs` `A7q3o` on the task page, `VpX0E` on New task): where a page sits, its crumbs
-//! in 12 `text_muted`, 6 apart, the page's own last in `text_secondary`; a key in Geist Mono (`KON-12`).
-//! The task page separates crumbs with a `/` in 12 `text_muted`, New task with a 12 `chevron-right`:
-//! the boards differ, so the caller picks. A crumb that opens its page is underlined under the pointer.
+//! Breadcrumb (`Crumbs` `A7q3o` on the task page, `VpX0E` on New task): where a page sits, lurq's `ui::Breadcrumb` in
+//! the theme's recipe (`theme::kit::breadcrumb`). The task page separates crumbs with a `/`, New task with a
+//! `chevron-right`: the boards differ, so the caller picks. Its links are pointer-only.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, TypographyStyle},
+    events::{MouseButton, MouseEvent},
   },
-  components::{Row, Text},
-  layout::Alignment,
-  node::{Element, Style, border::Border, dimension::Dimension},
+  node::Element,
+  ui::{Breadcrumb, BreadcrumbSeparator, BreadcrumbStep},
 };
 
-use super::{
-  icon::{Icon, icon},
-  pressable::Press,
-  tooltip::Truncated,
-};
+use super::{icon::Icon, pressable::Press};
 use crate::{
-  navigation::link::Open,
-  theme::{ExtraColor, ExtraSpacing, IconSize},
+  navigation::{
+    link::{Open, follow},
+    press::OpenIn,
+  },
+  theme::kit::breadcrumb::{ANCESTOR, LAST, MONO, TITLE},
 };
 
-/// The most room an ancestor crumb takes: a longer name is cut there with an ellipsis. Ancestors keep
-/// their room and the page's own crumb gives up what the row lacks, so no crumb is squeezed away.
-const ANCESTOR_MAX_WIDTH: f32 = 160.0;
+/// The most room a link takes: a longer name is cut there with an ellipsis, said whole in a tooltip. Links keep their
+/// room and the page's own crumb gives up what the row lacks, so no crumb is squeezed away.
+const LINK_MAX_WIDTH: f32 = 160.0;
 
 /// The task page's separator: a mark, the same in every language.
 pub(crate) const SLASH: &str = "/";
@@ -39,9 +36,16 @@ pub enum CrumbSeparator {
   Chevron,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Words {
+  Plain,
+  Mono,
+  Title,
+}
+
 pub struct Crumb {
   label: Arc<str>,
-  typography: TypographyStyle,
+  words: Words,
   open: Option<Press>,
   ancestor: bool,
 }
@@ -49,36 +53,31 @@ pub struct Crumb {
 impl Crumb {
   /// A crumb that opens its page, a place of the window, with `open` by a browser's rules (`navigation::link`).
   pub fn to(label: impl Into<Arc<str>>, open: Open) -> Self {
-    Self::pressed(label, Press::Open(open))
+    Self::pressed(label, Some(Press::Open(open)))
   }
 
   /// A crumb that goes back to a panel of its page, which is no place of its own: the page shows it in place.
   pub fn link(label: impl Into<Arc<str>>, open: impl Fn() + Send + Sync + 'static) -> Self {
-    Self::pressed(label, Press::run(open))
+    Self::pressed(label, Some(Press::run(open)))
   }
 
-  fn pressed(label: impl Into<Arc<str>>, press: Press) -> Self {
-    Self {
-      label: label.into(),
-      typography: TypographyStyle::Description,
-      open: Some(press),
-      ancestor: false,
-    }
-  }
-
-  /// The page itself, the last crumb.
+  /// The page itself, the last crumb; before the last, a place on the way that cannot be gone to.
   pub fn here(label: impl Into<Arc<str>>) -> Self {
+    Self::pressed(label, None)
+  }
+
+  fn pressed(label: impl Into<Arc<str>>, open: Option<Press>) -> Self {
     Self {
       label: label.into(),
-      typography: TypographyStyle::Description,
-      open: None,
+      words: Words::Plain,
+      open,
       ancestor: false,
     }
   }
 
   /// The label is an identifier, e.g. a task's key.
   pub fn mono(mut self) -> Self {
-    self.typography = TypographyStyle::Mono;
+    self.words = Words::Mono;
     self
   }
 
@@ -91,64 +90,63 @@ impl Crumb {
 
   /// The page title in the last crumb (Effective instructions, c3yZoo).
   pub fn title(mut self) -> Self {
-    self.typography = TypographyStyle::Title;
+    self.words = Words::Title;
     self
   }
 
-  /// The crumb, cut to its room with its whole label in a tooltip; a link's label is `<id>-label`.
-  fn render(self, ctx: &mut Ctx, id: String, last: bool) -> Element {
-    let typography = self.typography;
-    let color = if self.ancestor {
-      PaletteColor::MutedForeground
-    } else if last && typography == TypographyStyle::Title {
-      PaletteColor::Foreground
-    } else if last {
-      ExtraColor::TextSecondary.role()
-    } else {
-      PaletteColor::MutedForeground
-    };
+  /// The step `index` with the id `id`; a link that ends the trail stays a link.
+  fn step(self, id: String, index: usize, last: bool) -> BreadcrumbStep {
+    let step = BreadcrumbStep::new(&self.label)
+      .value(&index.to_string())
+      .id(id)
+      .state(MONO, self.words == Words::Mono)
+      .state(TITLE, self.words == Words::Title)
+      .state(ANCESTOR, self.ancestor);
     match self.open {
-      Some(open) => {
-        let name = self.label.clone();
-        let text = Truncated::new(format!("{id}-label"), self.label, typography)
-          .color(color)
-          .render(ctx);
-        open
-          .button()
-          .id(id)
-          .flex_shrink(0.0)
-          .max_width(Dimension::Px(ANCESTOR_MAX_WIDTH))
-          .describe("a11y_name", name)
-          .hovered_style(Style::new().border_bottom(Border::inside(BorderSize::Sm, PaletteColor::MutedForeground)))
-          .child(text)
-          .into()
-      }
-      None => Truncated::new(id, self.label, typography).color(color).render(ctx),
+      None => step.link(false),
+      Some(press) => pressed(step.link(true).state(LAST, last), press),
     }
   }
 }
 
-/// `crumbs` in order, the page itself last; crumb `n` has the element id `<id>-<n>`, the separator
-/// before it `<id>-separator-<n>`.
-pub fn breadcrumb(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, crumbs: Vec<Crumb>) -> Row {
-  let count = crumbs.len();
-  let mut row = Row::new()
-    .id(id.to_owned())
-    .max_width(Dimension::Pct(100.0))
-    .min_width(Dimension::Px(0.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center);
-  for (index, crumb) in crumbs.into_iter().enumerate() {
-    if index > 0 {
-      let mark = match separator {
-        CrumbSeparator::Slash => Text::new(SLASH)
-          .variant(TypographyStyle::Description)
-          .color(PaletteColor::MutedForeground),
-        CrumbSeparator::Chevron => icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::MutedForeground),
-      };
-      row = row.child(mark.id(format!("{id}-separator-{index}")));
+/// `step` followed by `press`: an action on a click and a click with Ctrl (Cmd on macOS), a place by a browser's rules.
+fn pressed(step: BreadcrumbStep, press: Press) -> BreadcrumbStep {
+  match press {
+    Press::Run(action) => {
+      let aside = action.clone();
+      step
+        .on_select(move || action())
+        .on_open_aside(move |event: MouseEvent| {
+          if event.button != MouseButton::Middle {
+            aside();
+          }
+        })
     }
-    row = row.child(crumb.render(ctx, format!("{id}-{index}"), index + 1 == count));
+    Press::Open(open) => {
+      let aside = open.clone();
+      step
+        .on_select(move || open(OpenIn::ActiveTab))
+        .on_open_aside(move |event: MouseEvent| follow(&aside, &event))
+    }
   }
-  row
+}
+
+/// `crumbs` in order, the page itself last, mounted so the tooltips of cut names keep what they read; crumb `n` has the
+/// element id `<id>-<n>`, the separators lurq's `<id>-separator`, `<id>-separator-2`, ...
+pub fn breadcrumb(ctx: &mut Ctx, id: &str, separator: CrumbSeparator, crumbs: Vec<Crumb>) -> Element {
+  let count = crumbs.len();
+  let steps = crumbs
+    .into_iter()
+    .enumerate()
+    .map(|(index, crumb)| crumb.step(format!("{id}-{index}"), index, index + 1 == count));
+  let separator = match separator {
+    CrumbSeparator::Slash => BreadcrumbSeparator::Text(Arc::from(SLASH)),
+    CrumbSeparator::Chevron => BreadcrumbSeparator::Icon(Icon::ChevronRight.name().into()),
+  };
+  Breadcrumb::new(steps)
+    .separator(separator)
+    .link_max_width(LINK_MAX_WIDTH)
+    .tab_stop(false)
+    .id(id.to_owned())
+    .mount(ctx)
 }

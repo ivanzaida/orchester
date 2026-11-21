@@ -309,7 +309,7 @@ fn settings_daily_report_is_off_until_turned_on_and_comes_at_six_by_default() {
   window.until("its time to show", |window| {
     window.tree.get_element_by_id(&format!("{DAILY_REPORT}-time")).is_some()
   });
-  let texts = window.texts(&format!("{DAILY_REPORT}-at-row")).expect("the time's row");
+  let texts = window.texts(&format!("{DAILY_REPORT}-at")).expect("the time's row");
   assert!(texts.iter().any(|text| text == "Deliver at"), "{texts:?}");
 }
 
@@ -354,7 +354,7 @@ fn settings_window_control_shows_the_next_start_and_only_a_person_changes_it() {
   let workspace = window.launch.workspace().expect("session").clone();
   window.navigation().go(Route::Settings);
   window.until("the switch", |window| {
-    window.texts(&format!("{WINDOW_CONTROL}-hint")).is_some()
+    window.texts(&format!("{WINDOW_CONTROL}-row-description")).is_some()
   });
   let default = cfg!(debug_assertions);
   assert_eq!(
@@ -367,7 +367,11 @@ fn settings_window_control_shows_the_next_start_and_only_a_person_changes_it() {
   } else {
     "Build default: off in release builds like this one"
   };
-  assert!(window.text(&format!("{WINDOW_CONTROL}-hint")).starts_with(build));
+  assert!(
+    window
+      .text(&format!("{WINDOW_CONTROL}-row-description"))
+      .starts_with(build)
+  );
   assert!(
     window.link.input_gate().protecting(),
     "the gate refuses an MCP client's window input while the row shows"
@@ -392,7 +396,9 @@ fn settings_window_control_shows_the_next_start_and_only_a_person_changes_it() {
     "On from the next start."
   };
   window.until("the hint to say when it applies", |window| {
-    window.text(&format!("{WINDOW_CONTROL}-hint")).starts_with(next)
+    window
+      .text(&format!("{WINDOW_CONTROL}-row-description"))
+      .starts_with(next)
   });
 }
 

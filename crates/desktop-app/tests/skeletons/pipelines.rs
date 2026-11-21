@@ -35,10 +35,10 @@ fn skeletons_pipelines_show_the_lists_and_panels_bones_under_the_real_head_and_t
   for counted in ["all", "archived"] {
     let count = format!("pipeline-hub-filter-{counted}-count");
     assert!(held.exists(&count), "{counted}'s count keeps its place");
-    // A bone holds only the digit's room, a clipped 0.
+    // A bone (lurq's count skeleton) holds no digit.
     assert_eq!(
       held.window.texts(&count).map(|words| words.concat()).as_deref(),
-      Some("0"),
+      Some(""),
       "{counted}'s count is a bone, not a number"
     );
   }
@@ -64,7 +64,7 @@ fn skeletons_pipelines_real_hub_takes_the_bones_place_in_the_same_room() {
       .texts("pipeline-hub-filter-all-count")
       .map(|words| words.concat())
       .as_deref(),
-    Some("0"),
+    Some(""),
     "the count replaces its bone"
   );
   let read = held.bounds("pipeline-hub-master-detail");
