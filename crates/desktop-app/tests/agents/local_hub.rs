@@ -74,7 +74,7 @@ fn local_hub_counts_each_kind_and_lists_a_server_without_a_version() {
   assert!(filter(&mut agents, "mcp_servers").contains('1'));
   assert!(filter(&mut agents, "archived").contains('0'));
   assert!(
-    agents.exists("local-hub-filter-divider"),
+    agents.exists("local-hub-filter-separator"),
     "a rule sets Archived apart from the kinds"
   );
   let row = format!("local-hub-row-mcp-{docs}");

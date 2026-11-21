@@ -3,6 +3,11 @@
     "copied": "Copied",
     "copyFailed": "Couldn't copy",
     "tabCount": "{{label}} {{count}}",
+    "tabs": {
+      "more": "More",
+      "scrollBack": "Scroll back",
+      "scrollOn": "Scroll on"
+    },
     "agentPicker": {
       "search": "Search agents and tools…",
       "clear": "Clear search",

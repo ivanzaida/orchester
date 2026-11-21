@@ -24,7 +24,7 @@ fn memory_task_summary_links_to_the_task_s_memory_with_its_active_count() {
   page.until("the task's memory", |window| window.texts("memory-list").is_some());
   assert_eq!(page.text("memory-count"), "10 active · 2 waiting");
   assert_eq!(
-    page.text("task-tab-summary"),
+    page.text("task-tab-summary-label"),
     "Summary",
     "the memory is a view of the Summary's tab"
   );

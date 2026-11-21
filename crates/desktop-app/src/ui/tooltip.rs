@@ -190,6 +190,11 @@ impl Tooltip {
     self.lurq(&self.text).placement(placement).hang(anchor, shown)
   }
 
+  /// lurq's tooltip saying this one's words, for a lurq component that shows it itself (a page tab's).
+  pub fn to_ui(&self) -> ui::Tooltip {
+    self.lurq(&self.text)
+  }
+
   /// What the tooltip says once the pointer rested on its anchor, if it shows at all: a cut text's own
   /// words only while it is cut; its hint's words either way.
   fn words(&self, fits: bool) -> Option<&Arc<str>> {

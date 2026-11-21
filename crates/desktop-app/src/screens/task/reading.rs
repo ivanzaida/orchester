@@ -171,7 +171,7 @@ fn tabs(ctx: &mut Ctx, task: &Reading<'_>, view: &TaskView) -> Element {
       }
     })
     .collect();
-  page_tabs(ctx, "task-tabs", tabs).into()
+  page_tabs(ctx, "task-tabs", tabs)
 }
 
 /// One entry of the transcript in bones.

@@ -6,7 +6,7 @@
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
-  components::{Column, Row, Stack},
+  components::{Column, Row},
   node::Element,
 };
 use orchester_app::ui::{
@@ -111,7 +111,7 @@ fn toggles(state: &State) -> [Column; 3] {
   ]
 }
 
-fn tabs(ctx: &mut Ctx, state: &State) -> Stack {
+fn tabs(ctx: &mut Ctx, state: &State) -> Element {
   let current = state.tab.get();
   let tab = |id: &'static str, label: &str, count: usize| {
     let set = state.tab.clone();

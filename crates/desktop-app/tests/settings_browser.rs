@@ -116,7 +116,7 @@ fn browser_found_shows_its_name_its_program_and_the_profiles_folder() {
   let mut page = Page::open(&[CHROME]);
   let program = page.folder("installed").join(CHROME);
 
-  assert_eq!(page.window.text("settings-tab-browser"), "Browser");
+  assert_eq!(page.window.text("settings-tab-browser-label"), "Browser");
   assert_eq!(page.found(), "Google Chrome");
   assert!(
     page.window.texts("settings-browser-found-version").is_none(),

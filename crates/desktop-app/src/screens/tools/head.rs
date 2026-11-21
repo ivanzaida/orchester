@@ -120,5 +120,5 @@ pub(super) fn tabs(ctx: &mut Ctx, p: &EditorProps) -> Element {
       }
     })
     .collect::<Vec<_>>();
-  page_tabs(ctx, "tool-tabs", tabs).into()
+  page_tabs(ctx, "tool-tabs", tabs)
 }

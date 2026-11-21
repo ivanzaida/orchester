@@ -297,7 +297,7 @@ fn tabs(
       }
     })
     .collect();
-  page_tabs(ctx, "modules-tabs", tabs).into()
+  page_tabs(ctx, "modules-tabs", tabs)
 }
 
 /// Each module's row bones while the modules are read (`05 · Modules · loading` `beo7S`): its name, description and

@@ -23,6 +23,7 @@ mod segmented;
 mod skeleton;
 pub mod spinner;
 pub mod status_label;
+pub mod tabs;
 pub mod toggle;
 mod tooltip;
 mod trigger;
@@ -54,6 +55,7 @@ pub(super) fn install(theme: &Theme) {
   skeleton::install(theme);
   spinner::install(theme);
   status_label::install(theme);
+  tabs::install(theme);
   toggle::install(theme);
   tooltip::install(theme);
   trigger::install(theme);

@@ -315,11 +315,19 @@ fn details_a_task_opens_on_its_summary_its_tabs_summary_conversation_changes() {
   page
     .window
     .until("the Summary", |window| window.texts("task-criteria").is_some());
-  let tabs = page.window.texts("task-tabs").expect("the page tabs");
-  assert_eq!(tabs.len(), 3, "three tabs: {tabs:?}");
-  assert_eq!(tabs[0], "Summary");
-  assert_eq!(tabs[1], "Conversation");
-  assert!(tabs[2].starts_with("Changes"), "{tabs:?}");
+  let tabs = ["summary", "conversation", "changes", "services"].map(|tab| {
+    page
+      .window
+      .texts(&format!("task-tab-{tab}-label"))
+      .map(|words| words.concat())
+  });
+  assert_eq!(tabs[0].as_deref(), Some("Summary"), "the tabs: {tabs:?}");
+  assert_eq!(tabs[1].as_deref(), Some("Conversation"));
+  assert!(
+    tabs[2].as_deref().is_some_and(|tab| tab.starts_with("Changes")),
+    "{tabs:?}"
+  );
+  assert_eq!(tabs[3].as_deref(), Some("Services"));
   for gone in [
     "task-tab-details",
     "task-tab-artifacts",

@@ -379,10 +379,10 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     services,
   ];
   if props.view != TaskView::Conversation {
-    return page_tabs(ctx, "task-tabs", tabs).into();
+    return page_tabs(ctx, "task-tabs", tabs);
   }
   let search = search_button(ctx);
-  page_tabs_with_note(ctx, "task-tabs", tabs, search).into()
+  page_tabs_with_note(ctx, "task-tabs", tabs, search)
 }
 
 /// The search of the transcript at the right end of the tabs, on the Conversation tab only (`Search` `E1gMr0` in 13):

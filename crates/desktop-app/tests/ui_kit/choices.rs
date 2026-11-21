@@ -80,7 +80,7 @@ fn page_tabs_are_34_high_20_apart_with_counts_and_a_locked_tab_that_cannot_open(
       PageTab::new("tab-review", counted(ctx, "In review", 2), false, open("review")),
       PageTab::unavailable("tab-artifacts", "Artifacts", "Artifacts are planned."),
     ];
-    page_tabs(ctx, "tabs", tabs).into()
+    page_tabs(ctx, "tabs", tabs)
   });
   let (all, review, artifacts) = (
     kit.bounds("tab-all"),
@@ -88,29 +88,39 @@ fn page_tabs_are_34_high_20_apart_with_counts_and_a_locked_tab_that_cannot_open(
     kit.bounds("tab-artifacts"),
   );
   assert_eq!(all.height, 34.0);
-  let (tabs, line) = (kit.bounds("tabs"), kit.bounds("tabs-line"));
-  assert_eq!(
-    (line.x, line.y, line.width, line.height),
-    (tabs.x, all.y + 33.0, tabs.width, 1.0),
-    "the line under the tabs, under the current tab's underline"
-  );
+  // The line is the list's underline, under the current tab's: it ends with the tabs.
+  let tabs = kit.bounds("tabs");
+  assert_eq!((tabs.y, tabs.height), (all.y, 34.0), "the line under the tabs");
   assert_close(gap_after(all, review), 20.0, "between tabs");
   assert_close(gap_after(review, artifacts), 20.0, "before the locked tab");
   assert_close(kit.bounds("tab-all-label").x - all.x, 2.0, "a tab's side");
-  assert_eq!(kit.texts("tab-all"), ["All 24"]);
+  // Each label, then the hidden copy that keeps the room it takes as the current tab.
+  assert_eq!(kit.texts("tab-all"), ["All 24", "All 24"]);
   assert_eq!(
     kit.texts("tab-artifacts"),
-    ["Artifacts".to_owned(), Icon::Lock.glyph().to_string()],
+    [
+      "Artifacts".to_owned(),
+      "Artifacts".to_owned(),
+      Icon::Lock.glyph().to_string()
+    ],
     "the label, then the lock (`Smb4t`)"
   );
   assert_close(
-    gap_after(kit.bounds("tab-artifacts-label"), kit.bounds("tab-artifacts-icon")),
+    gap_after(
+      kit.bounds("tab-artifacts-label"),
+      kit.bounds("tab-artifacts-trailing_icon"),
+    ),
     5.0,
     "label to lock",
   );
   kit.click("tab-review");
   kit.click("tab-artifacts");
-  assert_eq!(opened.get(), ["review"]);
+  kit.click("tab-all");
+  assert_eq!(
+    opened.get(),
+    ["review", "all"],
+    "the current tab opens again; the locked one never"
+  );
   kit.rest_on("tab-artifacts");
   assert_eq!(
     kit.texts("tab-artifacts-tooltip"),
@@ -124,7 +134,7 @@ fn tab_labels(current: &'static str) -> Vec<(f32, f32, f32, f32)> {
   let names = ["tab-one", "tab-two", "tab-three"];
   let mut kit = Kit::show(move |ctx| {
     let tabs = names.map(|name| PageTab::new(name, "A label to measure", name == current, || {}));
-    page_tabs(ctx, "tabs", tabs).into()
+    page_tabs(ctx, "tabs", tabs)
   });
   names
     .map(|name| {

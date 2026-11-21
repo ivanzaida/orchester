@@ -383,5 +383,5 @@ fn tabs(ctx: &mut Ctx) -> Element {
       reason,
     ),
   ];
-  page_tabs(ctx, "orchestrator-settings-tabs", tabs).into()
+  page_tabs(ctx, "orchestrator-settings-tabs", tabs)
 }

@@ -220,7 +220,7 @@ fn the_window_shows_the_active_tabs_route() {
   let changes = draft_route(TaskTab::Changes);
   navigation.go(changes.clone());
   window.until("the task to be read", |window| window.texts("changes-no-run").is_some());
-  let tab = window.texts("task-tab-changes").expect("the page tabs show");
+  let tab = window.texts("task-tab-changes-label").expect("the page tabs show");
   assert_eq!(tab, ["Changes"], "a task without a run has no count");
   let card = window.texts("changes-no-run").expect("the Changes tab shows");
   assert_eq!(card[0], "No run yet");
