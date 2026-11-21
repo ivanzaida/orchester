@@ -39,6 +39,20 @@ fn usage_filter_menus_choose_and_chips_let_go() {
 }
 
 #[test]
+fn usage_filter_menu_keeps_the_focus_in_its_search_where_the_arrows_and_enter_check_a_value() {
+  let mut page = Seeded::usage("usage", UsageQuery::default());
+  page.click("usage-filter-model");
+  assert!(page.shows("usage-filter-model-menu-search"));
+  let second = page.text("usage-filter-model-option-1-label");
+  page.key("ArrowDown");
+  page.key("Enter");
+  assert_eq!(page.query().filter.models, [second.as_str().into()]);
+  assert!(page.shows("usage-filter-model-menu"), "a checked value keeps the menu open");
+  page.key("Escape");
+  page.until("the menu to close", |page| !page.shows("usage-filter-model-menu-search"));
+}
+
+#[test]
 fn usage_breakdown_rows_filter_by_their_profile() {
   let mut page = Seeded::usage("usage", UsageQuery::default());
   let name = page.text("usage-breakdown-profiles-row-0-name");

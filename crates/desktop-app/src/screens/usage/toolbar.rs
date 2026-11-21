@@ -16,6 +16,7 @@ use lurq::{
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::MenuKeys,
 };
 use orchester_core::{
   time::Timestamp,
@@ -26,7 +27,11 @@ use orchester_workspace::{
   usage::{Dashboard, Facet, UsageQuery},
 };
 
-use super::{Requery, custom_range, filters, words};
+use super::{
+  Requery, custom_range,
+  filters::{self, MenuSearch},
+  words,
+};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, UsageSpacing, UsageText},
   ui::{
@@ -71,8 +76,12 @@ pub struct UsageToolbar {
   group: (Signal<bool>, ElementRef),
   /// *Custom…*'s range: whether it is open, its segment and the period control, which places it.
   custom: (Signal<bool>, ElementRef, ElementRef),
-  /// What a filter's menu searches for.
+  /// What a filter's menu searches for, the field it is typed in, the menu's keys while that field has the focus, and
+  /// whether the field is to take the focus (a menu just opened).
   search: Signal<String>,
+  search_field: ElementRef,
+  search_keys: MenuKeys,
+  focus_search: Signal<bool>,
 }
 
 impl Component for UsageToolbar {
@@ -80,18 +89,23 @@ impl Component for UsageToolbar {
 
   fn create(ctx: &mut Ctx) -> Self {
     let mut pair = || (ctx.signal(false), ElementRef::default());
+    let search_field = ElementRef::default();
     let toolbar = Self {
       filters: [pair(), pair(), pair(), pair(), pair(), pair()],
       group: pair(),
       custom: (ctx.signal(false), ElementRef::default(), ElementRef::default()),
       search: ctx.signal(String::new()),
+      search_keys: MenuKeys::new(search_field.clone()),
+      search_field,
+      focus_search: ctx.signal(false),
     };
-    // A menu opens on its whole list: what the last one searched for is forgotten.
+    // A menu opens on its whole list, its search taking the focus: what the last one searched for is forgotten.
     for (open, _) in &toolbar.filters {
-      let search = toolbar.search.clone();
+      let (search, focus) = (toolbar.search.clone(), toolbar.focus_search.clone());
       ctx.watch(open, move |open: &bool| {
         if *open {
           search.set(String::new());
+          focus.set(true);
         }
       });
     }
@@ -267,7 +281,13 @@ impl UsageToolbar {
     let mut popups = Vec::new();
     for (facet, (open, anchor)) in self.menus(props) {
       let panel = if open.get() {
-        filters::menu(ctx, props.dashboard.as_deref(), facet, &self.search, &props.requery)
+        let search = MenuSearch {
+          words: &self.search,
+          field: &self.search_field,
+          keys: &self.search_keys,
+          focus: &self.focus_search,
+        };
+        filters::menu(ctx, props.dashboard.as_deref(), facet, &search, &props.requery)
       } else {
         filters::closed(facet)
       };

@@ -18,6 +18,7 @@ use lurq::{
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  ui::{self, Styled},
 };
 
 use super::{
@@ -227,15 +228,16 @@ impl From<FilterChip> for Element {
   }
 }
 
-/// A filter's option `id` saying `label`, `chosen` or not, with its value's swatch where it has one (`u1ZxRL`);
-/// a press runs `toggle`, and the menu stays open. A `mono` label is an identifier, such as a model, in mono 11
+/// A filter's option `id` saying `label`, `chosen` or not, with its value's swatch where it has one (`u1ZxRL`): an
+/// item of lurq's menu that a choice, a press or Enter, toggles with `toggle` and leaves the menu open
+/// (`MenuItem::keeps_open`); the arrows and typing reach it. A `mono` label is an identifier, such as a model, in mono 11
 /// (`claude-opus-5-5` `aQCL8`).
 pub fn filter_option(
   id: impl Into<Arc<str>>,
   (label, chosen, mono): (&str, bool, bool),
   swatch: Option<Element>,
   toggle: impl Fn() + Send + Sync + 'static,
-) -> Element {
+) -> ui::MenuItem {
   let id = id.into();
   let text = Text::new(label)
     .id(format!("{id}-label"))
@@ -248,10 +250,10 @@ pub fn filter_option(
     .nowrap()
     .flex(1.0)
     .min_width(Dimension::Px(0.0));
-  option_frame(&id, (label, chosen), swatch, toggle)
+  let row = option_frame(chosen, swatch)
     .height(Dimension::Px(ControlHeight::Md.value()))
-    .child(text)
-    .into()
+    .child(text);
+  option_item(&id, (label, chosen), row, toggle)
 }
 
 /// An option that says under its label what it chooses (*Earlier runs*, as *No account* in `EU0ex`), as tall as its
@@ -261,7 +263,7 @@ pub fn filter_option_explained(
   (label, detail, chosen): (&str, &str, bool),
   swatch: Option<Element>,
   toggle: impl Fn() + Send + Sync + 'static,
-) -> Element {
+) -> ui::MenuItem {
   let id = id.into();
   let words = Column::new()
     .flex(1.0)
@@ -279,11 +281,11 @@ pub fn filter_option_explained(
         .width(Dimension::Pct(100.0))
         .variant(TypographyStyle::Caption),
     );
-  option_frame(&id, (label, chosen), swatch, toggle)
+  let row = option_frame(chosen, swatch)
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
     .align_items(Alignment::Start)
-    .child(words)
-    .into()
+    .child(words);
+  option_item(&id, (label, chosen), row, toggle)
 }
 
 /// The heading of a group of options (`Group · Codex` `ezGJl`): its icon and name in 11/500 `text_muted`,
@@ -306,23 +308,13 @@ pub fn filter_group(id: impl Into<Arc<str>>, glyph: Icon, label: &str) -> Elemen
     .into()
 }
 
-/// An option's pressable row with its check and swatch; its words go after them.
-fn option_frame(
-  id: &Arc<str>,
-  (label, chosen): (&str, bool),
-  swatch: Option<Element>,
-  toggle: impl Fn() + Send + Sync + 'static,
-) -> lurq::components::Button {
-  pressable(toggle)
-    .id(id.clone())
+/// An option's row with its check and swatch; its words go after them.
+fn option_frame(chosen: bool, swatch: Option<Element>) -> Row {
+  Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .rounded(RadiusSize::Sm)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .describe("a11y_name", label.to_owned())
-    .describe("checked", if chosen { "true" } else { "false" })
     .child(check_mark(chosen))
     .with_children(swatch.map(|swatch| {
       Row::new()
@@ -331,6 +323,23 @@ fn option_frame(
         .align_items(Alignment::Center)
         .child(swatch)
     }))
+}
+
+/// `row` as the menu's item `id`, checked while `chosen`; a choice runs `toggle` and keeps the menu open. Its root is
+/// the kit's menu row's: radius 4, the `hover` fill under the pointer and the keys.
+fn option_item(
+  id: &Arc<str>,
+  (label, chosen): (&str, bool),
+  row: Row,
+  toggle: impl Fn() + Send + Sync + 'static,
+) -> ui::MenuItem {
+  ui::MenuItem::new(label)
+    .id(id.clone())
+    .content(row)
+    .checked(chosen)
+    .keeps_open(true)
+    .on_select(toggle)
+    .describe("checked", if chosen { "true" } else { "false" })
 }
 
 /// A group heading's height (`ezGJl`), and the box an option's swatch sits in (`Swatch box` `eOYES`).

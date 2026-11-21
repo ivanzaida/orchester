@@ -13,9 +13,10 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
+  ui::{self, MenuKeys},
 };
 use orchester_workspace::usage::{Dashboard, Facet, FilterOption, ValueLabel};
 
@@ -31,7 +32,7 @@ use crate::{
     field::FieldInput,
     filter::{FilterChip, filter_group, filter_option, filter_option_explained},
     icon::{Icon, icon},
-    menu::{MenuPanel, filter_menu_panel, separator_line},
+    menu::{Entry, MenuPanel, filter_menu_panel, separator},
     skeleton::{self, Skeleton},
   },
 };
@@ -111,12 +112,22 @@ pub fn button_label(ctx: &Ctx, dashboard: Option<&Dashboard>, facet: Facet) -> (
   (label, true)
 }
 
-/// The menu of `facet`: its values to check, searchable when the list is long, or what it reads.
+/// What a filter's menu searches with: the words typed, the field they are typed in, the menu's keys while that field
+/// has the focus, and whether the field is to take the focus (as the menu opens).
+pub struct MenuSearch<'a> {
+  pub words: &'a Signal<String>,
+  pub field: &'a ElementRef,
+  pub keys: &'a MenuKeys,
+  pub focus: &'a Signal<bool>,
+}
+
+/// The menu of `facet`: its values to check, searchable when the list is long, or what it reads. A searchable menu
+/// keeps the focus in its search, where the arrows move through the values and Enter checks one.
 pub fn menu(
   ctx: &mut Ctx,
   dashboard: Option<&Dashboard>,
   facet: Facet,
-  search: &Signal<String>,
+  search: &MenuSearch<'_>,
   requery: &Requery,
 ) -> MenuPanel {
   let id = format!("{}-menu", facet_id(facet));
@@ -134,25 +145,31 @@ pub fn menu(
   }
   let options = dashboard.options(facet);
   let searchable = facet == Facet::Model || options.len() > SEARCH_FROM;
-  let query = search.get().to_lowercase();
-  let rows: Vec<Element> = options
+  let query = search.words.get().to_lowercase();
+  let rows: Vec<ui::MenuItem> = options
     .iter()
     .enumerate()
     .filter(|(_, option)| query.is_empty() || value_text(ctx, &option.label).to_lowercase().contains(&query))
     .map(|(index, option)| option_row(ctx, dashboard, (facet, index), option, requery))
     .collect();
   let empty = rows.is_empty().then(|| empty_line(ctx, &id, facet, options.is_empty()));
-  let field = searchable.then(|| {
-    FieldInput::new(format!("{id}-search"), ctx.t("usage.filters.search"), search.clone())
+  let width = if searchable { SEARCH_MENU_WIDTH } else { MENU_WIDTH };
+  let panel = filter_menu_panel(&id, width);
+  let panel = if searchable {
+    if search.focus.get_untracked() {
+      search.focus.set(false);
+      ctx.focus(search.field);
+    }
+    let field = FieldInput::new(format!("{id}-search"), ctx.t("usage.filters.search"), search.words.clone())
       .search()
       .placeholder(ctx.t("usage.filters.search"))
-      .render(ctx)
-  });
-  let width = if searchable { SEARCH_MENU_WIDTH } else { MENU_WIDTH };
-  filter_menu_panel(&id, width)
-    .with_children(field)
-    .with_children(rows)
-    .with_children(empty)
+      .element(search.field.clone())
+      .render(ctx);
+    panel.keeps_focus(search.keys).child(field)
+  } else {
+    panel
+  };
+  panel.with_children(rows).with_children(empty)
 }
 
 /// The menu of `facet` while it is closed: declared all the same, so that a press on its button switches to it from
@@ -167,7 +184,7 @@ fn option_row(
   (facet, index): (Facet, usize),
   option: &FilterOption,
   requery: &Requery,
-) -> Element {
+) -> ui::MenuItem {
   let label = match option.runs {
     Some(runs) => ctx.t_args(
       "usage.filters.tagRuns",
@@ -191,19 +208,22 @@ fn option_row(
 /// *Provider*'s menu (in the look of `Account menu` `JoCR3`): the agent providers as the Connections page lists them,
 /// by name, each with its series' swatch; then, past a line, *Earlier runs* and what it holds.
 fn provider_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Requery) -> MenuPanel {
-  let mut rows: Vec<Element> = vec![filter_group(
-    format!("{id}-group"),
-    Icon::Bot,
-    &ctx.t("usage.providers.heading"),
-  )];
+  let mut rows: Vec<Entry> = vec![
+    filter_group(
+      format!("{id}-group"),
+      Icon::Bot,
+      &ctx.t("usage.providers.heading"),
+    )
+    .into(),
+  ];
   for (index, option) in dashboard.options(Facet::Provider).into_iter().enumerate() {
     let (requery, query) = (requery.clone(), dashboard.toggled(Facet::Provider, &option.value));
     let choose = move || requery.show(query.clone());
     let option_id = format!("{}-option-{index}", facet_id(Facet::Provider));
     let swatch = option.series.map(series_swatch);
     if option.label == ValueLabel::Earlier {
-      rows.push(separator_line(ctx));
-      rows.push(filter_option_explained(
+      rows.push(separator());
+      rows.push(Entry::from(filter_option_explained(
         option_id,
         (
           &ctx.t("usage.providers.earlier"),
@@ -212,10 +232,10 @@ fn provider_menu(ctx: &mut Ctx, dashboard: &Dashboard, id: &str, requery: &Reque
         ),
         swatch,
         choose,
-      ));
+      )));
     } else {
       let label = value_text(ctx, &option.label);
-      rows.push(filter_option(option_id, (&label, option.chosen, false), swatch, choose));
+      rows.push(filter_option(option_id, (&label, option.chosen, false), swatch, choose).into());
     }
   }
   filter_menu_panel(id, PROVIDER_MENU_WIDTH).with_children(rows)

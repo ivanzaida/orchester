@@ -148,4 +148,14 @@ impl Seeded {
     self.window.tree.tick_futures();
     self.window.pass();
   }
+
+  /// A key pressed where the focus is, and what the window does with it.
+  pub fn key(&mut self, key: &str) {
+    let tree = &mut self.window.tree;
+    tree.key_down(key.to_owned(), key.to_owned(), false, false, false);
+    tree.key_up(key.to_owned(), key.to_owned(), false, false, false);
+    self.window.pass();
+    self.window.tree.tick_futures();
+    self.window.pass();
+  }
 }
