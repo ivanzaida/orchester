@@ -10,19 +10,13 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Button, Text},
+  app::theme::TypographyStyle,
   core::ElementRef,
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::Element,
   ui::{Checkbox, Radio, Recipe, Styled, Switch},
 };
 
-use super::pressable::{Focus, inert, pressable};
-use crate::theme::{
-  DISABLED_OPACITY,
-  kit::toggle::{PLAIN_LABEL, RING_ROOM, SETTLED},
-};
+use crate::theme::kit::toggle::{PLAIN_LABEL, RING_ROOM, SETTLED};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToggleKind {
@@ -105,8 +99,8 @@ impl Toggle {
     self
   }
 
-  /// A checkbox's label wraps onto more lines within the parent's width, the box beside its first line: a label that
-  /// may be long, such as one that names a folder.
+  /// The label wraps onto more lines within the parent's width, the mark beside its first line: a label that may be
+  /// long, such as one that names a folder.
   pub fn wrap_label(mut self) -> Self {
     self.wrap_label = true;
     self
@@ -161,9 +155,6 @@ fn label_rules(style: Option<TypographyStyle>) -> Recipe {
 
 impl From<Toggle> for Element {
   fn from(mut toggle: Toggle) -> Self {
-    if toggle.wrap_label {
-      return wrapping(toggle);
-    }
     let change = toggle.change.take();
     let disabled = change.is_none();
     let wanted = move |value: bool| {
@@ -179,6 +170,7 @@ impl From<Toggle> for Element {
       ToggleKind::Checkbox => {
         let mut control = Checkbox::new(&label)
           .checked(toggle.on)
+          .label_wraps(toggle.wrap_label)
           .whole(true)
           .label_hidden(hidden)
           .disabled(disabled)
@@ -192,6 +184,7 @@ impl From<Toggle> for Element {
       ToggleKind::Radio => {
         let mut control = Radio::new(&label)
           .selected(toggle.on)
+          .label_wraps(toggle.wrap_label)
           .whole(true)
           .label_hidden(hidden)
           .disabled(disabled)
@@ -205,6 +198,7 @@ impl From<Toggle> for Element {
       ToggleKind::Switch => {
         let mut control = Switch::new(&label)
           .on(toggle.on)
+          .label_wraps(toggle.wrap_label)
           .whole(true)
           .label_hidden(hidden)
           .disabled(disabled)
@@ -217,46 +211,4 @@ impl From<Toggle> for Element {
       }
     }
   }
-}
-
-/// A checkbox whose label wraps onto more lines, the box beside its first line: lurq's checkbox keeps its label on
-/// one line, so the kit presses the whole and draws lurq's box alone (`<id>-box`) beside its own label.
-fn wrapping(toggle: Toggle) -> Element {
-  let wanted = !toggle.on;
-  let button = match toggle.change {
-    Some(change) => Focus::Keyboard
-      .apply(pressable(move || change(wanted)))
-      .describe("state", "enabled"),
-    None if toggle.settled => inert(Button::empty()).describe("state", "fixed"),
-    None => inert(Button::empty())
-      .opacity(DISABLED_OPACITY)
-      .describe("state", "fixed"),
-  };
-  let button = match toggle.element {
-    Some(element) => button.ref_element(element),
-    None => button,
-  };
-  let label = Text::new(&toggle.label).id(format!("{}-label", toggle.id));
-  let label = match toggle.label_style {
-    Some(style) => label.variant(style),
-    None => label
-      .variant(TypographyStyle::Description)
-      .color(PaletteColor::Foreground),
-  };
-  let mark = Checkbox::new(&toggle.label)
-    .checked(toggle.on)
-    .mark_only(true)
-    .id(format!("{}-box", toggle.id));
-  button
-    .id(toggle.id.to_string())
-    .width(Dimension::Pct(100.0))
-    .align_items(Alignment::Start)
-    .spacing(SpacingSize::Sm)
-    .rounded(RadiusSize::Sm)
-    .describe("kind", toggle.kind.name())
-    .describe("a11y_name", toggle.label.clone())
-    .describe("checked", if toggle.on { "true" } else { "false" })
-    .child(mark)
-    .child(label.flex(1.0).min_width(Dimension::Px(0.0)))
-    .into()
 }
