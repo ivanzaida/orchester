@@ -26,6 +26,17 @@ pub enum PopoverSide {
   BelowEnd,
 }
 
+impl PopoverSide {
+  /// lurq's placement of this side; lurq counts a popup's offset away from its anchor on every side.
+  const fn placement(self) -> Placement {
+    match self {
+      Self::Below => Placement::BottomStart,
+      Self::Above => Placement::TopStart,
+      Self::BelowEnd => Placement::BottomEnd,
+    }
+  }
+}
+
 /// The panel of a popover `width` wide with the element id `id`; add its content as children.
 pub fn popover_panel(id: &str, width: f32) -> Column {
   padded_popover_panel(
@@ -53,16 +64,9 @@ pub fn padded_popover_panel(id: &str, width: f32, padding: Padding) -> Column {
 /// (`theme::kit::popover`): the kit's panel is the popover's. The focus goes to the first control in it as it opens and
 /// back as it closes; a press outside or Esc closes it.
 pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> ui::Popover {
-  let gap = ExtraSpacing::Snug.value();
-  // Over its control it keeps the offset the engine's popup had: into the control, not away from it.
-  let (placement, offset) = match side {
-    PopoverSide::Below => (Placement::BottomStart, gap),
-    PopoverSide::Above => (Placement::TopStart, -gap),
-    PopoverSide::BelowEnd => (Placement::BottomEnd, gap),
-  };
   ui::Popover::new(open, anchor)
-    .placement(placement)
-    .offset(offset)
+    .placement(side.placement())
+    .offset(ExtraSpacing::Snug.role())
     .child(panel)
 }
 
@@ -70,16 +74,10 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
 /// opens it (a card's question). lurq's `ui::Popover` cannot be told so (it has no `switch_on_anchor_press`), so this
 /// stays the engine's `Popup`; a press outside or Esc closes it.
 pub fn popup_by_app(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> Popup {
-  let gap = ExtraSpacing::Snug.value();
-  let (placement, offset) = match side {
-    PopoverSide::Below => (Placement::BottomStart, gap),
-    PopoverSide::Above => (Placement::TopStart, -gap),
-    PopoverSide::BelowEnd => (Placement::BottomEnd, gap),
-  };
   Popup::new(anchor, panel)
     .open(open)
-    .placement(placement)
-    .offset(0.0, offset)
+    .placement(side.placement())
+    .offset(0.0, ExtraSpacing::Snug.value())
     .switch_on_anchor_press(false)
 }
 

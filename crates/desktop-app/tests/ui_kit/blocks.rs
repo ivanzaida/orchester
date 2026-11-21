@@ -408,6 +408,27 @@ fn a_popover_opens_6_under_its_control_14_over_and_16_beside_its_content() {
 }
 
 #[test]
+fn a_popover_over_its_control_stands_6_clear_of_it() {
+  let open = Signal::new(true);
+  let mut kit = Kit::show(move |ctx| {
+    let anchor = ctx.element_ref();
+    let panel = popover_panel("operations", 360.0).child(Text::new("Background operations"));
+    Column::new()
+      .padding(Padding::new().top(400.0))
+      .child(
+        Row::new()
+          .id("item")
+          .ref_element(anchor.clone())
+          .child(Text::new("2 running")),
+      )
+      .child(popover(anchor, open.clone(), PopoverSide::Above, panel))
+      .into()
+  });
+  let (item, panel) = (kit.bounds("item"), kit.bounds("operations"));
+  assert_close(gap_under(panel, item), 6.0, "over its control, never into it");
+}
+
+#[test]
 fn text_cut_to_its_room_keeps_its_whole_value_in_a_tooltip_that_wraps() {
   let title =
     "Explain an expired GitHub token in the connection inspector, offer to sign in again and say what changed";
