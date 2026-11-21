@@ -14,10 +14,11 @@ use lurq::{
     events::MouseEvent,
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Button, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, Style, dimension::Dimension, padding::Padding},
+  ui::{self, MenuKeys, Styled},
 };
 use orchester_ipc::browser::BrowserCommand;
 use parking_lot::Mutex;
@@ -32,7 +33,7 @@ use crate::{
   ui::{
     field::FieldInput,
     icon::{Icon, icon},
-    menu::{MenuPanel, menu_at_end, menu_panel, separator_line},
+    menu::{Entry, MenuPanel, menu_at_end, menu_panel, separator},
     pressable::{in_title_bar, pressable},
   },
 };
@@ -49,6 +50,8 @@ const MENU_ID: &str = "browser-overflow-menu";
 #[derive(Clone)]
 pub struct MenuFocus {
   filter: ElementRef,
+  /// The menu's keys while the filter has the focus: Up and Down move the active row, Enter shows its tab.
+  keys: MenuKeys,
   opened: Arc<Mutex<Option<Opened>>>,
 }
 
@@ -57,8 +60,10 @@ struct Opened(Option<ElementRef>);
 
 impl MenuFocus {
   pub fn new(ctx: &mut Ctx) -> Self {
+    let filter = ctx.element_ref();
     Self {
-      filter: ctx.element_ref(),
+      keys: MenuKeys::new(filter.clone()),
+      filter,
       opened: Arc::new(Mutex::new(None)),
     }
   }
@@ -181,24 +186,25 @@ impl Component for Overflow {
 impl Overflow {
   fn menu(&self, ctx: &mut Ctx, showing: &Showing, focus: &MenuFocus) -> MenuPanel {
     let filter = self.filter.get().to_lowercase();
-    let rows = |tabs: &[StripTab], offset: usize, ctx: &mut Ctx| -> Vec<Element> {
+    let rows = |tabs: &[StripTab], offset: usize, ctx: &mut Ctx| -> Vec<Entry> {
       let mut rows = Vec::new();
       for (index, tab) in tabs.iter().enumerate() {
         if filter.is_empty() || label(ctx, tab).to_lowercase().contains(&filter) {
-          rows.push(self.row(ctx, showing, tab, offset + index));
+          rows.push(self.row(ctx, showing, tab, offset + index).into());
         }
       }
       rows
     };
     let agents = rows(&showing.strip.agents, 0, ctx);
     let person = rows(&showing.strip.person, showing.strip.agents.len(), ctx);
-    let divider = (!agents.is_empty() && !person.is_empty()).then(|| separator_line(ctx));
+    let divider = (!agents.is_empty() && !person.is_empty()).then(separator);
     let none = (agents.is_empty() && person.is_empty()).then(|| {
-      Row::new()
+      let line = Row::new()
         .height(Dimension::Px(ControlHeight::Md.value()))
         .padding(Padding::horizontal(SpacingSize::Sm))
         .align_items(Alignment::Center)
-        .child(Text::new(&ctx.t("browser.overflow.none")).variant(TypographyStyle::Caption))
+        .child(Text::new(&ctx.t("browser.overflow.none")).variant(TypographyStyle::Caption));
+      Entry::from(line)
     });
     let field = FieldInput::new(
       "browser-overflow-filter",
@@ -210,21 +216,16 @@ impl Overflow {
     .element(focus.filter.clone())
     .render(ctx);
     // Rows of 28 one under another, as the frame's (`Row · …` in `P6RCw`).
-    let rows = Column::new()
-      .width(Dimension::Pct(100.0))
-      .with_children(agents)
-      .with_children(divider)
-      .with_children(person)
-      .with_children(none);
-    menu_panel(MENU_ID).width(MENU_WIDTH).child(field).child(
-      ScrollVertical::new(rows)
-        .width(Dimension::Pct(100.0))
-        .max_height(Dimension::Px(MENU_MAX_HEIGHT)),
-    )
+    let rows = agents.into_iter().chain(divider).chain(person).chain(none);
+    menu_panel(MENU_ID)
+      .width(MENU_WIDTH)
+      .keeps_focus(&focus.keys)
+      .child(field)
+      .scrolling(rows, (MENU_MAX_HEIGHT, None))
   }
 
-  /// A tab's row: its icon and dot, its label, its run, × under the pointer.
-  fn row(&self, ctx: &mut Ctx, showing: &Showing, tab: &StripTab, index: usize) -> Element {
+  /// A tab's row: its icon and dot, its label, its run, × under the pointer; an item of the menu that shows its tab.
+  fn row(&self, ctx: &mut Ctx, showing: &Showing, tab: &StripTab, index: usize) -> ui::MenuItem {
     let id = format!("browser-overflow-{index}");
     let run = match &tab.owner {
       Owner::Run { known: Some(known), .. } => Some(
@@ -251,22 +252,15 @@ impl Overflow {
         .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground))
     });
     let label = label(ctx, tab);
-    let (open, hooks, picked) = (self.open.clone(), showing.person.clone(), tab.id.clone());
+    let (hooks, picked) = (showing.person.clone(), tab.id.clone());
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
-    let row = pressable(move || {
-      open.set(false);
-      hooks.pick(&picked);
-    })
-    .id(id.clone())
-    .describe("a11y_name", label.clone())
-    .describe("chosen", if shown { "true" } else { "false" })
+    let row = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ControlHeight::Md.value()))
     .flex_shrink(0.0)
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
-    .rounded(RadiusSize::Sm)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .align_items(Alignment::Center)
     .on_mouse_enter(move || enter.set(Some(index)))
     .on_mouse_leave(move || {
       leave.update(|hovered| {
@@ -287,10 +281,15 @@ impl Overflow {
     )
     .with_children(run.map(|run| Text::new(&run).variant(ExtraTypography::Note.role()).nowrap()))
     .with_children(close);
-    if shown {
-      row.background(ExtraColor::Hover.role()).into()
+    let row = if shown {
+      row.rounded(RadiusSize::Sm).background(ExtraColor::Hover.role())
     } else {
-      row.into()
-    }
+      row
+    };
+    ui::MenuItem::new(&label)
+      .id(id)
+      .content(row)
+      .describe("chosen", if shown { "true" } else { "false" })
+      .on_select(move || hooks.pick(&picked))
   }
 }

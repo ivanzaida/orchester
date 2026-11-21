@@ -99,14 +99,21 @@ impl MenuPanel {
   }
 
   /// A section of the panel that scrolls past `max_height` (lurq's `Menu::scrolling`): its items are still the menu's,
-  /// reached by the arrows and by typing, the one the keys reach scrolled into view. Its rows stand 2 apart, as the
-  /// panel's do: lurq lays a section's content out with no gap of its own, so a 2 high spacer stands between them.
+  /// reached by the arrows and by typing, the one the keys reach scrolled into view. Its rows stand `gap` apart (the
+  /// panel's 2, a list's own, or none): lurq lays a section's content out with no gap of its own, so a spacer stands
+  /// between them.
   #[must_use]
-  pub fn scrolling(mut self, entries: impl IntoIterator<Item = impl Into<Entry>>, max_height: f32) -> Self {
+  pub fn scrolling(
+    mut self,
+    entries: impl IntoIterator<Item = impl Into<Entry>>,
+    (max_height, gap): (f32, Option<ExtraSpacing>),
+  ) -> Self {
     let mut spaced = Vec::new();
     for entry in entries {
-      if !spaced.is_empty() {
-        spaced.push(ui::MenuEntry::Element(row_gap()));
+      if let Some(gap) = gap
+        && !spaced.is_empty()
+      {
+        spaced.push(ui::MenuEntry::Element(row_gap(gap)));
       }
       spaced.push(entry.into().0);
     }
@@ -164,11 +171,11 @@ pub fn menu_panel(id: &str) -> MenuPanel {
   }
 }
 
-/// The 2 between two rows of a section that scrolls ([`MenuPanel::scrolling`]), as the panel's gap is.
-fn row_gap() -> Element {
+/// The room between two rows of a section that scrolls ([`MenuPanel::scrolling`]).
+fn row_gap(gap: ExtraSpacing) -> Element {
   Row::new()
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ExtraSpacing::Tight.value()))
+    .height(Dimension::Px(gap.value()))
     .into()
 }
 

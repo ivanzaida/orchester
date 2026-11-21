@@ -7,14 +7,14 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 
 use super::{
   icon::{Icon, icon},
-  menu::{MenuItem, menu, menu_panel, separator_line},
+  menu::{Entry, MenuItem, menu, menu_panel, separator},
   pressable::{Focus, pressable},
 };
 use crate::theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
@@ -131,20 +131,17 @@ impl Component for Picker {
     } = ctx.props::<PickerProps>().clone();
     let chosen = props.value.get();
     let trigger = self.trigger(&props, &chosen);
-    let mut rows = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Hair.role());
+    let mut rows: Vec<Entry> = Vec::new();
     for (index, choice) in props.choices.iter().enumerate() {
       if let Some((_, heading)) = headings.iter().find(|(at, _)| *at == index) {
-        rows = rows.child(
-          Text::new(heading)
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::MutedForeground)
-            .padding(SpacingSize::Sm),
-        );
+        let heading = Text::new(heading)
+          .variant(TypographyStyle::Caption)
+          .color(PaletteColor::MutedForeground)
+          .padding(SpacingSize::Sm);
+        rows.push(Element::from(heading).into());
       }
       if choice.separator {
-        rows = rows.child(separator_line(ctx));
+        rows.push(separator());
       }
       let id = format!("{}-option-{index}", props.id);
       let item = match &choice.unavailable {
@@ -176,7 +173,7 @@ impl Component for Picker {
       if choice.warning {
         item = item.warning_detail();
       }
-      rows = rows.child(item.render_scrolled(ctx, &props.open));
+      rows.push(item.render(ctx).into());
     }
     let panel = menu_panel(&format!("{}-menu", props.id))
       .width(if headings.is_empty() {
@@ -184,9 +181,7 @@ impl Component for Picker {
       } else {
         GROUPED_MENU_WIDTH
       })
-      .child(Element::from(
-        ScrollVertical::new(rows).max_height(Dimension::Px(MENU_MAX_HEIGHT)),
-      ));
+      .scrolling(rows, (MENU_MAX_HEIGHT, Some(ExtraSpacing::Hair)));
     Row::new().width(Dimension::Px(props.width)).child(trigger).child(menu(
       self.anchor.clone(),
       props.open.clone(),

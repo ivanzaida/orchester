@@ -291,7 +291,7 @@ impl FilterControl {
           ),
       );
     }
-    panel.scrolling(groups, OPTIONS_MAX_HEIGHT)
+    panel.scrolling(groups, (OPTIONS_MAX_HEIGHT, Some(ExtraSpacing::Tight)))
   }
 }
 
