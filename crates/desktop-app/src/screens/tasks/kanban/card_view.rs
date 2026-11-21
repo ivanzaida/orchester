@@ -22,7 +22,7 @@ use super::{
   card::{CardLook, CardModel, content},
   display::Display,
   drop::Dropping,
-  menu::{MenuHandles, card_menu},
+  menu::{Lists, card_menu},
 };
 use crate::{
   navigation::{Navigation, press::LinkPress},
@@ -56,9 +56,8 @@ pub struct CardView {
   hovered: Signal<bool>,
   open: Signal<bool>,
   anchor: ElementRef,
-  /// The menu's list (Move to, Priority or Tags) is open, beside the row that opened it.
-  list_open: Signal<bool>,
-  list_anchor: ElementRef,
+  /// The menu's lists (Move to, Priority and Tags), each beside the row that opens it.
+  lists: Lists,
   frame: ElementRef,
 }
 
@@ -67,31 +66,19 @@ impl Component for CardView {
 
   fn create(ctx: &mut Ctx) -> Self {
     let open = ctx.signal(false);
-    let list_open = ctx.signal(false);
     // The menu closed by a choice, a press outside or Esc: the board no longer holds it open.
     let (menu, task) = (BoardState::of(ctx).menu, ctx.props::<CardProps>().card.row.id);
-    let listed = menu.clone();
+    let lists = Lists::new(ctx, task, &menu);
     ctx.watch(&open, move |open: &bool| {
       if !*open && menu.get_untracked().0.is_some_and(|(held, _)| held == task) {
         menu.set(OpenMenu(None));
-      }
-    });
-    // The list closed by a press outside it or Esc: the menu shows its commands alone.
-    ctx.watch(&list_open, move |open: &bool| {
-      let listing = listed
-        .get_untracked()
-        .0
-        .is_some_and(|(held, page)| held == task && page != MenuPage::Commands);
-      if !*open && listing {
-        listed.set(OpenMenu(Some((task, MenuPage::Commands))));
       }
     });
     Self {
       hovered: ctx.signal(false),
       open,
       anchor: ElementRef::default(),
-      list_open,
-      list_anchor: ElementRef::default(),
+      lists,
       frame: ElementRef::default(),
     }
   }
@@ -106,10 +93,7 @@ impl Component for CardView {
     if held != self.open.get_untracked() {
       self.open.set(held);
     }
-    let listing = shown.is_some_and(|(_, page)| page != MenuPage::Commands);
-    if listing != self.list_open.get_untracked() {
-      self.list_open.set(listing);
-    }
+    self.lists.follow(shown.map(|(_, page)| page));
     let acting = props.menu && (self.hovered.get() || held);
     let more = acting.then(|| {
       let menu = state.menu.clone();
@@ -135,13 +119,7 @@ impl Component for CardView {
         .describe("state", "pending")
         .child(frame);
     }
-    let handles = MenuHandles {
-      open: &self.open,
-      anchor: &self.anchor,
-      list_open: &self.list_open,
-      list_anchor: &self.list_anchor,
-    };
-    let menu = held.then(|| card_menu(ctx, &props.card, &handles));
+    let menu = held.then(|| card_menu(ctx, &props.card, (&self.open, &self.anchor), &self.lists));
     let card = self.pressable(ctx, &props, frame);
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -237,11 +215,11 @@ impl CardView {
 fn frame(props: &CardProps, look: CardLook, parts: Column) -> Column {
   let (fill, stroke) = match () {
     () if look.lifted => (None, PaletteColor::Border),
-    () if look.waiting => (Some(PaletteColor::SurfacePanel), PaletteColor::BorderFocus),
-    () if look.selected => (Some(PaletteColor::AccentMuted), PaletteColor::Accent),
-    () if look.focused => (Some(PaletteColor::SurfacePanel), PaletteColor::BorderFocus),
+    () if look.waiting => (Some(PaletteColor::Canvas), PaletteColor::Ring),
+    () if look.selected => (Some(PaletteColor::Highlight), PaletteColor::Primary),
+    () if look.focused => (Some(PaletteColor::Canvas), PaletteColor::Ring),
     () if props.card.highlighted => (Some(PaletteColor::InfoMuted), PaletteColor::Border),
-    () => (Some(PaletteColor::SurfacePanel), PaletteColor::Border),
+    () => (Some(PaletteColor::Canvas), PaletteColor::Border),
   };
   let pending = if props.pending { "-pending" } else { "" };
   let frame = Column::new()
@@ -249,7 +227,7 @@ fn frame(props: &CardProps, look: CardLook, parts: Column) -> Column {
     .width(Dimension::Pct(100.0))
     .rounded(RadiusSize::Md)
     .border(Border::inside(BorderSize::Sm, stroke))
-    .hovered_style(Style::new().border_inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .hovered_style(Style::new().border_inside(BorderSize::Sm, PaletteColor::Input))
     .child(parts.opacity(if look.lifted { 0.0 } else { 1.0 }));
   let frame = match fill {
     Some(fill) => frame.background(fill),
@@ -269,8 +247,8 @@ pub fn lifted_frame(parts: Column) -> Column {
     .id("tasks-board-lifted")
     .width(Dimension::Pct(100.0))
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .box_shadow(lurq::app::theme::ShadowStyle::Md)
     .child(parts)
 }

@@ -57,7 +57,7 @@ impl Said {
     Self {
       state,
       glyph,
-      toned_label: tone != PaletteColor::TextMuted,
+      toned_label: tone != PaletteColor::MutedForeground,
       tone,
       label,
       hint,
@@ -124,7 +124,7 @@ fn said(ctx: &mut Ctx, facts: &UpdatesFacts, parts: &Parts) -> Said {
     UpdateState::UpToDate { checked_at } => up_to_date(ctx, facts, (&channel, *checked_at), parts),
     UpdateState::Checking => Said::new(
       "checking",
-      (Icon::LoaderCircle, PaletteColor::TextMuted),
+      (Icon::LoaderCircle, PaletteColor::MutedForeground),
       ctx.t("settings.general.updates.checking.label").to_string(),
       ctx
         .t_args("settings.general.updates.checking.hint", [("channel", channel)])
@@ -151,7 +151,7 @@ fn said(ctx: &mut Ctx, facts: &UpdatesFacts, parts: &Parts) -> Said {
     UpdateState::InstallFailed { version, failure } => {
       let said = Said::new(
         "install-failed",
-        (Icon::CircleX, PaletteColor::Danger),
+        (Icon::CircleX, PaletteColor::Destructive),
         ctx
           .t_args(
             "settings.general.updates.installFailed.label",
@@ -254,7 +254,7 @@ fn download(ctx: &mut Ctx, (version, received, total): (&str, u64, u64), paused:
   };
   let mut said = Said::new(
     state,
-    (Icon::Download, PaletteColor::TextMuted),
+    (Icon::Download, PaletteColor::MutedForeground),
     label.to_string(),
     hint.to_string(),
   )
@@ -385,7 +385,7 @@ fn failed(ctx: &Ctx, version: &str, failure: UpdateFailure, parts: &Parts) -> Sa
   .press(parts.on(UpdateAction::CheckNow));
   Said::new(
     "failed",
-    (Icon::CircleX, PaletteColor::Danger),
+    (Icon::CircleX, PaletteColor::Destructive),
     ctx.t_args(label, [("version", version.to_owned())]).to_string(),
     ctx.t(hint).to_string(),
   )
@@ -407,7 +407,7 @@ fn unreachable(ctx: &mut Ctx, last_checked: Option<Timestamp>, parts: &Parts) ->
   );
   Said::new(
     "unreachable",
-    (Icon::CloudOff, PaletteColor::TextMuted),
+    (Icon::CloudOff, PaletteColor::MutedForeground),
     ctx.t("settings.general.updates.unreachable.label").to_string(),
     hint.to_string(),
   )
@@ -459,7 +459,7 @@ fn not_this_copy(ctx: &Ctx, reason: CopyReason, newest: Option<&NewestRelease>, 
   };
   let said = Said::new(
     "not-this-copy",
-    (Icon::Info, PaletteColor::TextMuted),
+    (Icon::Info, PaletteColor::MutedForeground),
     ctx.t("settings.general.updates.notThisCopy.label").to_string(),
     hint.to_string(),
   );
@@ -470,7 +470,7 @@ fn not_this_copy(ctx: &Ctx, reason: CopyReason, newest: Option<&NewestRelease>, 
 fn not_on_this_platform(ctx: &Ctx, newest: Option<&NewestRelease>, parts: &Parts) -> Said {
   let said = Said::new(
     "not-on-this-platform",
-    (Icon::Info, PaletteColor::TextMuted),
+    (Icon::Info, PaletteColor::MutedForeground),
     ctx.t("settings.general.updates.otherPlatform.label").to_string(),
     ctx.t("settings.general.updates.otherPlatform.hint").to_string(),
   );

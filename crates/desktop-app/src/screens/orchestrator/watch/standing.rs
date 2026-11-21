@@ -44,7 +44,7 @@ pub(in crate::screens::orchestrator) fn line(
   (event, now): (&StandingEvent, Option<&ModuleNow>),
   (at, project): (Option<Timestamp>, ProjectId),
 ) -> Element {
-  let starts = (Icon::CirclePlay, PaletteColor::TextMuted);
+  let starts = (Icon::CirclePlay, PaletteColor::MutedForeground);
   let persons = (Icon::CircleAlert, PaletteColor::Warning);
   let (glyph, aside, place) = match &event.raised {
     Raised::CanStart { .. } => (starts, Some(ctx.t("orchestrator.standing.canStart")), None),

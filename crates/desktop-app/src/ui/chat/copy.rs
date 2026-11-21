@@ -183,7 +183,7 @@ impl MessageActions {
     let (glyph, color, key) = match self.copied.get() {
       Copied::Not => (Icon::Copy, self.color(Action::Copy), "ui.chat.copyMessage"),
       Copied::Done => (Icon::Check, PaletteColor::Success, "ui.copied"),
-      Copied::Failed => (Icon::TriangleAlert, PaletteColor::Danger, "ui.copyFailed"),
+      Copied::Failed => (Icon::TriangleAlert, PaletteColor::Destructive, "ui.copyFailed"),
     };
     let words = ctx.t(key);
     let (copied, reset) = (self.copied.clone(), self.reset.clone());
@@ -210,7 +210,7 @@ impl MessageActions {
       }
       Err(why) => {
         // A held action takes no hover colour: its glyph stays `text_secondary`, at half.
-        let glyph = icon(action.icon(), IconSize::Md, PaletteColor::TextSecondary).opacity(DISABLED_OPACITY);
+        let glyph = icon(action.icon(), IconSize::Md, ExtraColor::TextSecondary.role()).opacity(DISABLED_OPACITY);
         held(self.button(props, action, (label, why), glyph), why)
       }
     }
@@ -219,17 +219,16 @@ impl MessageActions {
   /// `text_primary` for the glyph of the button the pointer is on, else `text_secondary`.
   fn color(&self, action: Action) -> PaletteColor {
     if self.pointed.get() == Some(action) {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     }
   }
 
   /// The button of `action` with `glyph`, named `name`, saying `tip` in its tooltip while that shows: the `hover` fill
   /// under the pointer, which alone presses it (never a Tab stop, no focus ring); the line knows whether the pointer
-  /// is on it. The tooltip is the button's own child, out of the layout and always laid out, seen only while it shows:
-  /// a press under the pointer reaches the button it began on even when the pointer's arrival redraws the line in the
-  /// same frame.
+  /// is on it. The tooltip is the button's own child, out of the layout and taking no pointer: a press under the
+  /// pointer reaches the button it began on even when the pointer's arrival redraws the line in the same frame.
   fn button(
     &self,
     props: &MessageActionsProps,
@@ -243,7 +242,7 @@ impl MessageActions {
       Edge::End => Placement::Bottom,
     };
     let tooltip = Tooltip::new(format!("{}-{}", props.id, action.key()), tip.clone()).hung(
-      anchor.clone(),
+      &anchor,
       placement,
       self.tipped(props.hovered) == Some(action),
     );

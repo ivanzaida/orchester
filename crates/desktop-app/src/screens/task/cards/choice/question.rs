@@ -119,13 +119,13 @@ fn asked(ctx: &mut Ctx, shown: &Shown<'_>, index: usize) -> Element {
     return text.render(ctx);
   }
   let text = text
-    .style(CardsText::Asked.role(), PaletteColor::TextPrimary)
+    .style(CardsText::Asked.role(), PaletteColor::Foreground)
     .render(ctx);
   Column::new()
     .id(format!("{id}-asked-{index}"))
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Sm)
     .child(text)

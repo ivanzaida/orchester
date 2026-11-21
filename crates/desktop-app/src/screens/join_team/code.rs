@@ -71,7 +71,7 @@ fn address(ctx: &mut Ctx, join: &CodeJoin, refusal: Option<&CodeRefusal>) -> Ele
   let input = input.render(ctx);
   let mut part = field(&format!("{ID}-address-field"), Some(&label), input, None);
   if invalid {
-    part = part.child(field_error(
+    part = part.below(field_error(
       &format!("{ID}-address-invalid"),
       &ctx.t("startup.join.code.addressInvalid"),
     ));
@@ -94,7 +94,7 @@ fn code(ctx: &mut Ctx, join: &CodeJoin, refusal: Option<&CodeRefusal>) -> Elemen
   let input = input.render(ctx);
   if wrong {
     return field(&format!("{ID}-code-field"), Some(&label), input, None)
-      .child(field_error(&format!("{ID}-wrong"), &ctx.t("startup.join.code.wrong")))
+      .below(field_error(&format!("{ID}-wrong"), &ctx.t("startup.join.code.wrong")))
       .into();
   }
   let hint = ctx.t("startup.join.code.hint");

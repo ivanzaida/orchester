@@ -43,11 +43,11 @@ fn by_id_row(ctx: &Ctx) -> Row {
   let id = "team-hub-secret-by-id";
   let value = fill::input_box(
     &format!("{id}-field"),
-    (Icon::Lock, PaletteColor::TextMuted),
+    (Icon::Lock, PaletteColor::MutedForeground),
     Text::new(&ctx.t("team_hub.tool.cannotFill"))
       .id(format!("{id}-words"))
       .variant(HubText::Value.role())
-      .color(PaletteColor::TextMuted),
+      .color(PaletteColor::MutedForeground),
   );
   let sub = Sub {
     words: ctx.t("team_hub.tool.cannotFillSub"),

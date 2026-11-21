@@ -22,7 +22,7 @@ use lurq::{
 
 use super::line::{Chip, ChipTone, chip_element};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -39,7 +39,7 @@ pub(super) fn frame(id: &str, outcome: &'static str, widens: bool) -> Column {
   let stroke = if widens {
     PaletteColor::Warning
   } else {
-    PaletteColor::BorderStrong
+    PaletteColor::Input
   };
   Column::new()
     .id(id.to_owned())
@@ -48,7 +48,7 @@ pub(super) fn frame(id: &str, outcome: &'static str, widens: bool) -> Column {
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Lg)
 }
@@ -64,7 +64,7 @@ pub(super) fn head(ctx: &mut Ctx, id: &str, (glyph, question): (Icon, &str), tar
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary).flex_shrink(0.0))
+    .child(icon(glyph, IconSize::Md, ExtraColor::TextSecondary.role()).flex_shrink(0.0))
     .child(
       Text::new(question)
         .id(format!("{id}-title"))
@@ -105,12 +105,12 @@ pub(super) fn quote(id: &str, words: &str) -> Column {
         .top(ExtraSpacing::Tight.role())
         .bottom(ExtraSpacing::Tight.role()),
     )
-    .border_left(Border::inside(BorderSize::Md, PaletteColor::BorderStrong))
+    .border_left(Border::inside(BorderSize::Md, PaletteColor::Input))
     .child(
       Text::new(words)
         .id(format!("{id}-quote-text"))
         .variant(ExtraTypography::Lead.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .selectable(true)
         .width(Dimension::Pct(100.0)),
     )
@@ -169,7 +169,7 @@ pub(super) fn actions(ctx: &Ctx, id: &str, buttons: Vec<Element>) -> Row {
         .flex_shrink(0.0)
         .spacing(ExtraSpacing::Pair.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
+        .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground))
         .child(
           Text::new(&ctx.t("orchestrator.decision.onlyYou"))
             .variant(ExtraTypography::Note.role())

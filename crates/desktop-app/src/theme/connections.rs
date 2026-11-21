@@ -8,7 +8,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::style;
+use super::{palette::text_secondary, typography::style};
 
 /// Text of Connections.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,14 +68,14 @@ impl ConnectionsText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.text_muted),
-      Self::InspectorTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::ConfirmTitle | Self::CompactName => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::CompactStatus => style(11.5, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
-      Self::CompactLine => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::TestLead => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
-      Self::TestCell => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
+      Self::ColumnHeading => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.muted_foreground),
+      Self::InspectorTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::ConfirmTitle | Self::CompactName => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::CompactStatus => style(11.5, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
+      Self::CompactLine => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::TestLead => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.muted_foreground),
+      Self::TestCell => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
     }
   }
 }

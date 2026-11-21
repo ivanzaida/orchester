@@ -58,7 +58,7 @@ fn card(ctx: &Ctx, facts: &BarFacts) -> FactsCard {
   lines.push(fact(ctx, "version", "shell.status.health.version", version(ctx)));
   FactsCard {
     id: "status-health-card".into(),
-    dot: (PaletteColor::Success, PaletteColor::TextPrimary),
+    dot: (PaletteColor::Success, PaletteColor::Foreground),
     state: project.map(|project| {
       let since = project.runner.online_since.map(|since| {
         ctx

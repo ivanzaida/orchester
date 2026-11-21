@@ -109,7 +109,7 @@ impl More {
       .border(Border::inside(
         BorderSize::Sm,
         if open {
-          PaletteColor::BorderStrong
+          PaletteColor::Input
         } else {
           PaletteColor::Border
         },
@@ -117,7 +117,7 @@ impl More {
       .hovered_style(
         Style::new()
           .background(ExtraColor::Hover.role())
-          .border_inside(BorderSize::Sm, PaletteColor::BorderStrong),
+          .border_inside(BorderSize::Sm, PaletteColor::Input),
       )
       .child(
         Text::new(&ctx.t_args("orchestrator.leads.more", [("count", folded.len().to_string())]))
@@ -164,7 +164,7 @@ impl More {
           Text::new(&ctx.t_args("orchestrator.leads.stopFailed", [("reason", &*reason)]))
             .id(format!("{id}-refused"))
             .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .width(Dimension::Pct(100.0)),
         )
     });
@@ -174,8 +174,8 @@ impl More {
       .padding(ExtraSpacing::Snug.role())
       .spacing(ExtraSpacing::Tight.role())
       .rounded(RadiusSize::Md)
-      .background(PaletteColor::SurfaceRaised)
-      .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+      .background(PaletteColor::Card)
+      .border_inside(BorderSize::Sm, PaletteColor::Input)
       .child(head)
       .with_children(rows)
       .with_children(refused);
@@ -222,7 +222,11 @@ impl More {
       .spacing(SpacingSize::Sm)
       .rounded(RadiusSize::Sm)
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(icon(target_icon(target), IconSize::Base, PaletteColor::TextSecondary))
+      .child(icon(
+        target_icon(target),
+        IconSize::Base,
+        ExtraColor::TextSecondary.role(),
+      ))
       .child(
         Text::new(&name)
           .id(format!("{id}-name"))

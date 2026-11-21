@@ -14,7 +14,7 @@ fn archive_roles_follow_the_design() {
       1.35,
       FontWeight::SemiBold,
       "Geist",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       ArchiveText::Body,
@@ -22,7 +22,7 @@ fn archive_roles_follow_the_design() {
       1.5,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       ArchiveText::Heading,
@@ -30,7 +30,7 @@ fn archive_roles_follow_the_design() {
       1.45,
       FontWeight::SemiBold,
       "Geist",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       ArchiveText::Name,
@@ -38,7 +38,7 @@ fn archive_roles_follow_the_design() {
       1.45,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       ArchiveText::Holder,
@@ -46,7 +46,7 @@ fn archive_roles_follow_the_design() {
       1.45,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       ArchiveText::Version,
@@ -54,7 +54,7 @@ fn archive_roles_follow_the_design() {
       1.45,
       FontWeight::Normal,
       "Geist Mono",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       ArchiveText::Note,
@@ -62,7 +62,7 @@ fn archive_roles_follow_the_design() {
       1.5,
       FontWeight::Normal,
       "Geist",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
   ] {
     let style = theme.typography_style(role.role());

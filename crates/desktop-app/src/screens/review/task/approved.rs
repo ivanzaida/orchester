@@ -70,7 +70,7 @@ pub(super) fn status(ctx: &Ctx, env: &Env, approved: &ApprovedRun) -> Element {
       Text::new(&meta(ctx, approved))
         .id("review-status-meta")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

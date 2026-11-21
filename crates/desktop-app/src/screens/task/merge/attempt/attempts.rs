@@ -154,7 +154,7 @@ fn row(
     Text::new(&attempt_via(ctx, attempt, run))
       .id(format!("{id}-via"))
       .variant(ExtraTypography::Property.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap(),
   )
   .child(Column::new().flex(1.0))
@@ -168,7 +168,7 @@ fn row(
       .nowrap()
       .text_overflow(TextOverflow::Elipsis),
   )
-  .child(icon(chevron, IconSize::Md, PaletteColor::TextMuted));
+  .child(icon(chevron, IconSize::Md, PaletteColor::MutedForeground));
   if !last {
     row = row.border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border));
   }

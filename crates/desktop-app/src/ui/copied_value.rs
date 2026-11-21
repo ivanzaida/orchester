@@ -111,11 +111,15 @@ impl Component for CopiedValueView {
       Copied::Not => (Icon::Copy, props.label.to_string(), None),
       Copied::Done => {
         let words = ctx.t("ui.copied").to_string();
-        (Icon::Check, words.clone(), Some((words, PaletteColor::TextMuted)))
+        (Icon::Check, words.clone(), Some((words, PaletteColor::MutedForeground)))
       }
       Copied::Failed => {
         let words = ctx.t("ui.copyFailed").to_string();
-        (Icon::CircleAlert, words.clone(), Some((words, PaletteColor::Danger)))
+        (
+          Icon::CircleAlert,
+          words.clone(),
+          Some((words, PaletteColor::Destructive)),
+        )
       }
     };
     let button = IconButton::new(format!("{}-copy", props.id), glyph, label).small();

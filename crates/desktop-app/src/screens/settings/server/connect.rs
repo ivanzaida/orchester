@@ -234,7 +234,7 @@ impl ConnectBlock {
       .child(
         Text::new(&ctx.t("settings.automation.connect.scope.label"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted),
+          .color(PaletteColor::MutedForeground),
       )
       .child(segmented(
         "settings-mcp-connect-scope",

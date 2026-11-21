@@ -248,16 +248,16 @@ impl Fields {
               .id("instruction-targets-value")
               .variant(TypographyStyle::Description)
               .color(if named {
-                PaletteColor::TextPrimary
+                PaletteColor::Foreground
               } else {
-                PaletteColor::TextMuted
+                PaletteColor::MutedForeground
               })
               .nowrap()
               .text_overflow(TextOverflow::Elipsis)
               .width(Dimension::Px(0.0))
               .flex(1.0),
           )
-          .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted))
+          .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::MutedForeground))
       });
     Row::new()
       .width(width)
@@ -270,7 +270,7 @@ impl Fields {
       .border_inside(
         BorderSize::Sm,
         if invalid {
-          PaletteColor::Danger
+          PaletteColor::Destructive
         } else {
           PaletteColor::Border
         },

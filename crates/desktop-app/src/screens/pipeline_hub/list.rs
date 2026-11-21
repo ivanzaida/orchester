@@ -47,7 +47,7 @@ pub(super) fn list(ctx: &mut Ctx, listing: &Listing, shown: &Shown<'_>, first: O
     let archived: Vec<&Entry> = listing.shown(shown.filter).collect();
     vec![section_of(
       ctx,
-      ("archived", "pipeline_hub.group.archived", PaletteColor::TextMuted),
+      ("archived", "pipeline_hub.group.archived", PaletteColor::MutedForeground),
       archived,
       shown,
     )]
@@ -84,6 +84,6 @@ fn section_of(ctx: &mut Ctx, name: (&str, &str, PaletteColor), entries: Vec<&Ent
 const fn named(group: Group) -> (&'static str, &'static str, PaletteColor) {
   match group {
     Group::NeedsYouHere => ("needs", "pipeline_hub.group.needs", PaletteColor::Warning),
-    Group::Ready | Group::OffHere => ("ready", "pipeline_hub.group.ready", PaletteColor::TextMuted),
+    Group::Ready | Group::OffHere => ("ready", "pipeline_hub.group.ready", PaletteColor::MutedForeground),
   }
 }

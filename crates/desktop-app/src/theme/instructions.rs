@@ -6,6 +6,8 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle, VerticalAlign},
 };
 
+use super::palette::text_secondary;
+
 /// Prompt body cCFTK: baseline inset below the toolbar.
 pub fn prompt_top() -> SpacingSize {
   SpacingSize::extra("instructions_prompt_top")
@@ -61,7 +63,7 @@ pub fn token_style(unavailable: bool) -> lurq::components::InputTokenStyle {
   let (text, fill) = if unavailable {
     (PaletteColor::Warning, PaletteColor::WarningMuted)
   } else {
-    (PaletteColor::TextPrimary, super::ExtraColor::Pressed.role())
+    (PaletteColor::Foreground, super::ExtraColor::Pressed.role())
   };
   lurq::components::InputTokenStyle::new(text, fill)
     .padding(token_padding())
@@ -82,46 +84,52 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
   [
     (
       Arc::from("instructions_viewer_keycap"),
-      mono(style(10.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
+      mono(style(10.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground)),
     ),
     (
       Arc::from("instructions_variable_name"),
-      mono(style(12.0, FontWeight::Normal, 4.0 / 3.0, 0.0, palette.text_primary)),
+      mono(style(12.0, FontWeight::Normal, 4.0 / 3.0, 0.0, palette.foreground)),
     ),
     (
       Arc::from("instructions_detail_value"),
-      mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_primary)),
+      mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.foreground)),
     ),
     (
       Arc::from("instructions_detail_description"),
-      style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
+      style(12.0, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
     ),
     (
       Arc::from("instructions_variable_value"),
-      mono(style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted)),
+      mono(style(11.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground)),
     ),
     (
       Arc::from("instructions_prompt"),
-      mono(style(12.0, FontWeight::Normal, 1.666667, 0.0, palette.text_secondary)),
+      mono(style(12.0, FontWeight::Normal, 1.666667, 0.0, text_secondary(palette))),
     ),
     (
       Arc::from("instructions_source"),
       TextStyle {
         vertical_align: VerticalAlign::LineBox,
-        ..mono(style(12.0, FontWeight::Normal, 1.666667, 0.0, palette.text_primary))
+        ..mono(style(12.0, FontWeight::Normal, 1.666667, 0.0, palette.foreground))
       },
     ),
     (
       Arc::from("instructions_gutter"),
-      mono(style(11.0, FontWeight::Normal, 20.0 / 11.0, 0.0, palette.text_muted)),
+      mono(style(
+        11.0,
+        FontWeight::Normal,
+        20.0 / 11.0,
+        0.0,
+        palette.muted_foreground,
+      )),
     ),
     (
       Arc::from("instructions_rule_name"),
-      style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
+      style(12.5, FontWeight::Medium, 1.3, 0.0, palette.foreground),
     ),
     (
       Arc::from("instructions_overline"),
-      mono(style(10.5, FontWeight::Normal, 1.4, 0.6, palette.text_muted)),
+      mono(style(10.5, FontWeight::Normal, 1.4, 0.6, palette.muted_foreground)),
     ),
   ]
   .into_iter()

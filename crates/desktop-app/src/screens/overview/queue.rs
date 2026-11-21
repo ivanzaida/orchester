@@ -39,7 +39,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView},
   services::Services,
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -78,19 +78,19 @@ pub(super) fn queue(
       let task: TaskKey = queued.key.parse().expect("a task's key reads back as a task key");
       let id = format!("overview-queue-{}", queued.key);
       let row = line(&id, LINE_HEIGHT, SpacingSize::Md)
-        .child(icon(Icon::Clock3, IconSize::Md, PaletteColor::TextMuted))
+        .child(icon(Icon::Clock3, IconSize::Md, PaletteColor::MutedForeground))
         .child(key(&queued.key))
         .child(title(
           &format!("{id}-title"),
           &queued.title,
           ExtraTypography::Strong.role(),
-          PaletteColor::TextPrimary,
+          PaletteColor::Foreground,
         ))
         .child(
           Text::new(&message_text(ctx, &queued.reason.message(&separator)))
             .id(format!("{id}-why"))
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap(),
         )
         .child(

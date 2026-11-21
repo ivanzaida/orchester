@@ -193,7 +193,7 @@ impl Link {
     let mut rows: Vec<Element> = match listed {
       None => vec![
         SettingRow::new("sharing-projects-reading", ctx.t("sharing.link.reading"))
-          .label_color(PaletteColor::TextSecondary)
+          .label_color(ExtraColor::TextSecondary.role())
           .render(ctx),
       ],
       Some(Err(reason)) => vec![
@@ -203,7 +203,7 @@ impl Link {
       ],
       Some(Ok(listed)) if listed.0.is_empty() => vec![
         SettingRow::new("sharing-projects-none", ctx.t("sharing.link.noProjects"))
-          .label_color(PaletteColor::TextSecondary)
+          .label_color(ExtraColor::TextSecondary.role())
           .render(ctx),
       ],
       Some(Ok(listed)) => listed
@@ -390,7 +390,7 @@ fn remote_words(ctx: &Ctx, props: &Props, picked: Option<&SharedProject>) -> (Ic
   let Some(project) = picked else {
     return (
       Icon::Info,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("sharing.link.remote.choose").to_string(),
     );
   };
@@ -427,12 +427,12 @@ fn remote_words(ctx: &Ctx, props: &Props, picked: Option<&SharedProject>) -> (Ic
     ),
     RemoteMatch::NoOrigin => (
       Icon::GitBranch,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("sharing.link.remote.noOriginBody").to_string(),
     ),
     RemoteMatch::NoHint => (
       Icon::Info,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("sharing.link.remote.noHint").to_string(),
     ),
   }

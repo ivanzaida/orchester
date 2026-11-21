@@ -11,6 +11,7 @@ use lurq::{
   components::{Column, Row, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::CardPart,
 };
 
 use super::parts::{hint, paragraph};
@@ -18,7 +19,7 @@ use crate::{
   clipboard::copy_for_a_minute,
   mcp::input_gate::{InputGate, TokenShown},
   services::Services,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterSpacing, OrchesterText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterSpacing, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -35,8 +36,8 @@ pub(super) fn code_box(id: &str, code: &str) -> Row {
     .padding(Padding::symmetric(OrchesterSpacing::CodeSide.role(), SpacingSize::Md))
     .justify(Justify::Center)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(ExtraColor::InputSurface.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(lurq::app::theme::RadiusSize::Md)
     .child(
       Text::new(code)
@@ -170,9 +171,9 @@ impl Component for ShownCode {
     let done = ActionButton::new("orchester-pairing-done", ButtonKind::Ghost, ctx.t("cloud.pairing.done"))
       .on_click(move || done());
     card("orchester-pairing", CardSurface::Outline)
-      .rounded(ExtraRadius::Tile.role())
+      .style(CardPart::Root, |style| style.radius(ExtraRadius::Tile.role()))
       .padding(SpacingSize::Lg)
-      .spacing(SpacingSize::Md)
+      .gap(SpacingSize::Md)
       .child(
         Text::new(&ctx.t_args("cloud.pairing.title", [("server", shown.server.as_str())]))
           .variant(ExtraTypography::Strong.role()),
@@ -215,7 +216,7 @@ fn check_code_box(id: &str, code: &str) -> Row {
       ExtraSpacing::Loose.role(),
     ))
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(lurq::app::theme::RadiusSize::Md)
     .child(

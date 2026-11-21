@@ -87,10 +87,10 @@ impl Component for BrowserLine {
     .child(
       Text::new(&ctx.t("summary.browser.show"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap(),
     )
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextPrimary));
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::Foreground));
     Row::new()
       .id("task-browser")
       .describe("tabs", count.to_string())
@@ -100,7 +100,7 @@ impl Component for BrowserLine {
       .align_items(Alignment::Center)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
-      .child(icon(Icon::Globe, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Globe, IconSize::Base, PaletteColor::MutedForeground))
       .child(
         Text::new(&ctx.t("summary.browser.title"))
           .id("task-browser-title")

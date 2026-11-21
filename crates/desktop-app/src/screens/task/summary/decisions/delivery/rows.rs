@@ -23,7 +23,7 @@ use orchester_workspace::{
 
 use super::super::stages::stage_chip;
 use crate::{
-  theme::{DeliveryText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DeliveryText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -40,37 +40,47 @@ pub(super) struct Look {
 }
 
 impl Look {
-  pub(super) const DONE: Self = Self {
-    glyph: Icon::CircleCheck,
-    color: PaletteColor::Success,
-    title: PaletteColor::TextPrimary,
-    detail: PaletteColor::TextSecondary,
-  };
-  pub(super) const WORKING: Self = Self {
-    glyph: Icon::LoaderCircle,
-    color: PaletteColor::TextSecondary,
-    title: PaletteColor::TextPrimary,
-    detail: PaletteColor::TextSecondary,
-  };
-  pub(super) const PENDING: Self = Self {
-    glyph: Icon::CircleDashed,
-    color: PaletteColor::TextMuted,
-    title: PaletteColor::TextMuted,
-    detail: PaletteColor::TextSecondary,
-  };
+  pub(super) fn done() -> Self {
+    Self {
+      glyph: Icon::CircleCheck,
+      color: PaletteColor::Success,
+      title: PaletteColor::Foreground,
+      detail: ExtraColor::TextSecondary.role(),
+    }
+  }
+  pub(super) fn working() -> Self {
+    Self {
+      glyph: Icon::LoaderCircle,
+      color: ExtraColor::TextSecondary.role(),
+      title: PaletteColor::Foreground,
+      detail: ExtraColor::TextSecondary.role(),
+    }
+  }
+  pub(super) fn pending() -> Self {
+    Self {
+      glyph: Icon::CircleDashed,
+      color: PaletteColor::MutedForeground,
+      title: PaletteColor::MutedForeground,
+      detail: ExtraColor::TextSecondary.role(),
+    }
+  }
   /// What failed says why in `danger` too (`ZOr8X`, `NILKO` in `e7geY3`).
-  pub(super) const FAILED: Self = Self {
-    glyph: Icon::CircleX,
-    color: PaletteColor::Danger,
-    title: PaletteColor::TextPrimary,
-    detail: PaletteColor::Danger,
-  };
-  pub(super) const CONFLICTED: Self = Self {
-    glyph: Icon::GitCompareArrows,
-    color: PaletteColor::TextSecondary,
-    title: PaletteColor::TextPrimary,
-    detail: PaletteColor::TextSecondary,
-  };
+  pub(super) fn failed() -> Self {
+    Self {
+      glyph: Icon::CircleX,
+      color: PaletteColor::Destructive,
+      title: PaletteColor::Foreground,
+      detail: PaletteColor::Destructive,
+    }
+  }
+  pub(super) fn conflicted() -> Self {
+    Self {
+      glyph: Icon::GitCompareArrows,
+      color: ExtraColor::TextSecondary.role(),
+      title: PaletteColor::Foreground,
+      detail: ExtraColor::TextSecondary.role(),
+    }
+  }
 }
 
 /// A line of the verification: `title` over `detail`, `end` at its end.
@@ -132,27 +142,31 @@ fn delivery_check(ctx: &Ctx, id: &str, check: &DeliveryCheck, (base, integrator)
         (0, _) => "delivery.task.check.resynced",
         _ => "delivery.task.check.syncedConflicts",
       };
-      let look = if *conflicts > 0 { Look::CONFLICTED } else { Look::DONE };
+      let look = if *conflicts > 0 {
+        Look::conflicted()
+      } else {
+        Look::done()
+      };
       check_row(id, look, (&sync_title, &ctx.t_args(key, args)), Some(&clock(*at)))
     }
     DeliveryCheck::Integrating { files, since } => {
       let title = ctx.t_args("delivery.task.check.integrate", [("integrator", integrator)]);
       let detail = ctx.t_args("delivery.task.check.integrating", [("count", files.to_string())]);
-      check_row(id, Look::WORKING, (&title, &detail), Some(&clock(*since)))
+      check_row(id, Look::working(), (&title, &detail), Some(&clock(*since)))
     }
     DeliveryCheck::Integrated { files } => {
       let title = ctx.t_args("delivery.task.check.integrate", [("integrator", integrator)]);
       let detail = ctx.t_args("delivery.task.check.integrated", [("count", files.to_string())]);
-      check_row(id, Look::DONE, (&title, &detail), None)
+      check_row(id, Look::done(), (&title, &detail), None)
     }
     DeliveryCheck::Checking { base: revision, since } => {
       let detail = ctx.t_args("delivery.task.check.checking", [("time", clock(*since))]);
       let end = format!("{base} {}", short_revision(revision.as_str()));
-      check_row(id, Look::WORKING, (&check_title, &detail), Some(&end))
+      check_row(id, Look::working(), (&check_title, &detail), Some(&end))
     }
     DeliveryCheck::CheckWaits => check_row(
       id,
-      Look::PENDING,
+      Look::pending(),
       (&check_title, &ctx.t("delivery.task.check.waits")),
       None,
     ),
@@ -161,19 +175,19 @@ fn delivery_check(ctx: &Ctx, id: &str, check: &DeliveryCheck, (base, integrator)
     } => {
       let detail = ctx.t_args("delivery.task.check.passed", [("tool", tool.as_str())]);
       let end = format!("{base} {}", short_revision(revision.as_str()));
-      check_row(id, Look::DONE, (&check_title, &detail), Some(&end))
+      check_row(id, Look::done(), (&check_title, &detail), Some(&end))
     }
     DeliveryCheck::CheckFailed {
       base: revision, tool, ..
     } => {
       let detail = ctx.t_args("delivery.task.check.failed", [("tool", tool.as_str())]);
       let end = format!("{base} {}", short_revision(revision.as_str()));
-      check_row(id, Look::FAILED, (&check_title, &detail), Some(&end))
+      check_row(id, Look::failed(), (&check_title, &detail), Some(&end))
     }
     DeliveryCheck::Approved { at } => {
       let title = ctx.t("delivery.task.check.approval");
       let detail = ctx.t_args("delivery.task.check.approved", [("time", clock(*at))]);
-      check_row(id, Look::DONE, (&title, &detail), None)
+      check_row(id, Look::done(), (&title, &detail), None)
     }
   }
 }
@@ -192,7 +206,7 @@ pub(super) fn conflict_row(id: &str, look: Look, path: &str, state: &str) -> Ele
     .child(
       Text::new(state)
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .into()
@@ -222,7 +236,7 @@ pub(super) fn stages(ctx: &Ctx, run: &RunView, delivery: Option<&RunDelivery>, s
   let mut chips = vec![stage_chip(
     "task-stage-passed",
     (Some(&range), &passed),
-    (done(), PaletteColor::TextSecondary, PaletteColor::Border),
+    (done(), ExtraColor::TextSecondary.role(), PaletteColor::Border),
   )];
   if let Some(integrate) = delivery.and_then(integrate_look) {
     let (glyph, name, stroke) = integrate;
@@ -234,8 +248,8 @@ pub(super) fn stages(ctx: &Ctx, run: &RunView, delivery: Option<&RunDelivery>, s
   }
   let deliver = match stage {
     Stage::Working => (
-      (Icon::LoaderCircle, PaletteColor::TextPrimary),
-      PaletteColor::TextPrimary,
+      (Icon::LoaderCircle, PaletteColor::Foreground),
+      PaletteColor::Foreground,
       PaletteColor::Border,
     ),
     Stage::Waiting => (
@@ -243,7 +257,7 @@ pub(super) fn stages(ctx: &Ctx, run: &RunView, delivery: Option<&RunDelivery>, s
       PaletteColor::Warning,
       PaletteColor::Warning,
     ),
-    Stage::Done => (done(), PaletteColor::TextSecondary, PaletteColor::Border),
+    Stage::Done => (done(), ExtraColor::TextSecondary.role(), PaletteColor::Border),
   };
   let number = format!("{:02}", steps + 1);
   chips.push(stage_chip(
@@ -271,18 +285,18 @@ fn integrate_look(delivery: &RunDelivery) -> Option<ChipLook> {
     .any(|recorded| matches!(recorded.event, QueueEvent::IntegrateStarted { .. }));
   match &delivery.entry.state {
     QueueState::Integrating { .. } => Some((
-      (Icon::LoaderCircle, PaletteColor::TextPrimary),
-      PaletteColor::TextPrimary,
+      (Icon::LoaderCircle, PaletteColor::Foreground),
+      PaletteColor::Foreground,
       PaletteColor::Border,
     )),
     QueueState::Left(orchester_core::merge_queue::Left::Conflicts { .. }) => Some((
-      (Icon::CircleX, PaletteColor::Danger),
-      PaletteColor::Danger,
-      PaletteColor::Danger,
+      (Icon::CircleX, PaletteColor::Destructive),
+      PaletteColor::Destructive,
+      PaletteColor::Destructive,
     )),
     _ if integrated => Some((
       (Icon::CircleCheck, PaletteColor::Success),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       PaletteColor::Border,
     )),
     _ => None,

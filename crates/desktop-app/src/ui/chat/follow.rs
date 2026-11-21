@@ -24,7 +24,7 @@ use lurq::{
 use parking_lot::Mutex;
 
 use crate::{
-  theme::{ConversationShadow, ExtraRadius, ExtraSpacing, IconSize},
+  theme::{ConversationShadow, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -274,11 +274,11 @@ impl Follow {
       .height(Dimension::Px(JUMP_HEIGHT))
       .padding_horizontal(SpacingSize::Md)
       .spacing(ExtraSpacing::Snug.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .rounded(ExtraRadius::Full.role())
       .box_shadow(ConversationShadow::Jump.role())
-      .child(icon(Icon::ArrowDown, IconSize::Base, PaletteColor::TextSecondary))
+      .child(icon(Icon::ArrowDown, IconSize::Base, ExtraColor::TextSecondary.role()))
       .child(Text::new(&label).variant(TypographyStyle::Label).nowrap());
     Row::new().padding_bottom(SpacingSize::Sm).child(button).into()
   }

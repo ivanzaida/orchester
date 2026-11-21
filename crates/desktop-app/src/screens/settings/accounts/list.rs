@@ -7,7 +7,7 @@
 use lurq::{
   app::{ctx::Ctx, theme::TypographyStyle},
   components::{Column, Row},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::account::{AccountCli, AccountState, AgentAccount};
 
@@ -63,7 +63,7 @@ pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work) -> Column {
       ),
       None => count,
     };
-    let mut rows: Vec<Element> = accounts
+    let mut rows: Vec<_> = accounts
       .into_iter()
       .map(|account| row(ctx, parts, account, &navigation))
       .collect();
@@ -114,10 +114,11 @@ fn add_menu(ctx: &mut Ctx, work: &Work, navigation: &Navigation) -> Element {
       )
       .icon(Icon::Cloud),
     ];
-    let panel = items.into_iter().fold(
-      menu_panel("settings-add-menu").width(Dimension::Px(ADD_MENU_WIDTH)),
-      |panel, item| panel.child(item.render(ctx, &open)),
-    );
+    let panel = items
+      .into_iter()
+      .fold(menu_panel("settings-add-menu").width(ADD_MENU_WIDTH), |panel, item| {
+        panel.child(item.render(ctx))
+      });
     menu_at_end(anchor, open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()
@@ -139,7 +140,7 @@ pub(in crate::screens::settings) fn reading(ctx: &mut Ctx) -> Element {
     .iter()
     .enumerate()
     .map(|(index, (cli, accounts))| {
-      let rows: Vec<Element> = accounts
+      let rows: Vec<_> = accounts
         .iter()
         .enumerate()
         .map(|(at, (name, line, state))| {

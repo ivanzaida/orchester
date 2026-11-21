@@ -11,7 +11,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// Text of Settings › Orchester.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,15 +73,15 @@ impl OrchesterText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::FormTitle => style(18.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::PageTitle => style(22.0, FontWeight::SemiBold, 1.3, -0.3, palette.text_primary),
-      Self::StepTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::StepNumber => style(10.5, FontWeight::SemiBold, 1.0, 0.0, palette.text_inverse),
-      Self::Code => mono(style(24.0, FontWeight::Medium, 1.3, 3.0, palette.text_primary)),
-      Self::CheckCode => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
-      Self::InviteTitle => style(13.0, FontWeight::Medium, 1.45, 0.0, palette.text_primary),
-      Self::Address => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::CardTitle => style(12.5, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::FormTitle => style(18.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::PageTitle => style(22.0, FontWeight::SemiBold, 1.3, -0.3, palette.foreground),
+      Self::StepTitle => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::StepNumber => style(10.5, FontWeight::SemiBold, 1.0, 0.0, palette.primary_foreground),
+      Self::Code => mono(style(24.0, FontWeight::Medium, 1.3, 3.0, palette.foreground)),
+      Self::CheckCode => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.foreground)),
+      Self::InviteTitle => style(13.0, FontWeight::Medium, 1.45, 0.0, palette.foreground),
+      Self::Address => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::CardTitle => style(12.5, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
     }
   }
 }

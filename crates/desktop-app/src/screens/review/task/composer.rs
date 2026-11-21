@@ -13,7 +13,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextInput},
   core::Signal,
@@ -35,7 +35,7 @@ use super::{
   words::lines,
 };
 use crate::{
-  theme::{ExtraSpacing, ReviewText},
+  theme::{ExtraSpacing, ReviewText, TextRole},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -89,8 +89,8 @@ pub(super) fn new_box(ctx: &mut Ctx, env: &Env) -> Element {
     .id("review-composer")
     .describe("kind", kind.as_str())
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Ring))
     .rounded(RadiusSize::Md)
     .on_key_down(keys(send, {
       let state = env.state.clone();
@@ -151,8 +151,8 @@ pub(super) fn in_thread_box(ctx: &mut Ctx, env: &Env, view: &ThreadView, what: I
     .id(id.clone())
     .describe("kind", kind.as_str())
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Ring))
     .rounded(RadiusSize::Md)
     .on_key_down(keys(send, {
       let state = env.state.clone();
@@ -188,21 +188,21 @@ fn head(ctx: &Ctx, env: &Env, composing: &Composing, kind: ThreadKind) -> Row {
     .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(mode)
     .child(
       Text::new(&lines(ctx, composing.span))
         .id("review-composer-lines")
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .child(Row::new().flex(1.0))
     .child(
       Text::new(&ctx.t("review_page.composer.new"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
 }
@@ -234,7 +234,7 @@ fn kind_switch(ctx: &Ctx, id: &str, chosen: &Signal<Held<ThreadKind>>, kind: Thr
     .height(Dimension::Px(HEAD_HEIGHT))
     .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(segmented(
       &format!("{id}-kind"),
@@ -256,7 +256,7 @@ fn placeholder(ctx: &Ctx, kind: ThreadKind) -> Arc<str> {
 fn field(ctx: &Ctx, (id, at): (&str, &BoxField), value: &Signal<String>, placeholder: &Arc<str>) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
-    FormTextRole {
+    TextRole {
       typography: ReviewText::Message.role(),
       color,
     }
@@ -267,10 +267,10 @@ fn field(ctx: &Ctx, (id, at): (&str, &BoxField), value: &Signal<String>, placeho
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Sm))
     .child(
-      TextInput::styled(value.clone(), resolve(PaletteColor::TextPrimary))
-        .placeholder_style(resolve(PaletteColor::TextMuted))
+      TextInput::styled(value.clone(), resolve(PaletteColor::Foreground))
+        .placeholder_style(resolve(PaletteColor::MutedForeground))
         .placeholder(placeholder)
-        .caret_color(PaletteColor::TextPrimary)
+        .caret_color(PaletteColor::Foreground)
         .id(id.to_owned())
         .describe("a11y_name", placeholder.clone())
         .width(Dimension::Pct(100.0))
@@ -302,7 +302,7 @@ fn foot(
       Text::new(hint)
         .id(format!("{id}-hint"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

@@ -11,6 +11,7 @@ use lurq::{
 
 use super::{
   Mode,
+  palette::text_secondary,
   typography::{mono, style},
 };
 
@@ -92,12 +93,12 @@ impl BrowserText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::SwitcherInitial => style(10.5, FontWeight::SemiBold, 1.35, 0.0, palette.text_secondary),
-      Self::Address => mono(style(12.0, FontWeight::Normal, 1.35, 0.0, palette.text_primary)),
-      Self::DialogMessage => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
-      Self::AgentTag => style(11.0, FontWeight::Medium, 1.25, 0.0, palette.text_inverse),
-      Self::FileHintTitle => style(13.0, FontWeight::Medium, 1.35, 0.0, palette.text_primary),
-      Self::FileHintLine => style(12.0, FontWeight::Normal, 1.35, 0.0, palette.text_secondary),
+      Self::SwitcherInitial => style(10.5, FontWeight::SemiBold, 1.35, 0.0, text_secondary(palette)),
+      Self::Address => mono(style(12.0, FontWeight::Normal, 1.35, 0.0, palette.foreground)),
+      Self::DialogMessage => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.foreground),
+      Self::AgentTag => style(11.0, FontWeight::Medium, 1.25, 0.0, palette.primary_foreground),
+      Self::FileHintTitle => style(13.0, FontWeight::Medium, 1.35, 0.0, palette.foreground),
+      Self::FileHintLine => style(12.0, FontWeight::Normal, 1.35, 0.0, text_secondary(palette)),
     }
   }
 }

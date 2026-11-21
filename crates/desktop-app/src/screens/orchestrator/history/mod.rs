@@ -262,7 +262,7 @@ pub(super) fn panel(
     .id("orchestrator-history-panel")
     .width(Dimension::Px(WIDTH))
     .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .box_shadow(OrchestratorShadow::History.role())
     .child(head)
@@ -449,16 +449,16 @@ fn foot(ctx: &Ctx, rows: &Rows, archived: usize) -> Column {
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(Icon::Archive, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Archive, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("orchestrator.historyPanel.archived"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(Text::new(&archived.to_string()).variant(ExtraTypography::MonoNote.role()))
     .child(Row::new().flex(1.0))
-    .child(icon(Icon::ChevronRight, IconSize::Base, PaletteColor::TextMuted));
+    .child(icon(Icon::ChevronRight, IconSize::Base, PaletteColor::MutedForeground));
   foot
     .padding(
       Padding::new()
@@ -566,7 +566,7 @@ fn heading(ctx: &Ctx, heading: Heading) -> Element {
     )
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .with_children((heading == Heading::Pinned).then(|| icon(Icon::Pin, IconSize::Xs, PaletteColor::TextMuted)))
+    .with_children((heading == Heading::Pinned).then(|| icon(Icon::Pin, IconSize::Xs, PaletteColor::MutedForeground)))
     .child(Text::new(&ctx.t(heading.key())).variant(OrchestratorText::Eyebrow.role()))
     .into()
 }

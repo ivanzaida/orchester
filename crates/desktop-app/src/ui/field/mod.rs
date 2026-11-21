@@ -8,10 +8,11 @@ mod number;
 mod select;
 
 use lurq::{
-  app::theme::{PaletteColor, TypographyStyle},
-  components::{Column, Row, Text},
+  app::theme::PaletteColor,
+  components::{Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
+  ui::Field,
 };
 
 pub use self::{
@@ -22,23 +23,20 @@ pub use self::{
 use super::icon::{Icon, icon};
 use crate::theme::{ExtraSpacing, ExtraTypography, IconSize};
 
-/// `label` over `control` and `hint` under it, as wide as their parent; the hint's element id is
-/// `<id>-hint`. A control's error is its own ([`FieldInput::error`]).
-pub fn field(id: &str, label: Option<&str>, control: impl Into<Element>, hint: Option<&str>) -> Column {
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Snug.role())
-    .with_children(label.map(|label| {
-      Text::new(label)
-        .id(format!("{id}-label"))
-        .variant(TypographyStyle::FieldLabel)
-    }))
-    .child(control)
-    .with_children(hint.map(|hint| {
-      Text::new(hint)
-        .id(format!("{id}-hint"))
-        .variant(TypographyStyle::Caption)
-    }))
+/// lurq's `ui::Field` (`theme::kit::field`): `label` over `control` and `hint` under it, as wide as their parent; the
+/// label's element id is `<id>-label` and the hint's `<id>-description`. A control's error is its own
+/// ([`FieldInput::error`]); what the caller puts under the field goes in [`Field::below`].
+pub fn field(id: &str, label: Option<&str>, control: impl Into<Element>, hint: Option<&str>) -> Field {
+  let control: Element = control.into();
+  let field = match label {
+    Some(label) => Field::new(label, control),
+    None => Field::unlabeled(control),
+  }
+  .id(id.to_owned());
+  match hint {
+    Some(hint) => field.description(hint),
+    None => field,
+  }
 }
 
 /// Why a value is not accepted (`Field error` `d5xipm`), under the field or action it is about. It is as
@@ -50,12 +48,12 @@ pub fn field_error(id: &str, text: &str) -> Row {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("role", "field-error")
-    .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Danger).flex_shrink(0.0))
+    .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Destructive).flex_shrink(0.0))
     .child(
       Text::new(text)
         .id(format!("{id}-text"))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

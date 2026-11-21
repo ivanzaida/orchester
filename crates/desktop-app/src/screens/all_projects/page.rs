@@ -28,7 +28,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
-  theme::{ExtraSpacing, IconSize, ProjectsSpacing, ProjectsText, UsageSpacing},
+  theme::{ExtraColor, ExtraSpacing, IconSize, ProjectsSpacing, ProjectsText, UsageSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -240,7 +240,7 @@ fn tabs(ctx: &mut Ctx, usage: bool) -> Element {
     usage,
     navigation.to(Route::Usage(Box::default())),
   );
-  page_tabs(ctx, "all-projects-tabs", [projects, usage]).into()
+  page_tabs(ctx, "all-projects-tabs", [projects, usage])
 }
 
 /// Why an action of the page did nothing (`FV5pQ`).
@@ -254,10 +254,10 @@ pub(super) fn error_line(id: &str, failure: &str) -> Element {
     ))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
-    .child(icon(Icon::CircleAlert, IconSize::Lg, PaletteColor::TextSecondary))
+    .child(icon(Icon::CircleAlert, IconSize::Lg, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(failure)
         .id(format!("{id}-text"))

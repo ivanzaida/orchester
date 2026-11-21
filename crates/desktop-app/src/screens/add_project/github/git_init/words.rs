@@ -31,8 +31,8 @@ pub(super) fn head(ctx: &Ctx, shown: &Shown, failed: bool) -> Head {
   };
   Head {
     glyph: Icon::CircleX,
-    mark: PaletteColor::Danger,
-    color: PaletteColor::Danger,
+    mark: PaletteColor::Destructive,
+    color: PaletteColor::Destructive,
     status,
     title: ctx.t(title),
     // git is not optional.
@@ -55,7 +55,7 @@ pub(super) fn properties(
   (shown, folder): (&Shown, &Path),
   surveyed: Option<&Result<Survey, SurveyError>>,
 ) -> Vec<Property> {
-  let danger = Value::Text(PaletteColor::Danger);
+  let danger = Value::Text(PaletteColor::Destructive);
   let git = match shown {
     Shown::Missing => ctx.t("setup.git.value.notFound"),
     Shown::NotRepository => ctx.t("setup.github.value.noGitRepository"),
@@ -78,8 +78,8 @@ pub(super) fn properties(
 /// out, or that they could not be counted.
 fn files_value(ctx: &Ctx, surveyed: Option<&Result<Survey, SurveyError>>) -> (Arc<str>, PaletteColor) {
   let survey = match surveyed {
-    None => return (ctx.t("setup.git.value.counting"), PaletteColor::TextMuted),
-    Some(Err(_)) => return (ctx.t("setup.git.value.filesUnknown"), PaletteColor::TextMuted),
+    None => return (ctx.t("setup.git.value.counting"), PaletteColor::MutedForeground),
+    Some(Err(_)) => return (ctx.t("setup.git.value.filesUnknown"), PaletteColor::MutedForeground),
     Some(Ok(survey)) => survey,
   };
   let value = match (survey.files, survey.gitignore) {
@@ -89,7 +89,7 @@ fn files_value(ctx: &Ctx, surveyed: Option<&Result<Survey, SurveyError>>) -> (Ar
     (count, true) => ctx.t_args("setup.git.value.filesIgnored", [("count", count.to_string())]),
     (count, false) => ctx.t_args("setup.git.value.files", [("count", count.to_string())]),
   };
-  (value, PaletteColor::TextPrimary)
+  (value, PaletteColor::Foreground)
 }
 
 /// What the block says under its properties (`wzrTC`, `C4H7IK`, `b5Cd2c`).

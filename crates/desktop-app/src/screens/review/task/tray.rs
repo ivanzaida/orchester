@@ -95,8 +95,8 @@ pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
     .padding(Padding::horizontal(SpacingSize::Lg))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(RadiusSize::Md)
     .child(icon(glyph, IconSize::Nav, color))
     .child(
@@ -113,7 +113,7 @@ pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
         )
         .with_children(under.map(|under| {
           Truncated::new("review-tray-detail", under, TypographyStyle::Description)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .render(ctx)
         })),
     )
@@ -138,7 +138,7 @@ fn words(ctx: &Ctx, tray: &Tray) -> (Icon, PaletteColor, Arc<str>, PaletteColor,
         ("review_page.tray.unsentOne", "review_page.tray.unsentOther"),
         *count,
       ),
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       Some(if *count == 1 {
         ctx.t("review_page.tray.whatOne")
       } else {
@@ -153,18 +153,18 @@ fn words(ctx: &Ctx, tray: &Tray) -> (Icon, PaletteColor, Arc<str>, PaletteColor,
         ("review_page.tray.unsentOne", "review_page.tray.unsentOther"),
         *count,
       ),
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       Some(ctx.t("review_page.tray.waits")),
     ),
     Tray::Sending(count) => (
       Icon::LoaderCircle,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       counted(
         ctx,
         ("review_page.tray.sendingOne", "review_page.tray.sendingOther"),
         *count,
       ),
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       None,
     ),
     Tray::Failed(failure) => {

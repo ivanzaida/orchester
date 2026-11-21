@@ -210,7 +210,7 @@ fn ready_header(ctx: &mut Ctx, (project, shown): (ProjectId, &TeamModule), tab: 
     let facts = Text::new(&words::facts(ctx, details, shown.progress, forecast))
       .id("module-facts")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap();
     status.push(facts.into());
   }
@@ -247,11 +247,11 @@ fn unavailable_header(
     .id("module-team-unavailable-since")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::CloudOff, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::CloudOff, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     );
   header::header(header::Header {
@@ -326,7 +326,7 @@ fn running_line(ctx: &Ctx, project: &ShownProject, tasks: Option<&TeamTasks>) ->
       .padding(Padding::vertical(ExtraSpacing::Tight.role()))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Info, IconSize::Base, PaletteColor::MutedForeground))
       .child(
         Text::new(&words)
           .id("module-team-running-text")

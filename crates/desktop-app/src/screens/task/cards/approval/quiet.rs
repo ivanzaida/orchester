@@ -33,24 +33,24 @@ pub(crate) fn line(ctx: &Ctx, id: &str, card: &ApprovalCard, more: Option<(usize
   let (glyph, tint, lead) = match answer.kind {
     AnswerKind::Profile => (
       Icon::ListChecks,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "cards.approval.quiet.profile",
     ),
     AnswerKind::Reviewer => (
       Icon::ShieldCheck,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "cards.approval.quiet.reviewer",
     ),
     // The setting's own glyph and color (`triangle-alert` in `danger`, `T4bbC`), so its answers never pass for the
     // others'.
     AnswerKind::DangerousAutoApprove => (
       Icon::TriangleAlert,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       "cards.approval.quiet.dangerous",
     ),
     AnswerKind::Autopilot | AnswerKind::Person => (
       Icon::CheckCheck,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "cards.approval.quiet.autopilot",
     ),
   };

@@ -11,7 +11,7 @@ use lurq::{
   },
 };
 
-use super::typography::style;
+use super::{palette::text_secondary, typography::style};
 
 /// The list's scrollbar (`Scrollbar` `f8jPq` in `List` `f2sV4`): 3 wide, radius 2, 4 from the list's side and 6 from
 /// its top and bottom, over the rows.
@@ -63,12 +63,12 @@ impl AgentPickerText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Group => style(11.0, FontWeight::Normal, 1.2, 0.0, palette.text_muted),
-      Self::Name => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
-      Self::Runs => style(11.5, FontWeight::Normal, 1.2, 0.0, palette.text_muted),
-      Self::Foot => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
-      Self::FieldName => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::FieldRuns => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::Group => style(11.0, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground),
+      Self::Name => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.foreground),
+      Self::Runs => style(11.5, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground),
+      Self::Foot => style(12.0, FontWeight::Normal, 1.2, 0.0, text_secondary(palette)),
+      Self::FieldName => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::FieldRuns => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
     }
   }
 }

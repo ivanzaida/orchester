@@ -29,7 +29,7 @@ use crate::{
   navigation::Navigation,
   queries::Kept,
   routes::{ProjectPage, ProjectSettingsTab, Route},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -227,14 +227,18 @@ fn how_added(ctx: &Ctx) -> Element {
       ExtraSpacing::Inline.role(),
     ))
     .spacing(ExtraSpacing::Fine.role())
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(
       Row::new()
         .spacing(ExtraSpacing::TextArea.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::ShieldCheck, IconSize::Base, PaletteColor::TextSecondary))
+        .child(icon(
+          Icon::ShieldCheck,
+          IconSize::Base,
+          ExtraColor::TextSecondary.role(),
+        ))
         .child(Text::new(&ctx.t("project_settings.approveForProject")).variant(ExtraTypography::Strong.role())),
     )
     .child(Text::new(&ctx.t("project_settings.approveForProjectCovers")).variant(ExtraTypography::Note.role()));
@@ -243,7 +247,7 @@ fn how_added(ctx: &Ctx) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Lg)
     .child(Text::new(&ctx.t("project_settings.howRuleAdded")).variant(ExtraTypography::OptionTitle.role()))
     .child(

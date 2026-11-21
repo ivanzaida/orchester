@@ -1,33 +1,28 @@
-//! What a tab shows in the strip and in the tab list alike: its label, the mark of a project that needs
-//! the person or has an unresolved failure, whether its task form holds edits that are not saved, and
-//! its close button. A project that waits for the person marks each of its tabs, the active one too, with a
-//! ✋ and how many wait, the count of its Needs you, as the Needs you panel counts a project (`Count` `ruG7r` in
-//! `o3xekF`; the design's tab mark `Tab/attention` `iJNwr` draws the hand without its count).
+//! What a tab shows: its label and icon, the mark of a project that needs the person or has an unresolved
+//! failure, and whether its task form holds edits that are not saved. A project that waits for the person marks each of
+//! its tabs, the active one too, with a ✋ and how many wait, the count of its Needs you, as the Needs you panel counts
+//! a project (`Count` `ruG7r` in `o3xekF`; the design's tab mark `Tab/attention` `iJNwr` draws the hand without its
+//! count).
 
 use lurq::{
   app::{
     ctx::Ctx,
-    events::MouseEvent,
-    theme::{PaletteColor, RadiusSize, SpacingSize},
+    theme::{PaletteColor, SpacingSize},
   },
-  components::{Button, Row, Text},
+  components::{Row, Text},
   layout::Alignment,
-  node::{CursorIcon, Element, Style},
+  node::Element,
 };
 
 use super::tab_fit::{MARK_WIDTH, badge_width};
 use crate::{
-  navigation::{
-    Navigation,
-    tabs::{Tab, TabId},
-  },
+  navigation::tabs::Tab,
   project::Projects,
   routes::{ProjectPage, Route, Screen},
   shell::needs_you::{self, Attention, count_words},
-  theme::{ExtraColor, IconSize, NeedsYouText},
+  theme::{IconSize, NeedsYouText},
   ui::{
     icon::{Icon, file_icon, icon, screen_icon},
-    pressable::in_title_bar,
     tooltip::Tooltip,
   },
 };
@@ -43,13 +38,13 @@ pub fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab, id: String) -> O
     Attention::Waiting(count) => (Icon::Hand, PaletteColor::Warning, count_words(ctx, count), "needs-you"),
     Attention::RunnerOffline => (
       Icon::CircleAlert,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       ctx.t("shell.tabs.runnerOffline").to_string(),
       "runner-offline",
     ),
     Attention::TasksUnread => (
       Icon::CircleAlert,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       ctx.t("shell.tabs.tasksUnread").to_string(),
       "tasks-unread",
     ),
@@ -82,7 +77,7 @@ pub fn attention(ctx: &mut Ctx, projects: &Projects, tab: &Tab, id: String) -> O
   Some(Tooltip::new(id, text).wrap(ctx, marker))
 }
 
-/// The room `tab`'s mark ([`attention`]) takes, with the gap before it; none without one.
+/// The room `tab`'s mark takes with the gap before it, as [`attention`] draws it; none without one.
 pub fn mark_width(projects: &Projects, tab: &Tab) -> f32 {
   let Some(project) = tab
     .route()
@@ -114,14 +109,16 @@ pub fn unsaved(projects: &Projects, route: &Route) -> bool {
 /// (`Kontur · KON-12`).
 pub fn label(ctx: &mut Ctx, projects: &Projects, route: &Route) -> String {
   let screen = page(ctx, projects, route);
-  match project_name(projects, route) {
+  in_project(ctx, screen, project_name(projects, route).as_deref())
+}
+
+/// `page` after `project`'s name, where it has one.
+pub fn in_project(ctx: &mut Ctx, page: String, project: Option<&str>) -> String {
+  match project {
     Some(name) => ctx
-      .t_args(
-        "shell.tabs.inProject",
-        [("project", name.as_str()), ("label", screen.as_str())],
-      )
+      .t_args("shell.tabs.inProject", [("project", name), ("label", page.as_str())])
       .to_string(),
-    None => screen,
+    None => page,
   }
 }
 
@@ -169,22 +166,4 @@ pub fn project_name(projects: &Projects, route: &Route) -> Option<String> {
     .project()
     .and_then(|project| projects.name(project))
     .map(|name| name.as_str().to_owned())
-}
-
-/// The close button of the tab `id` (`Close` `hfcCG`), with the element id `element`.
-pub fn close_button(ctx: &mut Ctx, navigation: Navigation, id: TabId, element: String) -> Element {
-  in_title_bar(Button::empty())
-    .id(element)
-    .describe("a11y_name", ctx.t("shell.tabs.close"))
-    .focusable(false)
-    .cursor(CursorIcon::Pointer)
-    .align_items(Alignment::Center)
-    .on_click(move |event: MouseEvent| {
-      event.stop_propagation();
-      navigation.close(id);
-    })
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .rounded(RadiusSize::Sm)
-    .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted))
-    .into()
 }

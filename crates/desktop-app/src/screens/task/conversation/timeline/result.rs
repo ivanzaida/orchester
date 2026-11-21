@@ -42,7 +42,7 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, card: &ResultCard) -> Ele
       PaletteColor::Warning,
       "conversation.result.unverified",
     ),
-    (false, _, false) => (Icon::CircleX, PaletteColor::Danger, "conversation.result.failed"),
+    (false, _, false) => (Icon::CircleX, PaletteColor::Destructive, "conversation.result.failed"),
   };
   let step = step_label(ctx, card.number, &card.step);
   // A command tool runs a tool step: the card says so rather than repeat the step's name (`hep0l`).
@@ -66,7 +66,7 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, card: &ResultCard) -> Ele
     .child(Text::new(&step).variant(ExtraTypography::Note.role()).nowrap());
   let report = card.reported.as_ref().map(|reported| {
     MarkdownView::new(format!("{id}-report"), reported.clone(), super::message::links(ctx))
-      .style(ExtraTypography::Lead.role(), PaletteColor::TextSecondary)
+      .style(ExtraTypography::Lead.role(), ExtraColor::TextSecondary.role())
       .render(ctx)
   });
   let meta = Row::new()
@@ -97,7 +97,7 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, card: &ResultCard) -> Ele
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(head)

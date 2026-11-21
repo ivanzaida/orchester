@@ -21,7 +21,7 @@ use super::super::rows::provider_key;
 use crate::{
   navigation::Navigation,
   routes::{ChangeSource, ChangedFile, ProjectPage, Route, TaskTab, TaskView},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, LifecycleText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, LifecycleText},
   ui::{
     icon::{Icon, icon},
     pressable::opening,
@@ -54,7 +54,7 @@ pub fn runs(ctx: &mut Ctx, project: ProjectId, runs: &[InterruptedRun]) -> Eleme
   Column::new()
     .id("recovery-runs")
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Lg)
     .clip()
@@ -203,9 +203,9 @@ fn worktree(ctx: &Ctx, (project, navigation): (ProjectId, &Navigation), run: &In
   };
   let uncommitted = matches!(run.worktree, WorktreeState::Uncommitted(_));
   let (color, role) = if uncommitted {
-    (PaletteColor::TextSecondary, ExtraTypography::Prose.role())
+    (ExtraColor::TextSecondary.role(), ExtraTypography::Prose.role())
   } else {
-    (PaletteColor::TextMuted, ExtraTypography::Note.role())
+    (PaletteColor::MutedForeground, ExtraTypography::Note.role())
   };
   let state = Row::new()
     .width(Dimension::Pct(100.0))
@@ -228,7 +228,7 @@ fn worktree(ctx: &Ctx, (project, navigation): (ProjectId, &Navigation), run: &In
           .variant(LifecycleText::Link.role())
           .nowrap(),
       )
-      .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextPrimary))
+      .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::Foreground))
   });
   Column::new()
     .width(Dimension::Pct(100.0))

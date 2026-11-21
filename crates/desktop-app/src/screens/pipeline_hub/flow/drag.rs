@@ -27,7 +27,7 @@ use super::{
   words,
 };
 use crate::{
-  theme::{ExtraSpacing, FlowText, IconSize},
+  theme::{ExtraColor, ExtraSpacing, FlowText, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -58,7 +58,7 @@ pub(super) fn handle(ctx: &Ctx, drive: &Drive, card: &StepCard, card_ref: Elemen
     .on_drag_start(move |_: DragEvent| *started.set_down.lock() = false)
     .on_drag_move(move |event: DragEvent| moved(&moving.reorder, (&stepped, &card_ref), &event))
     .on_drag_end(move |_: DragEvent| ended(&ending, &key))
-    .child(icon(Icon::GripVertical, IconSize::Md, PaletteColor::TextSecondary).id(format!("{id}-icon")))
+    .child(icon(Icon::GripVertical, IconSize::Md, ExtraColor::TextSecondary.role()).id(format!("{id}-icon")))
     .into()
 }
 
@@ -163,7 +163,7 @@ fn lifted_card(ctx: &Ctx, card: &StepCard, width: f32) -> Column {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::GripVertical, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::GripVertical, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&words::number(card.number))
         .variant(FlowText::CardNumber.role())
@@ -182,8 +182,8 @@ fn lifted_card(ctx: &Ctx, card: &StepCard, width: f32) -> Column {
     )
     .spacing(SpacingSize::Xs)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .box_shadow(ShadowStyle::Md)
     .transform(Transform2D::rotate_deg(TILT))
     .hit_test(HitTestBehavior::None)

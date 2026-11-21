@@ -4,20 +4,13 @@
 //! key listener is the last node of the tree: keyboard events visit nodes from the root down in order,
 //! so every control has seen a key before it and can claim it with `prevent_default`. The window's title
 //! bar is not among them: lurq hands keys to the chrome's overlay, where it lies, after the page and this
-//! listener. A part of it that must take keys first while it is open (the tab list) holds [`FirstKeys`],
-//! which the window calls before anything else.
-
-use std::sync::Arc;
+//! listener.
 
 use lurq::{
-  app::{
-    component::DevtoolsInspectable,
-    events::{HistoryDirection, HistorySwipeEvent, KeyboardEvent, MouseButton, MouseEvent},
-  },
+  app::events::{HistoryDirection, HistorySwipeEvent, KeyboardEvent, MouseButton, MouseEvent},
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use parking_lot::Mutex;
 
 use super::{
   Navigation,
@@ -28,52 +21,13 @@ use crate::routes::{ProjectPage, ProjectSettingsTab, Route};
 const BACK_BUTTON: MouseButton = MouseButton::Other(4);
 const FORWARD_BUTTON: MouseButton = MouseButton::Other(5);
 
-/// What takes a key press.
-pub type KeyHandler = Arc<dyn Fn(KeyboardEvent) + Send + Sync>;
-
-/// The keys a part of the window takes before the page and the window's shortcuts, while it holds them.
-#[derive(Clone, Default)]
-pub struct FirstKeys(Arc<Mutex<Option<KeyHandler>>>);
-
-/// One slot for the window's life.
-impl PartialEq for FirstKeys {
-  fn eq(&self, other: &Self) -> bool {
-    Arc::ptr_eq(&self.0, &other.0)
-  }
-}
-
-impl DevtoolsInspectable for FirstKeys {}
-
-impl FirstKeys {
-  /// `handler` takes every key first until [`release`](Self::release).
-  pub fn hold(&self, handler: KeyHandler) {
-    *self.0.lock() = Some(handler);
-  }
-
-  pub fn release(&self) {
-    *self.0.lock() = None;
-  }
-
-  fn handle(&self, event: KeyboardEvent) {
-    let handler = self.0.lock().clone();
-    if let Some(handler) = handler {
-      handler(event);
-    }
-  }
-}
-
 /// `content` filling the window, with the history and tab input around it while `active`; none while the
-/// closing panel holds the window. `first` takes keys before all of it.
-pub fn window_input(navigation: &Navigation, content: Element, (active, first): (bool, FirstKeys)) -> Column {
+/// closing panel holds the window.
+pub fn window_input(navigation: &Navigation, content: Element, active: bool) -> Column {
   let (mouse, swipe, keys) = (navigation.clone(), navigation.clone(), navigation.clone());
   Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .on_key_down(move |event: KeyboardEvent| {
-      if active {
-        first.handle(event);
-      }
-    })
     .on_mouse_up(move |event: MouseEvent| {
       if !active || event.default_prevented() {
         return;

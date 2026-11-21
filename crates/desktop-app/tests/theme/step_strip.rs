@@ -10,9 +10,15 @@ fn strip_text_follows_the_design() {
   let app = themed(Mode::Dark);
   let theme = app.theme();
   for (role, size, line_height, color, family) in [
-    (StripText::Number, 11.0, 1.2, PaletteColor::TextMuted, "Geist Mono"),
-    (StripText::Name, 12.0, 1.2, PaletteColor::TextSecondary, "Geist"),
-    (StripText::Current, 12.0, 1.2, PaletteColor::TextPrimary, "Geist"),
+    (
+      StripText::Number,
+      11.0,
+      1.2,
+      PaletteColor::MutedForeground,
+      "Geist Mono",
+    ),
+    (StripText::Name, 12.0, 1.2, ExtraColor::TextSecondary.role(), "Geist"),
+    (StripText::Current, 12.0, 1.2, PaletteColor::Foreground, "Geist"),
     // The gate's hand (`Gate` in `Step strip`), a 9 glyph of the icon font.
     (StripText::GateHand, 9.0, 1.0, PaletteColor::Warning, "lucide"),
   ] {

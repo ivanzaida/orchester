@@ -30,7 +30,7 @@ impl SourcesText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Path => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::Path => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
     }
   }
 }

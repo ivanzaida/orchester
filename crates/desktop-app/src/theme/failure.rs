@@ -8,7 +8,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FailureText {
@@ -62,14 +65,14 @@ impl FailureText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Why => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::StillWorks => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
-      Self::Toggle => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Detail => mono(style(11.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary)),
-      Self::Meta => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::RowTitle => style(13.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::NotSaved => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.danger),
+      Self::Title => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Why => style(12.5, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
+      Self::StillWorks => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.muted_foreground),
+      Self::Toggle => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Detail => mono(style(11.5, FontWeight::Normal, 1.5, 0.0, text_secondary(palette))),
+      Self::Meta => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::RowTitle => style(13.0, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::NotSaved => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.destructive),
     }
   }
 }

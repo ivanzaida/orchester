@@ -223,7 +223,7 @@ fn programs(ctx: &Ctx, id: &str, (services, standings): (&[ServiceApproval], &[S
     .enumerate()
     .map(|(at, (service, standing))| {
       let (words, color) = match standing {
-        Standing::Unchanged => (ctx.t("service_cards.approve.unchanged"), PaletteColor::TextMuted),
+        Standing::Unchanged => (ctx.t("service_cards.approve.unchanged"), PaletteColor::MutedForeground),
         Standing::Changed(what) => {
           let what: Vec<String> = what.iter().map(|key| ctx.t(key).to_string()).collect();
           (

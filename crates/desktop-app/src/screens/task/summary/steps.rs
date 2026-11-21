@@ -29,7 +29,7 @@ use orchester_workspace::{
 
 use super::live::Ticker;
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -190,19 +190,19 @@ fn chip(ctx: &mut Ctx, row: &StepRow, stands: Stands, now: Timestamp) -> Element
   let progress = &row.progress;
   let here = stands != Stands::Elsewhere;
   let (glyph, color) = match (row.waits_since, unjudged(progress.state)) {
-    _ if stands == Stands::StoppedHere(Stopped::Fenced) => (Icon::CircleStop, PaletteColor::Danger),
-    _ if stands == Stands::StoppedHere(Stopped::Archived) => (Icon::CircleX, PaletteColor::Danger),
-    _ if stands == Stands::WaitsOnTask => (Icon::Hourglass, PaletteColor::TextSecondary),
+    _ if stands == Stands::StoppedHere(Stopped::Fenced) => (Icon::CircleStop, PaletteColor::Destructive),
+    _ if stands == Stands::StoppedHere(Stopped::Archived) => (Icon::CircleX, PaletteColor::Destructive),
+    _ if stands == Stands::WaitsOnTask => (Icon::Hourglass, ExtraColor::TextSecondary.role()),
     (None, Some(glyph)) => (glyph, PaletteColor::Warning),
     (Some(_), _) => (Status::NeedsInput.icon(), Status::NeedsInput.color()),
     (None, None) => (status(progress.state).icon(), status(progress.state).color()),
   };
   let (typography, name_color) = match (here, progress.state) {
-    (true, _) => (TypographyStyle::Label, PaletteColor::TextPrimary),
+    (true, _) => (TypographyStyle::Label, PaletteColor::Foreground),
     (false, ProgressState::Waiting | ProgressState::WaitsForSlot) => {
-      (TypographyStyle::Description, PaletteColor::TextMuted)
+      (TypographyStyle::Description, PaletteColor::MutedForeground)
     }
-    (false, _) => (TypographyStyle::Description, PaletteColor::TextSecondary),
+    (false, _) => (TypographyStyle::Description, ExtraColor::TextSecondary.role()),
   };
   let detail = detail(ctx, row, now);
   let id = format!("task-step-{}", progress.id);
@@ -234,8 +234,8 @@ fn chip(ctx: &mut Ctx, row: &StepRow, stands: Stands, now: Timestamp) -> Element
   let chip = match stands {
     Stands::Elsewhere => chip,
     Stands::Here => chip.background(PaletteColor::WarningMuted),
-    Stands::StoppedHere(_) => chip.background(PaletteColor::DangerMuted),
-    Stands::WaitsOnTask => chip.background(PaletteColor::SurfaceRaised),
+    Stands::StoppedHere(_) => chip.background(PaletteColor::DestructiveMuted),
+    Stands::WaitsOnTask => chip.background(PaletteColor::Card),
   };
   Tooltip::new(format!("{id}-tip"), detail).wrap(ctx, chip)
 }

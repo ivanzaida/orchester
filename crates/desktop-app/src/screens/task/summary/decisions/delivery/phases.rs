@@ -24,7 +24,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -50,7 +50,7 @@ pub(crate) fn phases(ctx: &mut Ctx, id: &str, (phases, named): (&[RowPhase], Nam
     .wrap();
   for (index, phase) in phases.iter().enumerate() {
     if index > 0 {
-      line = line.child(icon(Icon::ChevronRight, IconSize::Xs, PaletteColor::TextMuted));
+      line = line.child(icon(Icon::ChevronRight, IconSize::Xs, PaletteColor::MutedForeground));
     }
     let around = (
       index.checked_sub(1).map(|before| &phases[before]),
@@ -156,11 +156,11 @@ fn superseded(ctx: &Ctx, id: &str) -> Element {
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
     .describe("state", "superseded")
-    .child(icon(Icon::CircleSlash, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::CircleSlash, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("delivery.queue.phase.superseded"))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }
@@ -171,19 +171,19 @@ fn item(id: &str, state: PhaseState, label: &str) -> Element {
     PhaseState::Done => (
       Icon::CircleCheck,
       PaletteColor::Success,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       false,
     ),
     PhaseState::Active => (
       Icon::LoaderCircle,
-      PaletteColor::TextPrimary,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
+      PaletteColor::Foreground,
       true,
     ),
     PhaseState::Pending => (
       Icon::CircleDashed,
-      PaletteColor::TextMuted,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
+      PaletteColor::MutedForeground,
       false,
     ),
     PhaseState::Blocked => (Icon::CirclePause, PaletteColor::Warning, PaletteColor::Warning, false),

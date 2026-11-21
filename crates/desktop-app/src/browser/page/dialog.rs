@@ -144,20 +144,20 @@ fn card(ctx: &Ctx, (kind, origin, message): (DialogKind, &str, &str), field: Opt
     .width(Dimension::Px(DIALOG_WIDTH))
     .padding(BrowserSpacing::Dialog.role())
     .spacing(lurq::app::theme::SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .rounded(lurq::app::theme::RadiusSize::Lg)
     .box_shadow(ShadowStyle::Lg)
     .child(
       Row::new()
         .spacing(crate::theme::ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::Globe, IconSize::Base, PaletteColor::TextMuted))
+        .child(icon(Icon::Globe, IconSize::Base, PaletteColor::MutedForeground))
         .child(
           Text::new(&ctx.t_args("browser.dialog.says", [("origin", origin)]))
             .id("browser-dialog-origin")
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextMuted),
+            .color(PaletteColor::MutedForeground),
         ),
     )
     .child(

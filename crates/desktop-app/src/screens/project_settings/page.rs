@@ -19,7 +19,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{Route, Screen, ServicesPage},
-  theme::{ExtraSpacing, ExtraTypography, ProjectSettingsSpacing, TaskFormSpacing},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, ProjectSettingsSpacing, TaskFormSpacing},
   ui::{
     icon::{Icon, icon},
     tabs::{PageTab, page_tabs},
@@ -63,7 +63,7 @@ pub fn settings(
     // Import draft says it isn't saved until its drafts are (`Saved` `N0GBnO` in `DFWRJ`).
     Shown::Services(ServicesPage::Import) => Some(status_line(
       ctx,
-      (Icon::CircleDashed, PaletteColor::TextMuted),
+      (Icon::CircleDashed, PaletteColor::MutedForeground),
       "project_settings.notSavedYet",
     )),
     _ => shown.autosaves().then(|| save_status(ctx, status)),
@@ -217,7 +217,7 @@ pub fn icon_note(id: &str, glyph: Icon, words: &str) -> Element {
     .id(id.to_owned())
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Start)
-    .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::MutedForeground))
     .child(Text::new(words).variant(ExtraTypography::Note.role()).flex(1.0))
     .into()
 }
@@ -228,7 +228,7 @@ pub fn wide_note(id: &str, glyph: Icon, words: &str) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Start)
-    .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, crate::theme::IconSize::Sm, PaletteColor::MutedForeground))
     .child(Text::new(words).variant(ExtraTypography::Note.role()).flex(1.0))
     .into()
 }
@@ -249,10 +249,10 @@ fn save_status(ctx: &Ctx, status: &Signal<Status>) -> Row {
     Status::Failed => "project_settings.failed",
   };
   let (glyph, tone) = match state {
-    Status::Saved => (Icon::Check, PaletteColor::TextMuted),
-    Status::Saving => (Icon::LoaderCircle, PaletteColor::TextSecondary),
-    Status::Unsaved => (Icon::CircleAlert, PaletteColor::TextSecondary),
-    Status::Invalid | Status::Failed => (Icon::CircleAlert, PaletteColor::Danger),
+    Status::Saved => (Icon::Check, PaletteColor::MutedForeground),
+    Status::Saving => (Icon::LoaderCircle, ExtraColor::TextSecondary.role()),
+    Status::Unsaved => (Icon::CircleAlert, ExtraColor::TextSecondary.role()),
+    Status::Invalid | Status::Failed => (Icon::CircleAlert, PaletteColor::Destructive),
   };
   status_line(ctx, (glyph, tone), key)
 }

@@ -1,6 +1,12 @@
 //! Status, priority and workflow labels, chips, badges, avatars, breadcrumbs and detail rows.
 
-use std::collections::BTreeSet;
+use std::{
+  collections::BTreeSet,
+  sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+  },
+};
 
 use lurq::{
   app::theme::{PaletteColor, SpacingSize},
@@ -8,11 +14,12 @@ use lurq::{
   node::Element,
 };
 use orchester_app::ui::{
-  avatar::{agent_avatar, initials, person_avatar},
+  avatar::{agent_avatar, person_avatar},
   breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
   chip::{BadgeTone, TagChip, badge},
   detail_row::{DetailValue, detail_row},
   icon::Icon,
+  pressable::pressable,
   status::{Status, StatusChip, priority_chip, workflow_chip},
 };
 use orchester_core::{
@@ -60,7 +67,7 @@ fn every_status_has_an_icon_and_a_word_and_failures_read_at_a_glance() {
     assert!(words.insert(word.to_string()), "{status:?}'s word is its own");
   }
   for status in [Status::Failed, Status::Unreadable] {
-    assert_eq!(status.color(), PaletteColor::Danger, "{status:?}");
+    assert_eq!(status.color(), PaletteColor::Destructive, "{status:?}");
   }
   assert_ne!(
     Status::Paused.icon(),
@@ -135,6 +142,33 @@ fn a_tag_is_a_pill_2_over_and_8_beside_its_name_and_a_badge_3_and_8() {
 }
 
 #[test]
+fn a_press_of_a_tags_cross_removes_it_and_leaves_the_row_around_it_alone() {
+  let (removed, opened) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
+  let (remove, open) = (removed.clone(), opened.clone());
+  let mut kit = Kit::show(move |_| {
+    let remove = remove.clone();
+    pressable({
+      let open = open.clone();
+      move || {
+        open.fetch_add(1, Ordering::SeqCst);
+      }
+    })
+    .id("row")
+    .child(
+      TagChip::new("removable", "backend").removable("Remove backend", move || {
+        remove.fetch_add(1, Ordering::SeqCst);
+      }),
+    )
+    .into()
+  });
+  kit.click("removable-remove");
+  assert_eq!(removed.load(Ordering::SeqCst), 1, "the tag is removed");
+  assert_eq!(opened.load(Ordering::SeqCst), 0, "the row hears nothing of the press");
+  kit.click("row");
+  assert_eq!(opened.load(Ordering::SeqCst), 1, "a press beside the tag opens the row");
+}
+
+#[test]
 fn avatars_breadcrumbs_and_detail_rows_take_their_design_sizes() {
   let mut kit = Kit::show(|ctx| {
     let crumbs = breadcrumb(
@@ -149,7 +183,7 @@ fn avatars_breadcrumbs_and_detail_rows_take_their_design_sizes() {
     );
     Column::new()
       .spacing(SpacingSize::Sm)
-      .child(person_avatar("person", &initials("Ada Lovelace")))
+      .child(person_avatar("person", "Ada Lovelace"))
       .child(agent_avatar("agent", Icon::Hammer))
       .child(crumbs)
       .child(Element::from(
@@ -171,14 +205,15 @@ fn avatars_breadcrumbs_and_detail_rows_take_their_design_sizes() {
   assert_eq!(kit.texts("crumbs"), ["Kontur", "/", "Tasks", "/", "KON-12"]);
   let (first, slash, second) = (
     kit.bounds("crumbs-0"),
-    kit.bounds("crumbs-separator-1"),
+    kit.bounds("crumbs-separator"),
     kit.bounds("crumbs-1"),
   );
   assert_close(gap_after(first, slash), 6.0, "crumb to separator");
   assert_close(gap_after(slash, second), 6.0, "separator to crumb");
-  let (key, value) = (kit.bounds("branch-key"), kit.bounds("branch"));
-  assert_eq!(key.width, 108.0, "the key column");
-  assert_close(gap_after(key, value), 12.0, "key to value");
+  let (key, value) = (kit.bounds("branch-term"), kit.bounds("branch-value"));
+  // The term's 12 of end padding is the room between the key and its value.
+  assert_eq!(key.width, 108.0 + 12.0, "the key column");
+  assert_close(gap_after(key, value), 0.0, "key to value");
 }
 
 #[test]
@@ -198,7 +233,7 @@ fn ancestor_crumbs_keep_their_room_and_the_page_crumb_is_cut() {
       .child(crumbs)
       .into()
   });
-  let (ancestor, page) = (kit.bounds("cut-0-label"), kit.bounds("cut-1"));
+  let (ancestor, page) = (kit.bounds("cut-0"), kit.bounds("cut-1"));
   assert!(
     ancestor.width >= 100.0,
     "the ancestor keeps its room: {}",
@@ -209,9 +244,9 @@ fn ancestor_crumbs_keep_their_room_and_the_page_crumb_is_cut() {
     page.width > 0.0 && page.x + page.width <= 260.5,
     "the page's crumb takes what is left"
   );
-  kit.rest_on("cut-0-label");
-  assert_eq!(
-    kit.texts("cut-0-label-tooltip"),
-    ["Kontur platform, billing and the partner portal"]
-  );
+  let name = "Kontur platform, billing and the partner portal";
+  let shown = |kit: &mut Kit| kit.all_texts().iter().filter(|text| *text == name).count();
+  assert_eq!(shown(&mut kit), 1, "the cut name alone");
+  kit.rest_on("cut-0");
+  assert_eq!(shown(&mut kit), 2, "and whole in its tooltip");
 }

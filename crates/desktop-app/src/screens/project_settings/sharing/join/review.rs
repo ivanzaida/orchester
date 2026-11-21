@@ -349,7 +349,7 @@ fn summary(ctx: &Ctx, plan: &Plan<'_>, key: &str) -> Element {
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
     .child(

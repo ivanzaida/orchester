@@ -108,5 +108,5 @@ fn tabs(
       Route::Orchester(OrchesterView::default()),
     ),
   ];
-  page_tabs(ctx, "settings-tabs", tabs).into()
+  page_tabs(ctx, "settings-tabs", tabs)
 }

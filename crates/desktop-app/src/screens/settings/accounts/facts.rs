@@ -102,7 +102,7 @@ pub(super) fn group(ctx: &mut Ctx, account: &AgentAccount) -> Element {
 fn fact(ctx: &mut Ctx, (id, key): (&str, &str), shown: Result<String, String>) -> Element {
   let control = match shown {
     Ok(text) => value(&format!("{id}-value"), &text),
-    Err(missing) => value(&format!("{id}-value"), &missing).color(PaletteColor::TextMuted),
+    Err(missing) => value(&format!("{id}-value"), &missing).color(PaletteColor::MutedForeground),
   };
   SettingRow::new(id.to_owned(), t(ctx, key)).control(control).render(ctx)
 }

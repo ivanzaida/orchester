@@ -98,6 +98,6 @@ fn failed(ctx: &Ctx, error: &Message) -> Element {
   Text::new(&message_text(ctx, error))
     .id("task-services-full-log-failed")
     .variant(RunServicesText::LogLine.role())
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .into()
 }

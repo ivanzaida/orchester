@@ -39,7 +39,7 @@ pub(super) fn row(ctx: &mut Ctx, project: ProjectId, led_in: &LedIn) -> Element 
     LedIn::Nobody => Text::new(&message_text(ctx, &led_in.message()))
       .id(format!("{ID}-value"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .into(),
     LedIn::Chat(leader) => {
       let words = ctx.t_args(
@@ -48,7 +48,7 @@ pub(super) fn row(ctx: &mut Ctx, project: ProjectId, led_in: &LedIn) -> Element 
       );
       let route = Route::Project(project, ProjectPage::Orchestrator(OrchestratorChat::Chat(leader.chat)));
       let text = Truncated::new(format!("{ID}-value"), words, TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .render(ctx);
       Press::Open(Navigation::of(ctx).to(route))
         .button()
@@ -63,7 +63,11 @@ pub(super) fn row(ctx: &mut Ctx, project: ProjectId, led_in: &LedIn) -> Element 
         .rounded(RadiusSize::Md)
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-        .child(icon(Icon::MessagesSquare, IconSize::Sm, PaletteColor::TextSecondary))
+        .child(icon(
+          Icon::MessagesSquare,
+          IconSize::Sm,
+          ExtraColor::TextSecondary.role(),
+        ))
         .child(text)
         .into()
     }

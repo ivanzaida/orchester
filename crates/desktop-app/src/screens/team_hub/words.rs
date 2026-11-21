@@ -17,6 +17,7 @@ use orchester_workspace::{
 };
 
 use super::model::{Entry, Kind, Listing, Reach};
+use crate::theme::ExtraColor;
 
 /// The name of a CLI kind (`team_hub.cli.*`).
 pub(in crate::screens) const fn cli_key(cli: AgentProvider) -> &'static str {
@@ -79,18 +80,18 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
     Group::NeedsYouHere => Said {
       text: needs(ctx, listing, entry),
       color: if said_in_danger(entry) {
-        PaletteColor::Danger
+        PaletteColor::Destructive
       } else {
         PaletteColor::Warning
       },
     },
     Group::Ready => Said {
       text: ready(ctx, entry),
-      color: PaletteColor::TextSecondary,
+      color: ExtraColor::TextSecondary.role(),
     },
     Group::OffHere => Said {
       text: ctx.t("team_hub.line.off"),
-      color: PaletteColor::TextMuted,
+      color: PaletteColor::MutedForeground,
     },
   }
 }

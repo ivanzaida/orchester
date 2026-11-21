@@ -4,7 +4,7 @@
 use lurq::app::theme::PaletteColor;
 use orchester_core::connection::{ConnectionStatus, GitHubState};
 
-use crate::{screens::project_settings::kit::Glyph, ui::icon::Icon};
+use crate::{screens::project_settings::kit::Glyph, theme::ExtraColor, ui::icon::Icon};
 
 /// The tone a status is said in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,21 +20,21 @@ pub(crate) enum Tone {
 
 impl Tone {
   /// The icon's color.
-  pub(crate) const fn color(self) -> PaletteColor {
+  pub(crate) fn color(self) -> PaletteColor {
     match self {
       Self::Success => PaletteColor::Success,
       Self::Warning => PaletteColor::Warning,
-      Self::Danger => PaletteColor::Danger,
-      Self::Muted => PaletteColor::TextMuted,
-      Self::Busy => PaletteColor::TextSecondary,
+      Self::Danger => PaletteColor::Destructive,
+      Self::Muted => PaletteColor::MutedForeground,
+      Self::Busy => ExtraColor::TextSecondary.role(),
     }
   }
 
   /// The word's color: a status that asks for something is said in its tone.
-  pub(super) const fn word_color(self) -> PaletteColor {
+  pub(super) fn word_color(self) -> PaletteColor {
     match self {
       Self::Warning | Self::Danger => self.color(),
-      Self::Success | Self::Muted | Self::Busy => PaletteColor::TextSecondary,
+      Self::Success | Self::Muted | Self::Busy => ExtraColor::TextSecondary.role(),
     }
   }
 }

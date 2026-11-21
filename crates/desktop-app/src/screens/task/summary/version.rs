@@ -21,10 +21,10 @@ use lurq::{
 use orchester_core::task::requirements::{CurrentStanding, Fallback, LatestRun, RequirementsSource, TaskRequirements};
 
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_at_end, menu_panel},
+    menu::{MenuItem, MenuPanel, menu_at_end, menu_panel},
     pressable::pressable,
     tooltip::Tooltip,
   },
@@ -76,10 +76,10 @@ impl VersionMenu {
         Text::new(&label)
           .id("task-brief-version-label")
           .variant(ExtraTypography::Note.role())
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
-      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground));
     let tip = provenance(ctx, requirements, shown);
     let chip = Tooltip::new("task-brief-version-tip", tip).wrap(ctx, chip);
     let menu = self.open.get().then(|| {
@@ -100,8 +100,8 @@ impl VersionMenu {
     ctx: &mut Ctx,
     requirements: &TaskRequirements,
     (shown, chosen): (RequirementsSource, &Signal<Option<Version>>),
-  ) -> Element {
-    let rows: Vec<Element> = requirements
+  ) -> MenuPanel {
+    let rows: Vec<_> = requirements
       .sources()
       .into_iter()
       .enumerate()
@@ -113,13 +113,12 @@ impl VersionMenu {
           move || chosen.set(Some(Version(source))),
         )
         .chosen(source == shown)
-        .render(ctx, &self.open)
+        .render(ctx)
       })
       .collect();
     menu_panel("task-brief-version-menu")
-      .width(Dimension::Px(MENU_WIDTH))
+      .width(MENU_WIDTH)
       .with_children(rows)
-      .into()
   }
 }
 

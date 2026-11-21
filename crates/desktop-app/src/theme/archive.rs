@@ -7,7 +7,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// The confirmation's width (`Dialog` `MdjVb`).
 pub const ARCHIVE_DIALOG_WIDTH: f32 = 480.0;
@@ -61,13 +64,13 @@ impl ArchiveText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(14.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
-      Self::Body => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
-      Self::Heading => style(11.5, FontWeight::SemiBold, 1.45, 0.0, palette.text_muted),
-      Self::Name => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_primary),
-      Self::Holder => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::Version => mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted)),
-      Self::Note => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
+      Self::Title => style(14.0, FontWeight::SemiBold, 1.35, 0.0, palette.foreground),
+      Self::Body => style(12.5, FontWeight::Normal, 1.5, 0.0, text_secondary(palette)),
+      Self::Heading => style(11.5, FontWeight::SemiBold, 1.45, 0.0, palette.muted_foreground),
+      Self::Name => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.foreground),
+      Self::Holder => style(12.5, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
+      Self::Version => mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.muted_foreground)),
+      Self::Note => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.muted_foreground),
     }
   }
 }

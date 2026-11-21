@@ -7,17 +7,17 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text, TextOverflow},
+  components::{Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 
 use super::{
   icon::{Icon, icon},
-  menu::{MenuItem, menu, menu_panel, separator},
+  menu::{Entry, MenuItem, menu, menu_panel, separator},
   pressable::{Focus, pressable},
 };
-use crate::theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
 
 const MENU_MAX_HEIGHT: f32 = 280.0;
 /// The two reviewer kinds in `Aga8S`.
@@ -131,20 +131,17 @@ impl Component for Picker {
     } = ctx.props::<PickerProps>().clone();
     let chosen = props.value.get();
     let trigger = self.trigger(&props, &chosen);
-    let mut rows = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Hair.role());
+    let mut rows: Vec<Entry> = Vec::new();
     for (index, choice) in props.choices.iter().enumerate() {
       if let Some((_, heading)) = headings.iter().find(|(at, _)| *at == index) {
-        rows = rows.child(
-          Text::new(heading)
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
-            .padding(SpacingSize::Sm),
-        );
+        let heading = Text::new(heading)
+          .variant(TypographyStyle::Caption)
+          .color(PaletteColor::MutedForeground)
+          .padding(SpacingSize::Sm);
+        rows.push(Element::from(heading).into());
       }
       if choice.separator {
-        rows = rows.child(separator(ctx));
+        rows.push(separator());
       }
       let id = format!("{}-option-{index}", props.id);
       let item = match &choice.unavailable {
@@ -169,27 +166,26 @@ impl Component for Picker {
       } else {
         item
       };
-      let mut item = item.chosen(choice.value == chosen).in_form();
+      let mut item = item.chosen(choice.value == chosen);
       if let Some(detail) = &choice.detail {
         item = item.detail(detail.clone());
       }
       if choice.warning {
         item = item.warning_detail();
       }
-      rows = rows.child(item.render(ctx, &props.open));
+      rows.push(item.render(ctx).into());
     }
     let panel = menu_panel(&format!("{}-menu", props.id))
-      .width(Dimension::Px(if headings.is_empty() {
+      .width(if headings.is_empty() {
         props.width
       } else {
         GROUPED_MENU_WIDTH
-      }))
-      .child(ScrollVertical::new(rows).max_height(Dimension::Px(MENU_MAX_HEIGHT)));
-    Row::new().width(Dimension::Px(props.width)).child(trigger).child(menu(
-      self.anchor.clone(),
-      props.open.clone(),
-      panel,
-    ))
+      })
+      .scrolling(rows, (MENU_MAX_HEIGHT, Some(ExtraSpacing::Hair)));
+    Row::new()
+      .width(Dimension::Px(props.width))
+      .child(trigger)
+      .child(menu(self.anchor.clone(), props.open, panel))
   }
 }
 
@@ -203,7 +199,7 @@ impl Picker {
     );
     let leading = current
       .filter(|_| props.icon_in_field)
-      .map(|choice| icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary));
+      .map(|choice| icon(choice.icon, IconSize::Md, ExtraColor::TextSecondary.role()));
     let (open, empty) = (props.open.clone(), props.choices.is_empty());
     Focus::Keyboard
       .apply(pressable(move || {
@@ -220,16 +216,16 @@ impl Picker {
       .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
       .spacing(SpacingSize::Sm)
       .rounded(RadiusSize::Md)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border_inside(
         BorderSize::Sm,
         if props.open.get() {
-          PaletteColor::BorderFocus
+          PaletteColor::Ring
         } else {
           PaletteColor::Border
         },
       )
-      .hovered_style(Style::new().border_inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .hovered_style(Style::new().border_inside(BorderSize::Sm, PaletteColor::Input))
       .with_children(leading)
       .child(
         Text::new(&label)
@@ -240,7 +236,7 @@ impl Picker {
               TypographyStyle::Description
             },
           )
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap()
@@ -253,7 +249,7 @@ impl Picker {
           Icon::ChevronDown
         },
         IconSize::Md,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
       ))
   }
 }

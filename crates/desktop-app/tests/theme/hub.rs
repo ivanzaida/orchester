@@ -36,21 +36,21 @@ fn hub_panel_roles_follow_the_design() {
   let palette = |color| theme.palette_color(color);
   assert_eq!(
     theme.typography_style(HubText::PanelSub.role()).color,
-    palette(PaletteColor::TextMuted)
+    palette(PaletteColor::MutedForeground)
   );
   assert_eq!(
     theme.typography_style(HubText::PanelLink.role()).color,
-    palette(PaletteColor::TextPrimary)
+    palette(PaletteColor::Foreground)
   );
   for (role, color) in [
-    (HubText::PanelWhere, PaletteColor::TextSecondary),
-    (HubText::PanelHint, PaletteColor::TextMuted),
-    (HubText::PanelLabel, PaletteColor::TextMuted),
-    (HubText::PanelTitle, PaletteColor::TextPrimary),
-    (HubText::NoticeTitle, PaletteColor::TextPrimary),
-    (HubText::CompareField, PaletteColor::TextSecondary),
-    (HubText::CompareBase, PaletteColor::TextMuted),
-    (HubText::CompareCell, PaletteColor::TextPrimary),
+    (HubText::PanelWhere, ExtraColor::TextSecondary.role()),
+    (HubText::PanelHint, PaletteColor::MutedForeground),
+    (HubText::PanelLabel, PaletteColor::MutedForeground),
+    (HubText::PanelTitle, PaletteColor::Foreground),
+    (HubText::NoticeTitle, PaletteColor::Foreground),
+    (HubText::CompareField, ExtraColor::TextSecondary.role()),
+    (HubText::CompareBase, PaletteColor::MutedForeground),
+    (HubText::CompareCell, PaletteColor::Foreground),
   ] {
     assert_eq!(theme.typography_style(role.role()).color, palette(color), "{role:?}");
   }

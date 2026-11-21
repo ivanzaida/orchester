@@ -191,7 +191,7 @@ impl Component for TaskSources {
       (ctx.t("task_form.sources.label"), value),
       Look::Empty,
     )
-    .inside(props.column.clone(), (WIDTH, END_INSET))
+    .inside(props.column.clone(), END_INSET)
     .render(&self.chip, panel)
   }
 }

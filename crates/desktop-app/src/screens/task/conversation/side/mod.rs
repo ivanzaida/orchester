@@ -15,7 +15,7 @@ mod thread;
 use lurq::{
   app::{
     ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, RadiusSize},
+    theme::RadiusSize,
   },
   core::Signal,
   layout::{
@@ -314,7 +314,7 @@ pub(super) fn button(ctx: &mut Ctx, agent: &str) -> Option<Element> {
   let square = square.child(icon(
     Icon::MessageCircleQuestion,
     IconSize::Nav,
-    PaletteColor::TextSecondary,
+    ExtraColor::TextSecondary.role(),
   ));
   let tip = ctx.t_args("side_question.button.tip", [("agent", agent)]);
   Some(Tooltip::new("composer-side-question", tip).wrap(ctx, square))

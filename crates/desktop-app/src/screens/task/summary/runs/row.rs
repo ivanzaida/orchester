@@ -18,6 +18,7 @@ use lurq::{
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_core::{integration::Leftovers, project::TaskKey, run::RunNumber, tokens::compact_tokens};
 use orchester_workspace::{
@@ -141,7 +142,7 @@ impl Component for RunRow {
         Text::new(&when(ctx, record))
           .id(format!("run-row-{}-when", record.id))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap(),
@@ -149,7 +150,7 @@ impl Component for RunRow {
       .with_children(line.as_ref().map(|line| worktree(ctx, record, line)))
       .child(self.menu(ctx, &props, line.as_ref()));
     let main = if props.this_run {
-      main.background(PaletteColor::SurfaceRaised)
+      main.background(PaletteColor::Card)
     } else {
       main
     };
@@ -166,7 +167,7 @@ impl Component for RunRow {
             Text::new(&message_text(ctx, error))
               .id(format!("run-remove-error-{}", record.id))
               .variant(ExtraTypography::Note.role())
-              .color(PaletteColor::Danger)
+              .color(PaletteColor::Destructive)
               .flex(1.0),
           )
       }))
@@ -225,7 +226,7 @@ impl RunRow {
         self.remove(ctx, props),
       ];
       let panel = menu_panel(&format!("run-menu-{number}-panel"))
-        .width(Dimension::Px(MENU_WIDTH))
+        .width(MENU_WIDTH)
         .with_children(items);
       menu_at_end(self.anchor.clone(), self.open.clone(), panel)
     });
@@ -233,7 +234,7 @@ impl RunRow {
   }
 
   /// *Open its conversation*: the task's Conversation, which holds every run's.
-  fn conversation(&self, ctx: &mut Ctx, props: &RowProps) -> Element {
+  fn conversation(&self, ctx: &mut Ctx, props: &RowProps) -> ui::MenuItem {
     let navigation = Navigation::of(ctx);
     let page = ProjectPage::task(props.key.clone(), TaskView::Conversation, props.kept);
     let route = Route::Project(props.project.open.project.id(), page);
@@ -244,28 +245,28 @@ impl RunRow {
       navigation.to(route),
     )
     .icon(Icon::MessageSquare)
-    .render(ctx, &self.open)
+    .render(ctx)
   }
 
   /// *Open worktree in Files*: the code viewer at the run's worktree, while it is there.
-  fn files(&self, ctx: &mut Ctx, props: &RowProps, line: Option<&Line>) -> Element {
+  fn files(&self, ctx: &mut Ctx, props: &RowProps, line: Option<&Line>) -> ui::MenuItem {
     let number = props.record.number.map_or(0, RunNumber::get);
     let (id, label) = (format!("run-open-worktree-{number}"), ctx.t("task.more.openWorktree"));
     if !line.is_some_and(|line| line.present) {
       return MenuItem::unavailable(id, label, ctx.t("summary.runs.menu.noWorktree"))
         .icon(Icon::FolderTree)
-        .render(ctx, &self.open);
+        .render(ctx);
     }
     let navigation = Navigation::of(ctx);
     let files = FilesView::new(None, Version::Run(props.record.id));
     let route = Route::Project(props.project.open.project.id(), ProjectPage::Files(files));
     MenuItem::opens(id, label, navigation.to(route))
       .icon(Icon::FolderTree)
-      .render(ctx, &self.open)
+      .render(ctx)
   }
 
   /// *Remove worktree*, while the run has worktrees and no live work: it opens the confirmation under the row.
-  fn remove(&self, ctx: &mut Ctx, props: &RowProps) -> Element {
+  fn remove(&self, ctx: &mut Ctx, props: &RowProps) -> ui::MenuItem {
     let number = props.record.number.map_or(0, RunNumber::get);
     let (id, label) = (format!("run-remove-worktree-{number}"), ctx.t("task.removeWorktree"));
     let unavailable = |reason: Arc<str>| MenuItem::unavailable(id.clone(), label.clone(), reason).icon(Icon::FolderX);
@@ -286,6 +287,6 @@ impl RunRow {
       })
       .icon(Icon::FolderX)
     };
-    item.render(ctx, &self.open)
+    item.render(ctx)
   }
 }

@@ -11,11 +11,11 @@ use lurq::{
   node::Element,
 };
 use orchester_app::{
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
-    menu::{MenuItem, foot, menu, menu_panel, separator},
+    menu::{Entry, MenuItem, foot, menu, menu_panel, separator},
     popover::{PopoverSide, popover, popover_panel},
     toggle::{Toggle, ToggleKind},
     tooltip::Tooltip,
@@ -36,7 +36,7 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
     cell("Tooltip · b6q3OZ (rest the pointer)", tooltip(ctx, state)),
     cell(
       "loader-circle · turning",
-      icon(Icon::LoaderCircle, IconSize::Md, PaletteColor::TextSecondary).id("g-loader"),
+      icon(Icon::LoaderCircle, IconSize::Md, ExtraColor::TextSecondary.role()).id("g-loader"),
     ),
   ])
   .into()])
@@ -50,40 +50,44 @@ fn pipeline_menu(ctx: &mut Ctx, state: &State) -> Row {
     let pressed = state.pressed.clone();
     move || pressed.set(what.to_owned())
   };
-  let items = [
+  let items: [Entry; 8] = [
     MenuItem::new("g-menu-feature", "Feature delivery v3", choose("Feature delivery v3"))
       .icon(Icon::Workflow)
       .detail("Published v3 · 6 steps · approval at Plan")
       .chosen(true)
-      .render(ctx, &state.menu_open),
+      .render(ctx)
+      .into(),
     MenuItem::new("g-menu-quick", "Quick fix v2", choose("Quick fix v2"))
       .icon(Icon::Workflow)
       .detail("Published v2 · 3 steps · no approval gates")
-      .render(ctx, &state.menu_open),
-    separator(ctx),
+      .render(ctx)
+      .into(),
+    separator(),
     MenuItem::new("g-menu-new", "New pipeline", choose("New pipeline"))
       .icon(Icon::Plus)
       .shortcut("Ctrl N")
-      .render(ctx, &state.menu_open),
+      .render(ctx)
+      .into(),
     MenuItem::new(
       "g-menu-long",
       "Release with a review after every step, a docs pass and a changelog",
       choose("Release"),
     )
     .icon(Icon::Workflow)
-    .render(ctx, &state.menu_open),
+    .render(ctx)
+    .into(),
     MenuItem::new("g-menu-hint", "Reopen task", choose("Reopen task"))
       .icon(Icon::Workflow)
       .hint("ready to claim")
-      .render(ctx, &state.menu_open),
+      .render(ctx)
+      .into(),
     MenuItem::unavailable("g-menu-import", "Import a pipeline", "Importing pipelines is planned.")
       .icon(Icon::Download)
-      .render(ctx, &state.menu_open),
-    foot(ctx, "g-menu-foot", "Only Admins reopen a closed team task."),
+      .render(ctx)
+      .into(),
+    foot(ctx, "g-menu-foot", "Only Admins reopen a closed team task.").into(),
   ];
-  let panel = menu_panel("g-menu")
-    .width(lurq::node::dimension::Dimension::Px(MENU_WIDTH))
-    .with_children(items);
+  let panel = menu_panel("g-menu").width(MENU_WIDTH).with_children(items);
   Row::new()
     .child(
       Row::new().ref_element(state.menu_anchor.clone()).child(
@@ -104,7 +108,7 @@ fn permissions(state: &State) -> Row {
     .child(
       Text::new("Run permissions")
         .variant(ExtraTypography::Strong.role())
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
     .child(Text::new("Builder · 03 Implement · Claude · sonnet-4.5").variant(ExtraTypography::Note.role()))
     .child(

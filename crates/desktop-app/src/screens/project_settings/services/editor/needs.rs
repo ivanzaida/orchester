@@ -137,19 +137,15 @@ fn chain(order: &[Started]) -> Element {
     .align_items(Alignment::Center);
   for (at, started) in order.iter().enumerate() {
     if at > 0 {
-      row = row.child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted));
+      row = row.child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::MutedForeground));
     }
     let (fill, stroke, name) = if started.this {
-      (
-        ExtraColor::Hover.role(),
-        PaletteColor::BorderFocus,
-        PaletteColor::TextPrimary,
-      )
+      (ExtraColor::Hover.role(), PaletteColor::Ring, PaletteColor::Foreground)
     } else {
       (
-        PaletteColor::SurfaceRaised,
+        PaletteColor::Card,
         PaletteColor::Border,
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       )
     };
     row = row.child(
@@ -212,15 +208,15 @@ pub(super) fn start_order_card(ctx: &Ctx, view: &View) -> Option<Element> {
 fn order_row(ctx: &Ctx, at: usize, started: &Started) -> Element {
   let (fill, number, name) = if started.this {
     (
-      PaletteColor::Accent,
+      PaletteColor::Primary,
       ExtraColor::OnAccent.role(),
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     )
   } else {
     (
-      PaletteColor::SurfaceRaised,
-      PaletteColor::TextSecondary,
-      PaletteColor::TextSecondary,
+      PaletteColor::Card,
+      ExtraColor::TextSecondary.role(),
+      ExtraColor::TextSecondary.role(),
     )
   };
   let ready = match &started.ready {

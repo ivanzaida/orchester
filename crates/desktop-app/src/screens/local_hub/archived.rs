@@ -34,7 +34,7 @@ use crate::{
     rows,
   },
   services::Services,
-  theme::{HubText, IconSize},
+  theme::{ExtraColor, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::BadgeTone,
@@ -57,12 +57,12 @@ pub(in crate::screens) fn nothing_picked(ctx: &Ctx, id: &str, (title, detail): (
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .child(icon(Icon::Archive, IconSize::Panel, PaletteColor::TextMuted))
+    .child(icon(Icon::Archive, IconSize::Panel, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t(title))
         .id(format!("{id}-title"))
         .variant(HubText::RowName.role())
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     )
     .child(
       Text::new(&ctx.t(detail))

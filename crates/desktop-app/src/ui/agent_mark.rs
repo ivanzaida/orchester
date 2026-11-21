@@ -75,7 +75,7 @@ impl AgentMark {
   pub fn color(self) -> PaletteColor {
     match self {
       Self::Claude => ExtraColor::MarkClaude.role(),
-      Self::OpenAi | Self::Anthropic => PaletteColor::TextPrimary,
+      Self::OpenAi | Self::Anthropic => PaletteColor::Foreground,
     }
   }
 

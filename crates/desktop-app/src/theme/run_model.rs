@@ -8,7 +8,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ModelText {
@@ -58,13 +61,13 @@ impl ModelText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Chip => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Heading => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.text_muted),
-      Self::Name => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
-      Self::Tag => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::Label => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Value => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::Sub => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::Chip => style(11.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Heading => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.muted_foreground),
+      Self::Name => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
+      Self::Tag => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground)),
+      Self::Label => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Value => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::Sub => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
     }
   }
 }

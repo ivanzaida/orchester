@@ -201,8 +201,12 @@ impl Component for OrchestratorScreen {
     let (draft, focused) = (ctx.signal(String::new()), ctx.signal(false));
     let skill = ctx.signal(None);
     let mention = MentionField::new(ctx, draft.clone(), focused.clone());
-    let slash =
-      SlashField::new(ctx, draft.clone(), (focused.clone(), skill.clone())).returns_focus_to(mention.element());
+    let slash = SlashField::new(
+      ctx,
+      (draft.clone(), mention.element()),
+      (focused.clone(), skill.clone()),
+    )
+    .returns_focus_to(mention.element());
     let view = View {
       draft,
       attached: DraftAttachments::new(ctx, Vec::new()),

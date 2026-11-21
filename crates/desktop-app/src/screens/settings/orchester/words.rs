@@ -10,6 +10,8 @@ use orchester_workspace::{
   sharing::{Connection, ServerEntry, SharingError, cloud::CloudError},
 };
 
+use crate::theme::ExtraColor;
+
 /// Words to show: a key and its values.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Said {
@@ -55,9 +57,9 @@ pub fn server_look(entry: &ServerEntry) -> Look {
   };
   if entry.certificate_changed {
     return look(
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       "cloud.state.certificateChanged",
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       "certificate-changed",
     );
   }
@@ -77,7 +79,7 @@ pub fn server_look(entry: &ServerEntry) -> Look {
     Some(Connection::Connected) => look(
       PaletteColor::Success,
       "cloud.state.connected",
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "connected",
     ),
     Some(Connection::Reconnecting { .. }) => look(
@@ -87,9 +89,9 @@ pub fn server_look(entry: &ServerEntry) -> Look {
       "reconnecting",
     ),
     Some(Connection::Offline { .. }) => look(
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "cloud.state.offline",
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "offline",
     ),
   }

@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{PaletteColor, ThemePalette},
+  app::{
+    theme::{PaletteColor, ThemePalette},
+    window::Appearance,
+  },
   node::color::Color,
 };
 
@@ -22,6 +25,14 @@ impl Mode {
     }
   }
 
+  /// lurq's appearance of the mode, which its own controls draw in.
+  pub const fn appearance(self) -> Appearance {
+    match self {
+      Self::Dark => Appearance::Dark,
+      Self::Light => Appearance::Light,
+    }
+  }
+
   fn pick(self, dark: &str, light: &str) -> Color {
     Color::from_hex(match self {
       Self::Dark => dark,
@@ -34,6 +45,12 @@ impl Mode {
 /// these instead of spelling extra names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExtraColor {
+  /// `text_secondary`: text between the foreground and the muted foreground. lurq's design palette has one muted
+  /// text role (`MutedForeground`, the design's `text_muted`); this is the other.
+  TextSecondary,
+  /// `surface_input`: the fill of a text field, a toggle's track and a picker. lurq's design palette fills inputs
+  /// with `Background`, which the app keeps for the window behind the panels.
+  InputSurface,
   /// `accent_text`: links and accent-colored text.
   AccentText,
   /// `on_accent`: text and icons on an `accent` fill.
@@ -89,7 +106,9 @@ pub enum ExtraColor {
 }
 
 impl ExtraColor {
-  pub const ALL: [Self; 25] = [
+  pub const ALL: [Self; 27] = [
+    Self::TextSecondary,
+    Self::InputSurface,
     Self::AccentText,
     Self::OnAccent,
     Self::PanelBorder,
@@ -124,6 +143,8 @@ impl ExtraColor {
   /// The design variable's name.
   pub const fn name(self) -> &'static str {
     match self {
+      Self::TextSecondary => "text_secondary",
+      Self::InputSurface => "surface_input",
       Self::AccentText => "accent_text",
       Self::OnAccent => "on_accent",
       Self::PanelBorder => "border_panel",
@@ -154,6 +175,8 @@ impl ExtraColor {
 
   fn color(self, mode: Mode) -> Color {
     match self {
+      Self::TextSecondary => mode.pick("#B3B3BA", "#45454D"),
+      Self::InputSurface => mode.pick("#1B1B1E", "#FFFFFF"),
       Self::AccentText => mode.pick("#EDEDF0", "#18181B"),
       Self::OnAccent => mode.pick("#111113", "#FFFFFF"),
       Self::PanelBorder => mode.pick("#2A2A2E", "#C7C7CE"),
@@ -183,30 +206,33 @@ impl ExtraColor {
   }
 }
 
-/// The color variables of `orchester2.pen` for `mode` and the `graphite` accent.
+/// The color variables of `orchester2.pen` for `mode` and the `graphite` accent, on lurq's design palette of the
+/// same mode for the roles the design has no variable for.
 pub fn palette(mode: Mode) -> ThemePalette {
   let c = |dark, light| mode.pick(dark, light);
+  let base = match mode {
+    Mode::Dark => ThemePalette::dark(),
+    Mode::Light => ThemePalette::light(),
+  };
   ThemePalette {
-    accent: c("#EDEDF0", "#18181B"),
-    accent_hover: c("#FFFFFF", "#2E2E33"),
-    accent_muted: c("#FFFFFF14", "#18181B0F"),
-    surface_base: c("#111113", "#E4E4E8"),
-    surface_panel: c("#18181A", "#FFFFFF"),
-    surface_raised: c("#202023", "#FFFFFF"),
-    surface_input: c("#1B1B1E", "#FFFFFF"),
+    primary: c("#EDEDF0", "#18181B"),
+    primary_hover: c("#FFFFFF", "#2E2E33"),
+    primary_foreground: c("#111113", "#FFFFFF"),
+    highlight: c("#FFFFFF14", "#18181B0F"),
+    background: c("#111113", "#E4E4E8"),
+    canvas: c("#18181A", "#FFFFFF"),
+    card: c("#202023", "#FFFFFF"),
     border: c("#2A2A2E", "#E2E2E6"),
-    border_strong: c("#3B3B40", "#C7C7CE"),
-    border_focus: c("#A3A3AB", "#52525A"),
-    text_primary: c("#EDEDF0", "#18181B"),
-    text_secondary: c("#B3B3BA", "#45454D"),
-    text_muted: c("#8A8A92", "#6B6B74"),
-    text_inverse: c("#111113", "#FFFFFF"),
+    input: c("#3B3B40", "#C7C7CE"),
+    ring: c("#A3A3AB", "#52525A"),
+    foreground: c("#EDEDF0", "#18181B"),
+    muted_foreground: c("#8A8A92", "#6B6B74"),
     success: c("#3DB07A", "#158354"),
     success_muted: c("#3DB07A24", "#1583541A"),
     warning: c("#E2A33C", "#9E630E"),
     warning_muted: c("#E2A33C24", "#D9911E24"),
-    danger: c("#F0605A", "#D4342F"),
-    danger_muted: c("#F0605A24", "#D4342F1A"),
+    destructive: c("#F0605A", "#D4342F"),
+    destructive_muted: c("#F0605A24", "#D4342F1A"),
     info: c("#4DA3F5", "#1A73C9"),
     info_muted: c("#4DA3F524", "#1A73C91A"),
     extra: ExtraColor::ALL
@@ -215,5 +241,11 @@ pub fn palette(mode: Mode) -> ThemePalette {
       .chain(super::composer::colors(mode))
       .chain(super::browser::colors(mode))
       .collect(),
+    ..base
   }
+}
+
+/// The design's `text_secondary` of `palette`, for a text style built from the palette.
+pub fn text_secondary(palette: &ThemePalette) -> Color {
+  palette.get(ExtraColor::TextSecondary.role())
 }

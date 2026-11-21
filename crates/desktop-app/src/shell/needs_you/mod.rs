@@ -201,7 +201,7 @@ impl NeedsYouPill {
     let color = if total > 0 {
       PaletteColor::Warning
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     };
     let toggle = self.open.clone();
     let pill = in_title_bar(pressable(move || toggle.update(|open| *open = !*open)))

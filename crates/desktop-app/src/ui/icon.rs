@@ -33,6 +33,12 @@ macro_rules! icons {
           $(Self::$name => $glyph,)*
         }
       }
+
+      const fn variant(self) -> &'static str {
+        match self {
+          $(Self::$name => stringify!($name),)*
+        }
+      }
     }
   };
 }
@@ -333,6 +339,26 @@ pub fn icon(icon: Icon, size: IconSize, color: impl Into<PaletteColor>) -> Text 
   }
 }
 
+impl Icon {
+  /// The design's name of the icon, the variant's words in kebab case: `chart-column` for [`Icon::ChartColumn`],
+  /// `trash-2` for [`Icon::Trash2`].
+  pub fn name(self) -> String {
+    let mut name = String::new();
+    let mut previous: Option<char> = None;
+    for ch in self.variant().chars() {
+      let starts_word = previous.is_some_and(|before| {
+        (ch.is_ascii_uppercase() && !before.is_ascii_uppercase()) || (ch.is_ascii_digit() && !before.is_ascii_digit())
+      });
+      if starts_word {
+        name.push('-');
+      }
+      name.push(ch.to_ascii_lowercase());
+      previous = Some(ch);
+    }
+    name
+  }
+}
+
 pub fn glyph(icon: Icon) -> String {
   icon.glyph().to_string()
 }
@@ -397,8 +423,8 @@ pub fn marker(mark: Icon, side: f32) -> lurq::components::Row {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Md)
-    .child(icon(mark, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(mark, IconSize::Base, PaletteColor::MutedForeground))
 }

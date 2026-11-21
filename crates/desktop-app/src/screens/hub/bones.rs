@@ -10,6 +10,7 @@ use lurq::{
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
+  ui::Skeleton as UiSkeleton,
 };
 
 use crate::{
@@ -38,8 +39,8 @@ pub(crate) fn head(ctx: &Ctx, id: &str, title: &str, count: Option<f32>) -> Row 
 }
 
 /// A tile not known yet: a bone of its size.
-pub(crate) fn tile() -> Column {
-  bone(TILE, TILE).rounded(RadiusSize::Md)
+pub(crate) fn tile() -> UiSkeleton {
+  bone(TILE, TILE).radius(RadiusSize::Md)
 }
 
 /// A status not known yet: its dot and its words, `width` long.
@@ -90,7 +91,7 @@ pub(crate) fn sub_head(ctx: &Ctx, label: f32, count: f32) -> Row {
     )
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .child(skeleton::line(ctx, HubText::GroupTitle.role(), label))
     .child(skeleton::line(ctx, HubText::Hint.role(), count))
 }

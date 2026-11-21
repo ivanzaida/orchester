@@ -36,14 +36,14 @@ impl NavItem<'_> {
   /// The item, opening its screen with `open` by a browser's rules (`navigation::link`).
   pub fn opens(self, open: Open) -> Element {
     let (color, label_style) = if self.selected {
-      (PaletteColor::TextPrimary, TypographyStyle::Label)
+      (PaletteColor::Foreground, TypographyStyle::Label)
     } else {
-      (PaletteColor::TextSecondary, TypographyStyle::Description)
+      (ExtraColor::TextSecondary.role(), TypographyStyle::Description)
     };
     let count_color = if self.waiting {
       PaletteColor::Warning
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     };
     let row = Row::new()
       .width(Dimension::Pct(100.0))

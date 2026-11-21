@@ -410,8 +410,8 @@ pub fn version_only(ctx: &mut Ctx) -> Element {
     .child(Row::new().flex(1.0))
     .child(
       item("status-version")
-        .child(glyph(Icon::Sparkles, PaletteColor::TextMuted))
-        .child(label(&version, PaletteColor::TextMuted)),
+        .child(glyph(Icon::Sparkles, PaletteColor::MutedForeground))
+        .child(label(&version, PaletteColor::MutedForeground)),
     )
     .into()
 }

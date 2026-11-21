@@ -126,7 +126,7 @@ impl RoleSection {
     let input = field(input, said.is_some(), props.locked);
     let sub = said.map(|words| Sub {
       words,
-      color: PaletteColor::Danger,
+      color: PaletteColor::Destructive,
     });
     rows::row(&format!("{id}-name"), &label, sub, input.render(ctx))
   }
@@ -186,7 +186,7 @@ fn field(input: FieldInput, invalid: bool, locked: bool) -> FieldInput {
 fn refusal(ctx: &Ctx, error: Option<&Message>) -> Option<Sub> {
   error.map(|error| Sub {
     words: message_text(ctx, error),
-    color: PaletteColor::Danger,
+    color: PaletteColor::Destructive,
   })
 }
 

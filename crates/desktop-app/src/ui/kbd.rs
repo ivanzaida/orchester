@@ -1,30 +1,12 @@
-//! Key cap (`Kbd` `wMPlq`): the keys of a shortcut in Geist Mono 10 `text_secondary`, 5 in from the sides of an 18
-//! high cap on `surface_raised` in a `border` stroke, radius 4.
+//! Key cap (`Kbd` `wMPlq`): lurq's `ui::Kbd` with the keys as one cap, in the theme's recipe (`theme::kit`).
 
-use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize},
-  components::{Row, Text},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
-};
+use lurq::{components::Row, node::Element, ui::Kbd};
 
-use crate::theme::{ExtraSpacing, ExtraTypography};
-
-/// The cap's height (`wMPlq`).
-const HEIGHT: f32 = 18.0;
-
-/// A cap with `keys`; `id` names it.
+/// A cap with `keys`, written as they are; `id` names it.
 pub fn key_cap(id: &str, keys: &str) -> Element {
+  // A cap keeps its width beside words that give way.
   Row::new()
-    .id(id.to_owned())
-    .height(Dimension::Px(HEIGHT))
-    .padding(Padding::horizontal(ExtraSpacing::Pair.role()))
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Sm)
-    // A cap keeps its width beside words that give way.
     .flex_shrink(0.0)
-    .child(Text::new(keys).variant(ExtraTypography::MonoSmall.role()).nowrap())
+    .child(Kbd::new(keys).id(id.to_owned()))
     .into()
 }

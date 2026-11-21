@@ -49,7 +49,7 @@ pub(super) fn crumbs(
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(breadcrumb(ctx, "review-crumbs", CrumbSeparator::Slash, trail))
     .child(Row::new().flex(1.0))
     .with_children(waiting.map(|waiting| pager::pager(ctx, project, waiting)))

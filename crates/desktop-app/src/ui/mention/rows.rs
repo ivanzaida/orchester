@@ -12,11 +12,12 @@ use std::ops::Range;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, TextOverflow},
   layout::Alignment,
-  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::{self, Styled},
 };
 use orchester_workspace::{
   mentions::{
@@ -32,9 +33,8 @@ use crate::{
   ui::{
     icon::{Icon, icon},
     kbd::key_cap,
-    menu::separator,
+    menu::{Entry, separator},
     message::message_text,
-    pressable::pressable,
     status::{Status, StatusChip, workflow_key},
   },
 };
@@ -59,53 +59,53 @@ pub(super) fn rows(
   props: &MenuProps,
   (offer, query, files): (&Offer, &str, &Files),
   focused: usize,
-) -> Vec<Element> {
+) -> Vec<Entry> {
   let note = files_note(ctx, files);
   if offer.is_empty() {
     let Some(note) = note else {
       let title = ctx.t_args("composer.mention.empty.title", [("query", query)]);
       let hint = ctx.t_args("composer.mention.empty.hint", [("project", &*props.project)]);
-      return vec![nothing((&title, &hint)), footer(ctx, (offer, query))];
+      return vec![nothing((&title, &hint)).into(), footer(ctx, (offer, query)).into()];
     };
-    return vec![note, footer(ctx, (offer, query))];
+    return vec![note.into(), footer(ctx, (offer, query)).into()];
   }
-  let mut rows: Vec<Element> = Vec::new();
+  let mut rows: Vec<Entry> = Vec::new();
   let tasks = offer.tasks.shown.len();
   if tasks > 0 {
-    rows.push(heading(ctx, "tasks", &offer.tasks));
+    rows.push(heading(ctx, "tasks", &offer.tasks).into());
     for (index, task) in offer.tasks.shown.iter().enumerate() {
       let face = task_row(ctx, task, index == focused);
       let name = format!("task-{}", task.key);
-      rows.push(row(props, (&name, index, index == focused), face));
+      rows.push(row(props, (&name, index, index == focused), face).into());
     }
   }
   let runs = offer.runs.shown.len();
   if runs > 0 {
     if !rows.is_empty() {
-      rows.push(separator(ctx));
+      rows.push(separator());
     }
-    rows.push(heading(ctx, "runs", &offer.runs));
+    rows.push(heading(ctx, "runs", &offer.runs).into());
     for (index, run) in offer.runs.shown.iter().enumerate() {
       let at = tasks + index;
       let face = run_row(ctx, props, run, at == focused);
       let name = format!("run-{}-{}", run.key, run.number.get());
-      rows.push(row(props, (&name, at, at == focused), face));
+      rows.push(row(props, (&name, at, at == focused), face).into());
     }
   }
   if !rows.is_empty() && (!offer.files.shown.is_empty() || note.is_some()) {
-    rows.push(separator(ctx));
+    rows.push(separator());
   }
   if !offer.files.shown.is_empty() {
-    rows.push(heading(ctx, "files", &offer.files));
+    rows.push(heading(ctx, "files", &offer.files).into());
     for (index, file) in offer.files.shown.iter().enumerate() {
       let at = tasks + runs + index;
       let face = file_row(ctx, file, at == focused);
       let name = format!("file-{}", file.path);
-      rows.push(row(props, (&name, at, at == focused), face));
+      rows.push(row(props, (&name, at, at == focused), face).into());
     }
   }
-  rows.extend(note);
-  rows.push(footer(ctx, (offer, query)));
+  rows.extend(note.map(Entry::from));
+  rows.push(footer(ctx, (offer, query)).into());
   rows
 }
 
@@ -127,7 +127,7 @@ fn files_note(ctx: &Ctx, files: &Files) -> Option<Element> {
       .padding(Padding::horizontal(SpacingSize::Sm))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::FileCode, IconSize::Md, PaletteColor::TextMuted))
+      .child(icon(Icon::FileCode, IconSize::Md, PaletteColor::MutedForeground))
       .child(
         Text::new(&words)
           .variant(TypographyStyle::Caption)
@@ -168,7 +168,7 @@ fn heading<T>(ctx: &Ctx, name: &str, section: &Section<T>) -> Element {
     .child(
       Text::new(&ctx.t(&format!("composer.mention.section.{name}")))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .child(Spacer::new().flex(1.0))
@@ -181,8 +181,9 @@ fn heading<T>(ctx: &Ctx, name: &str, section: &Section<T>) -> Element {
     .into()
 }
 
-/// Row `index`, which the pointer chooses too: `face` on `hover` while it has the focus (`focused`) or the pointer.
-fn row(props: &MenuProps, (name, index, focused): (&str, usize, bool), face: Vec<Element>) -> Element {
+/// Row `index` as lurq's menu item, which Enter and the pointer choose: `face`, on the `hover` fill the menu's recipe
+/// gives lurq's active row (`focused`) and the row under the pointer.
+fn row(props: &MenuProps, (name, index, focused): (&str, usize, bool), face: Vec<Element>) -> ui::MenuItem {
   let field = props.field.clone();
   let choose = move || {
     let shown = field.shown.lock().clone();
@@ -192,29 +193,26 @@ fn row(props: &MenuProps, (name, index, focused): (&str, usize, bool), face: Vec
       field.insert(replaces, mention);
     }
   };
-  let button = pressable(choose)
-    .id(format!("{}-mention-{name}", props.id))
-    .describe("focused", focused.to_string())
+  let content = Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ControlHeight::Md.value()))
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
-    .rounded(RadiusSize::Sm)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .align_items(Alignment::Center)
     .with_children(face);
-  if focused {
-    button.background(ExtraColor::Hover.role()).into()
-  } else {
-    button.into()
-  }
+  ui::MenuItem::new(name)
+    .id(format!("{}-mention-{name}", props.id))
+    .content(content)
+    .describe("focused", focused.to_string())
+    .on_select(choose)
 }
 
 /// A task's `square-check`, key, title and workflow status, and *Enter* while it has the focus.
 fn task_row(ctx: &Ctx, task: &TaskChoice, focused: bool) -> Vec<Element> {
   vec![
-    icon(Icon::SquareCheck, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(Icon::SquareCheck, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     key(&task.key.to_string(), TASK_KEY_WIDTH),
-    title(&task.title, PaletteColor::TextPrimary),
+    title(&task.title, PaletteColor::Foreground),
     Text::new(&ctx.t(workflow_key(task.status)))
       .variant(TypographyStyle::Caption)
       .nowrap()
@@ -245,9 +243,9 @@ fn run_row(ctx: &mut Ctx, props: &MenuProps, run: &RunChoice, focused: bool) -> 
   let id = format!("{}-mention-run-{}-state", props.id, run.number.get());
   let state = StatusChip::new(id, Status::of_phase(run.phase)).render(ctx);
   vec![
-    icon(Icon::Play, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(Icon::Play, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     key(&shown, RUN_KEY_WIDTH),
-    title(&words, PaletteColor::TextMuted),
+    title(&words, PaletteColor::MutedForeground),
     state,
   ]
   .into_iter()
@@ -266,7 +264,7 @@ fn file_row(ctx: &Ctx, file: &FileChoice, focused: bool) -> Vec<Element> {
       .into()
   });
   vec![
-    icon(Icon::FileCode, IconSize::Md, PaletteColor::TextSecondary).into(),
+    icon(Icon::FileCode, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
     path(file),
   ]
   .into_iter()
@@ -304,7 +302,7 @@ fn path(file: &FileChoice) -> Element {
     } else if range.end <= name_at {
       text
         .variant(ExtraTypography::PropertyMono.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
     } else {
       text.variant(ExtraTypography::PropertyMono.role())
     }
@@ -324,7 +322,7 @@ fn key(words: &str, width: f32) -> Element {
     .child(
       Text::new(words)
         .variant(ExtraTypography::PropertyMono.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .into()
@@ -359,7 +357,7 @@ pub(super) fn nothing((title, hint): (&str, &str)) -> Element {
     )
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .child(icon(Icon::SearchX, IconSize::Lg, PaletteColor::TextMuted))
+    .child(icon(Icon::SearchX, IconSize::Lg, PaletteColor::MutedForeground))
     .child(
       Column::new()
         .flex(1.0)
@@ -374,7 +372,7 @@ pub(super) fn nothing((title, hint): (&str, &str)) -> Element {
           Text::new(hint)
             .id("mention-nothing-hint")
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .width(Dimension::Pct(100.0)),
         ),
     )

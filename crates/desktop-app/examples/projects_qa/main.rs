@@ -42,7 +42,6 @@ use orchester_app::{
   services::cli_search::CliSearch,
   test_support::signed_in,
   theme::{self, Mode},
-  ui::loader,
 };
 use orchester_exec::search_path::{SearchBasis, SearchPath};
 use orchester_workspace::workspace::Workspace;
@@ -315,7 +314,6 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
   i18n::install(&app)?;
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
   let link = WindowLink::default();
   let settings = McpSettings::with_window_control(true);
   let config = mcp::config(settings, &link, &appearance, launch.services(), app.i18n());
@@ -331,15 +329,14 @@ fn window(state: State, folders: &Folders) -> Result<(), Box<dyn Error>> {
     mcp: McpLink::new(&server),
     start,
   };
-  tree.mount_root::<host::Host>(
-    &mut app,
-    host::props(
-      root,
-      (folders.folder(state.folder()), state.file(folders)),
-      folders.root.join("copied.txt"),
-      state.cli_search(),
-    ),
+  let props = host::props(
+    root,
+    (folders.folder(state.folder()), state.file(folders)),
+    folders.root.join("copied.txt"),
+    state.cli_search(),
   );
+  props.clipboard().install(&app);
+  tree.mount_root::<host::Host>(&mut app, props);
   WinitWindow::new(app, tree)
     .with_title("Orchester projects QA")
     .with_icon(brand::window_icon()?)

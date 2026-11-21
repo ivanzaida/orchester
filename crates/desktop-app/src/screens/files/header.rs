@@ -35,11 +35,11 @@ use crate::{
   navigation::Navigation,
   routes::{OverviewTab, ProjectPage, Route},
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, FilesText, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, FilesText, IconSize},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
-    code_box::Copier,
+    clipboard::Clipboard,
     icon::{Icon, file_icon, icon},
     message::message_text,
   },
@@ -190,7 +190,12 @@ fn crumbs(ctx: &mut Ctx, page: &Page<'_>) -> Row {
       );
     }
   }
-  breadcrumb(ctx, "files-crumbs", CrumbSeparator::Slash, crumbs).height(Dimension::Px(CRUMBS_HEIGHT))
+  Row::new()
+    .height(Dimension::Px(CRUMBS_HEIGHT))
+    .max_width(Dimension::Pct(100.0))
+    .min_width(Dimension::Px(0.0))
+    .align_items(Alignment::Center)
+    .child(breadcrumb(ctx, "files-crumbs", CrumbSeparator::Slash, crumbs))
 }
 
 /// The icon and the name: the file's, the path refused, or *Files*.
@@ -216,7 +221,7 @@ fn title(ctx: &Ctx, page: &Page<'_>) -> Row {
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Xl, PaletteColor::TextSecondary).flex_shrink(0.0))
+    .child(icon(glyph, IconSize::Xl, ExtraColor::TextSecondary.role()).flex_shrink(0.0))
     .child(text)
 }
 
@@ -230,7 +235,11 @@ fn meta(ctx: &Ctx, page: &Page<'_>, gone: bool) -> Row {
       MetaLine::whole(states::gone_meta(ctx, page)),
     )
   } else {
-    (version::glyph(page.at()), PaletteColor::TextMuted, meta_line(ctx, page))
+    (
+      version::glyph(page.at()),
+      PaletteColor::MutedForeground,
+      meta_line(ctx, page),
+    )
   };
   let refusal = page.view.refusal.get().map(|refusal| {
     Text::new(&ctx.t(refusal.key()))
@@ -387,7 +396,7 @@ fn copy(ctx: &mut Ctx, page: &Page<'_>, gone: bool) -> Option<Element> {
   } else {
     "files.copyFile"
   };
-  let clipboard = Copier::of(ctx);
+  let clipboard = Clipboard::of(ctx);
   let gate = ctx.use_context::<InputGate>();
   let press = actions::copy((clipboard, gate), page.view.refusal.clone(), (text.clone(), lines));
   Some(

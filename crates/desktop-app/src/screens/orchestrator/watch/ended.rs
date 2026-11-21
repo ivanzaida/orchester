@@ -23,7 +23,7 @@ pub(in crate::screens::orchestrator) fn line(
   let color = if ended_done(summary.reason) {
     PaletteColor::Success
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   let said = Said {
     glyph: (Icon::Flag, color),

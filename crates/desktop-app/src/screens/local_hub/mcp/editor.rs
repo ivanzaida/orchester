@@ -326,8 +326,14 @@ impl Editor {
     let reset = revision.clone();
     let cancel = (changed && !pending).then(|| Press::run(move || reset.update(|count| *count += 1)));
     let hint = match field {
-      Some(Refusal::Secret) => (ctx.t("local_hub.mcp.allowThenSave").to_string(), PaletteColor::Danger),
-      _ => (ctx.t("local_hub.mcp.onlyHere").to_string(), PaletteColor::TextMuted),
+      Some(Refusal::Secret) => (
+        ctx.t("local_hub.mcp.allowThenSave").to_string(),
+        PaletteColor::Destructive,
+      ),
+      _ => (
+        ctx.t("local_hub.mcp.onlyHere").to_string(),
+        PaletteColor::MutedForeground,
+      ),
     };
     save_bar::bar(ctx, "local-hub-mcp", (save, cancel), hint)
   }

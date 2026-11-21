@@ -254,6 +254,6 @@ fn section_head(label: &str, spacing: SpacingSize) -> Row {
 fn section_label(label: &str) -> Text {
   Text::new(label)
     .variant(TypographyStyle::FieldLabel)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .nowrap()
 }

@@ -89,7 +89,7 @@ fn docker(
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("service_cards.docker.mac"))
         .variant(ServiceCardsText::Detail.role())
@@ -101,7 +101,7 @@ fn docker(
     ctx.t_args("service_cards.actions.editService", named),
   );
   let actions = super::actions(ctx, timeline, (id, service), (labels, LogPlace::None));
-  frame(id, PaletteColor::Danger)
+  frame(id, PaletteColor::Destructive)
     .describe("service", service.to_owned())
     .describe(
       "cause",
@@ -113,7 +113,7 @@ fn docker(
     )
     .child(head(
       id,
-      (Icon::Database, PaletteColor::Danger),
+      (Icon::Database, PaletteColor::Destructive),
       &ctx.t_args(title, [("service", service.to_owned())]),
       (&meta, Meta::AfterTitle),
     ))
@@ -153,12 +153,12 @@ fn not_ready(
     ctx.t("service_cards.actions.editReadiness"),
   );
   let actions = super::actions(ctx, timeline, (id, service), (labels, LogPlace::Last));
-  frame(id, PaletteColor::Danger)
+  frame(id, PaletteColor::Destructive)
     .describe("service", service.to_owned())
     .describe("cause", "not_ready")
     .child(head(
       id,
-      (Icon::TimerOff, PaletteColor::Danger),
+      (Icon::TimerOff, PaletteColor::Destructive),
       &title,
       (&meta, Meta::AfterTitle),
     ))

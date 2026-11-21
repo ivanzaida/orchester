@@ -34,7 +34,7 @@ use super::super::{TaskContext, step_label, tab_link};
 use crate::{
   routes::TaskTab,
   services::Services,
-  theme::{DecisionSpacing, DecisionText, ExtraSpacing, ExtraTypography, IconSize, TaskText},
+  theme::{DecisionSpacing, DecisionText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     card::{CardSurface, card},
     icon::{Icon, icon},
@@ -213,7 +213,7 @@ fn files_card(ctx: &mut Ctx, task: &TaskContext, files: &[FileDiff]) -> Element 
     ));
   card("task-ready-files", CardSurface::Outline)
     .padding(ExtraSpacing::Snug.role())
-    .with_children(files.iter().take(SHOWN_FILES).map(file_row))
+    .children(files.iter().take(SHOWN_FILES).map(file_row))
     .child(link)
     .into()
 }
@@ -240,7 +240,10 @@ fn file_row(file: &FileDiff) -> Element {
     )
     .child(Text::new(file.path()).variant(TypographyStyle::Mono).flex(1.0).nowrap())
     .child(count(&format!("+{}", file.additions()), PaletteColor::Success))
-    .child(count(&format!("\u{2212}{}", file.deletions()), PaletteColor::Danger))
+    .child(count(
+      &format!("\u{2212}{}", file.deletions()),
+      PaletteColor::Destructive,
+    ))
     .into()
 }
 
@@ -275,7 +278,7 @@ fn verification(ctx: &Ctx, run: &RunView, (delivered, head): (Vec<Element>, Opti
         ExtraSpacing::Loose.role(),
         ExtraSpacing::Snug.role(),
       ))
-      .with_children(checks)
+      .children(checks)
       .into()
   };
   section(ctx, ("task-ready-verification", title), revision, body)
@@ -326,7 +329,7 @@ fn check(ctx: &Ctx, run: &RunView, step: &StepView) -> Element {
         .child(
           Text::new(&said)
             .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap(),
         ),
     )
@@ -350,7 +353,7 @@ pub(in super::super) fn section(
       Text::new(&figure)
         .id(format!("{id}-figure"))
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
     }));
   Column::new()

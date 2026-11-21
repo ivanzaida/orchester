@@ -281,9 +281,11 @@ impl Component for PermissionsChip {
 fn face(ctx: &Ctx, shown: &PermissionsMenu) -> Row {
   let (glyph, color) = match shown.chip {
     ChipMode::Everything => (Icon::ShieldAlert, PaletteColor::Warning),
-    ChipMode::Autopilot => (Icon::ShieldCheck, PaletteColor::TextSecondary),
-    ChipMode::Manual | ChipMode::ManualRun | ChipMode::ManualProject => (Icon::Shield, PaletteColor::TextSecondary),
-    ChipMode::Dangerous => (Icon::TriangleAlert, PaletteColor::Danger),
+    ChipMode::Autopilot => (Icon::ShieldCheck, ExtraColor::TextSecondary.role()),
+    ChipMode::Manual | ChipMode::ManualRun | ChipMode::ManualProject => {
+      (Icon::Shield, ExtraColor::TextSecondary.role())
+    }
+    ChipMode::Dangerous => (Icon::TriangleAlert, PaletteColor::Destructive),
   };
   // The project decides for every run while it approves every request: the profile's word would say nothing true.
   let dangerous = shown.chip == ChipMode::Dangerous;
@@ -300,9 +302,9 @@ fn face(ctx: &Ctx, shown: &PermissionsMenu) -> Row {
         .id("conversation-permissions-label")
         .variant(PermissionsText::Chip.role())
         .color(if dangerous {
-          PaletteColor::Danger
+          PaletteColor::Destructive
         } else {
-          PaletteColor::TextSecondary
+          ExtraColor::TextSecondary.role()
         })
         .nowrap(),
     )
@@ -310,10 +312,10 @@ fn face(ctx: &Ctx, shown: &PermissionsMenu) -> Row {
       Text::new(&ctx.t(profile))
         .id("conversation-permissions-profile")
         .variant(PermissionsText::Chip.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     }))
-    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground))
 }
 
 /// The chip's tooltip: what the profile is and what the project allows, in a sentence.

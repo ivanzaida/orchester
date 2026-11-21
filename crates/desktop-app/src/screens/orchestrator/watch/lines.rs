@@ -132,7 +132,7 @@ fn leading(ctx: &Ctx, id: &str, (led, asked, to_end): (&[&NamedTarget], bool, bo
     (Icon::Eye, "orchestrator.watch.leadingAside", "leading")
   };
   let said = Said {
-    glyph: (glyph, PaletteColor::TextMuted),
+    glyph: (glyph, PaletteColor::MutedForeground),
     words: ctx.t_args("orchestrator.watch.leading", [("targets", joined(ctx, &names))]),
     tag: at_request(ctx, asked),
     aside: Some(ctx.t(aside)),
@@ -158,7 +158,7 @@ fn now_led_in(
     _ => ctx.t("orchestrator.watch.nowLedInAside"),
   };
   let said = Said {
-    glyph: (Icon::ArrowRightLeft, PaletteColor::TextMuted),
+    glyph: (Icon::ArrowRightLeft, PaletteColor::MutedForeground),
     words: ctx.t_args("orchestrator.watch.nowLedIn", [("target", &*name), ("title", title)]),
     tag: None,
     aside: Some(aside),
@@ -177,7 +177,7 @@ fn now_led_in(
 fn moved(ctx: &Ctx, target: &NamedTarget, (words, aside): (&str, &str), title: &str) -> Said {
   let name = target_name(ctx, target);
   Said {
-    glyph: (Icon::ArrowRightLeft, PaletteColor::TextMuted),
+    glyph: (Icon::ArrowRightLeft, PaletteColor::MutedForeground),
     words: ctx.t_args(words, [("target", &*name)]),
     tag: None,
     aside: Some(ctx.t_args(aside, [("title", title)])),
@@ -204,7 +204,7 @@ fn stopped(
     count => ctx.t_args("orchestrator.watch.leftOpen.other", [("count", count.to_string())]),
   };
   let said = Said {
-    glyph: (Icon::EyeOff, PaletteColor::TextMuted),
+    glyph: (Icon::EyeOff, PaletteColor::MutedForeground),
     words,
     tag: at_request(ctx, asked),
     aside: Some(aside),

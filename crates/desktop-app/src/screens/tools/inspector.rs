@@ -60,7 +60,7 @@ fn properties(ctx: &Ctx, p: &EditorProps) -> Vec<Element> {
         Text::new(&value)
           .id(id.to_owned())
           .variant(HubText::Value.role())
-          .color(lurq::app::theme::PaletteColor::TextSecondary)
+          .color(crate::theme::ExtraColor::TextSecondary.role())
           .nowrap(),
       )
       .into()

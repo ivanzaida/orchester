@@ -13,5 +13,5 @@ fn ci_log_tail_follows_the_design() {
     (style.font_size, style.line_height, style.weight, &*style.font_family),
     (11.5, 1.6, FontWeight::Normal, "Geist Mono")
   );
-  assert_eq!(style.color, theme.palette_color(PaletteColor::TextSecondary));
+  assert_eq!(style.color, theme.palette_color(ExtraColor::TextSecondary.role()));
 }

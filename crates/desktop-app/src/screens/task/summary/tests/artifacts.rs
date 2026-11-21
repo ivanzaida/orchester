@@ -108,7 +108,7 @@ pub fn links(ctx: &mut Ctx, id: &str, artifacts: &[String]) -> Vec<Element> {
         .child(
           Text::new(&word)
             .variant(TypographyStyle::Label)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap(),
         );
       Some(link.into())
@@ -190,10 +190,10 @@ fn group(ctx: &Ctx, links: &Links, kind: ArtifactKind, files: &[(&str, bool)]) -
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&name)
         .id(format!("{id}-name"))
@@ -204,12 +204,12 @@ fn group(ctx: &Ctx, links: &Links, kind: ArtifactKind, files: &[(&str, bool)]) -
       Text::new(&count)
         .id(format!("{id}-count"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap(),
     )
-    .child(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::MutedForeground))
     .into()
 }
 

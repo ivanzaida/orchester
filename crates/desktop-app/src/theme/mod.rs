@@ -31,10 +31,11 @@ mod failure;
 mod files;
 mod flow;
 mod fonts;
-mod form;
 mod groups;
 mod hub;
+mod icons;
 pub mod instructions;
+pub mod kit;
 mod leading;
 mod lifecycle;
 mod local_integration;
@@ -79,10 +80,11 @@ mod typography;
 pub mod usage;
 mod watching;
 
-use std::time::Duration;
-
 use lurq::{
-  app::{App, theme::Theme},
+  app::{
+    App,
+    theme::{Theme, ThemeCaret},
+  },
   layout::scrollbar::ScrollBarStyle,
 };
 
@@ -112,7 +114,7 @@ pub use self::{
   leading::{CEILINGS_FORM_WIDTH, LeadingSpacing, LeadingText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
-  markdown::{blank_line_between_blocks, code_lines},
+  markdown::blank_line_between_blocks,
   memory::{MemorySpacing, MemoryText},
   merge_attempt::{AttemptSpacing, AttemptText},
   metrics::{ControlHeight, ExtraRadius, ExtraSpacing, text_area_scrollbar},
@@ -129,7 +131,7 @@ pub use self::{
   pipelines::{PIPELINE_HUB_LIST_NARROW, PIPELINES_BONE_FADE, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText, UNUSED_ROWS_OPACITY},
   projects::{ProjectsSpacing, ProjectsText},
-  review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
+  review::{ReviewSpacing, ReviewText},
   run_model::ModelText,
   run_services::RunServicesText,
   runs_on_picker::{RUNS_ON_UNAVAILABLE_OPACITY, RunsOnPickerText, runs_on_picker_scrollbar},
@@ -154,7 +156,7 @@ pub use self::{
   team_state::TeamStateText,
   test_results::TestsText,
   todo_list::TodoText,
-  typography::{ExtraTypography, IconSize},
+  typography::{ExtraTypography, IconSize, TextRole},
   usage::{UsageRadius, UsageSpacing, UsageText},
   watching::{WatchingSpacing, WatchingText},
 };
@@ -170,11 +172,10 @@ pub const MENU_SPLIT_OPACITY: f32 = 0.25;
 pub const SHORTCUT_OPACITY: f32 = 0.6;
 /// What a primary full-width button does, in `on_accent` under its label (`dwsGC` in `br5EG`).
 pub const CONSEQUENCE_ON_ACCENT_OPACITY: f32 = 0.75;
-/// One turn of a loader (`loader-circle`), which turns while it is shown; the design draws it still.
-pub const LOADER_TURN: Duration = Duration::from_secs(1);
-/// The poses of a loader's turn: 24, 15° apart. lurq draws a frame only when the pose changes, so a window
-/// with a turning loader draws 24 frames a second on any display, not one every display refresh.
-pub const LOADER_STEPS: u32 = 24;
+/// The poses a second of everything that turns (`theme::kit::spinner`): a loader's turn of a second in 24 poses, 15°
+/// apart; the design draws it still. lurq draws a frame only when the pose changes, so a window with a turning loader
+/// draws 24 frames a second on any display, not one every display refresh.
+pub const SPIN_STEPS: u32 = 24;
 
 /// Loads the fonts and fills every role for `mode`.
 pub fn install(app: &mut App, mode: Mode) {
@@ -224,17 +225,24 @@ pub fn install(app: &mut App, mode: Mode) {
   side_question::install(theme);
   watching::install(theme);
   leading::install(theme);
+  markdown::install(theme);
+  icons::install(theme);
+  kit::install(theme);
   theme.set_shadows(shadow::shadows());
-  theme.set_form(form::form());
+  // The caret of lurq 0.62, 1 wide and as high as the text: the design's fields draw no other.
+  theme.set_caret(ThemeCaret::legacy());
 }
 
 /// Switches the colors to `mode`: the palette, and the text styles, scrollbar and Markdown whose colors
 /// come from it. Every component that reads the theme follows on its next render.
 pub fn apply(theme: &Theme, mode: Mode) {
+  // The app chooses light or dark itself (`appearance`): lurq's own controls take the same, and a change of the
+  // system's appearance leaves the palette to the app.
+  theme.set_preferred_appearance(Some(mode.appearance()));
   let palette = palette::palette(mode);
   theme.set_typography(typography::typography(&palette));
   theme.set_scrollbar(ScrollBarStyle {
-    thumb_color: palette.border_strong,
+    thumb_color: palette.input,
     ..ScrollBarStyle::thin()
   });
   theme.set_markdown(markdown::markdown(&palette));

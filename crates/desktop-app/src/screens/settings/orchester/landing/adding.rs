@@ -82,7 +82,7 @@ fn not_git_card(ctx: &Ctx, folder: &std::path::Path) -> Element {
         .child(
           Text::new(&shorten_path(folder, PATH))
             .variant(OrchesterText::Address.role())
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .nowrap(),
         ),
     )
@@ -90,11 +90,11 @@ fn not_git_card(ctx: &Ctx, folder: &std::path::Path) -> Element {
       Row::new()
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::CircleX, IconSize::Sm, PaletteColor::Danger))
+        .child(icon(Icon::CircleX, IconSize::Sm, PaletteColor::Destructive))
         .child(
           Text::new(&ctx.t("sharing.landing.notGitLine"))
             .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::Danger),
+            .color(PaletteColor::Destructive),
         ),
     )
     .child(

@@ -33,7 +33,7 @@ pub fn window(ctx: &mut Ctx, problem: Problem) -> Element {
   let window = Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceBase)
+    .background(PaletteColor::Background)
     .child(body)
     .child(status_bar::version_only(ctx));
   chrome::bare(ctx, window.into())
@@ -67,7 +67,7 @@ impl Component for StartupScreen {
       .padding(StartupSpacing::Panel.role())
       .align_items(Alignment::Center)
       .justify(Justify::Center)
-      .background(PaletteColor::SurfacePanel)
+      .background(PaletteColor::Canvas)
       .rounded(RadiusSize::Lg)
       .border_inside(BorderSize::Sm, ExtraColor::PanelBorder.role())
       .clip()

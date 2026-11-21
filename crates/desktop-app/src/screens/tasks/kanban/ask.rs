@@ -201,7 +201,7 @@ fn change(task: &Subject, kind: ChangeKind) -> Change {
 fn neutral(ctx: &Ctx, (title, detail): (Arc<str>, Arc<str>), (keep, confirm): (&str, &str)) -> Words {
   Words {
     glyph: Icon::CircleHelp,
-    tone: PaletteColor::BorderStrong,
+    tone: PaletteColor::Input,
     title,
     detail,
     keep: ctx.t(keep),
@@ -321,7 +321,7 @@ fn words(ctx: &Ctx, asked: &Ask) -> Words {
     Ask::BulkClose { closing, tasks, runs } => bulk_close(ctx, *closing, tasks, runs),
     Ask::BulkDelete(tasks) => Words {
       glyph: Icon::Trash2,
-      tone: PaletteColor::Danger,
+      tone: PaletteColor::Destructive,
       title: ctx.t_args("tasks.board.ask.delete.title", [("count", tasks.len().to_string())]),
       detail: ctx.t_args("tasks.board.ask.delete.detail", [("tasks", listed(ctx, tasks.iter()))]),
       keep: ctx.t("tasks.board.ask.delete.keep"),

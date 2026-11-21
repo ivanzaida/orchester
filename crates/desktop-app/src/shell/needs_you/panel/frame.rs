@@ -32,7 +32,7 @@ pub(super) fn head(ctx: &mut Ctx, total: usize, sub: &str, open: &Signal<bool>) 
   let color = if total > 0 {
     PaletteColor::Warning
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   let close = {
     let open = open.clone();
@@ -98,7 +98,7 @@ pub(super) fn empty(ctx: &Ctx) -> Element {
         ))
         .spacing(crate::theme::ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::Hand, IconSize::Xl, PaletteColor::TextMuted))
+        .child(icon(Icon::Hand, IconSize::Xl, PaletteColor::MutedForeground))
         .child(
           Text::new(&ctx.t("needs_you.empty.title"))
             .id("needs-you-empty-title")

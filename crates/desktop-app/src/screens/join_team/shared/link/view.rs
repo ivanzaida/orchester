@@ -47,7 +47,7 @@ pub(super) fn project_line(ctx: &Ctx, project: &SharedProject) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(StartupSpacing::Row.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::FolderGit2, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::FolderGit2, IconSize::Md, PaletteColor::MutedForeground))
     .child(
       Text::new(&project.name)
         .id("join-team-link-project-name")
@@ -89,8 +89,8 @@ pub(super) fn existing_option(
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Lg)
     .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Ring))
     .rounded(RadiusSize::Lg)
     .child(head)
     .child(
@@ -202,7 +202,7 @@ fn found(ctx: &Ctx, project: &SharedProject, check: &FolderCheck, can_clone: boo
     | FolderCheck::Unreadable
     | FolderCheck::LinkedElsewhere { .. } => field_error("join-team-link-error", &said()).into(),
     FolderCheck::NoHint | FolderCheck::NoOrigin | FolderCheck::LinkedHere => {
-      line(CHECK, (Icon::Info, PaletteColor::TextMuted), &said())
+      line(CHECK, (Icon::Info, PaletteColor::MutedForeground), &said())
     }
   }
 }

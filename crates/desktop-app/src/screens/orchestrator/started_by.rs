@@ -56,9 +56,9 @@ fn tagged(id: &str, words: &str) -> Element {
     .padding(Padding::horizontal(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Sm)
-    .child(icon(Icon::Zap, IconSize::Xs, PaletteColor::TextMuted))
+    .child(icon(Icon::Zap, IconSize::Xs, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(format!("{id}-label"))

@@ -148,8 +148,8 @@ pub const fn state_name(fullness: Fullness) -> &'static str {
 const fn share_color(fullness: Fullness) -> PaletteColor {
   match fullness {
     Fullness::NearFull => PaletteColor::Warning,
-    Fullness::Full => PaletteColor::Danger,
-    Fullness::Plenty | Fullness::Unknown => PaletteColor::TextMuted,
+    Fullness::Full => PaletteColor::Destructive,
+    Fullness::Plenty | Fullness::Unknown => PaletteColor::MutedForeground,
   }
 }
 
@@ -289,7 +289,7 @@ fn compacting(ctx: &Ctx, props: &ContextMeterProps) -> Element {
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(Icon::LoaderCircle, IconSize::Sm, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t("ui.contextMeter.compacting"))
         .id(format!("{}-share", props.id))
@@ -311,7 +311,8 @@ fn face(ctx: &mut Ctx, props: &ContextMeterProps, fullness: Fullness) -> Row {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center);
   let Some(share) = props.reading.and_then(|reading| reading.share()) else {
-    return row.child(icon(Icon::CircleDashed, IconSize::Sm, PaletteColor::TextMuted).id(format!("{}-ring", props.id)));
+    return row
+      .child(icon(Icon::CircleDashed, IconSize::Sm, PaletteColor::MutedForeground).id(format!("{}-ring", props.id)));
   };
   let ring = ctx.mount_keyed::<Ring>(
     &format!("context-ring-{}", props.id),

@@ -22,7 +22,7 @@ use lurq::{
 use orchester_app::{
   i18n,
   theme::{self, Mode},
-  ui::{loader, tooltip::TOOLTIP_DELAY, typing},
+  ui::tooltip::TOOLTIP_DELAY,
 };
 
 type Build = Arc<dyn Fn(&mut Ctx) -> Element + Send + Sync>;
@@ -70,8 +70,6 @@ impl Kit {
     i18n::install(&app).expect("bundled locales load");
     let mut tree = Tree::new();
     tree.resize(1440, 900);
-    loader::install(&mut tree);
-    typing::install(&mut tree);
     tree.mount_root::<Host>(&mut app, Shown(Arc::new(build)));
     tree.pass_headless(&mut app);
     Self { app, tree }
@@ -102,6 +100,14 @@ impl Kit {
       .unwrap_or_else(|| panic!("{id} is shown"));
     let mut all = Vec::new();
     collect(element, &mut all);
+    all
+  }
+
+  /// Every text the window shows, an overlay's too (a tooltip lurq names no id of).
+  pub fn all_texts(&mut self) -> Vec<String> {
+    let root = self.tree.root().expect("the window has a root");
+    let mut all = Vec::new();
+    collect(root, &mut all);
     all
   }
 

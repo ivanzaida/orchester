@@ -225,7 +225,7 @@ impl Component for Leads {
       .flex_shrink(0.0)
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .child(icon(Icon::Eye, IconSize::Base, PaletteColor::TextMuted).id(format!("{ID}-eye")))
+      .child(icon(Icon::Eye, IconSize::Base, PaletteColor::MutedForeground).id(format!("{ID}-eye")))
       .with_children(chips)
       .with_children(more)
   }

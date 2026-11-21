@@ -33,7 +33,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     kbd::key_cap,
-    menu::menu_panel,
+    menu::{held_panel, menu_panel},
     message::message_text,
     pressable::Press,
     skeleton::bone,
@@ -106,10 +106,11 @@ impl Picker {
 
 /// The panel named after composer `id`, holding `content`.
 pub(super) fn frame((id, picker): (&str, Picker), content: Vec<Element>) -> Element {
-  menu_panel(&format!("{id}-{}-picker", picker.prefix()))
-    .width(Dimension::Px(WIDTH))
-    .with_children(content)
-    .into()
+  held_panel(
+    menu_panel(&format!("{id}-{}-picker", picker.prefix()))
+      .width(WIDTH)
+      .with_children(content),
+  )
 }
 
 /// The picker's own search field, `{id}-{prefix}-search`, with `count` at its end.
@@ -236,7 +237,7 @@ pub(super) fn unreadable(
     .child(
       Text::new(&ctx.t_args("orchestrator.watch.picker.unreadableNote", [("reason", reason)]))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Pct(100.0)),
     );
   let unreadable = Row::new()
@@ -245,7 +246,7 @@ pub(super) fn unreadable(
     .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger))
+    .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Destructive))
     .child(words)
     .child(again);
   let mut content = vec![
@@ -299,11 +300,11 @@ pub(super) fn finished((id, picker): (&str, Picker), (hidden, words): (usize, &s
   line()
     .id(format!("{id}-{}-finished", picker.prefix()))
     .describe("count", hidden.to_string())
-    .child(icon(Icon::Archive, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Archive, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .min_width(Dimension::Px(0.0))
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
@@ -324,7 +325,7 @@ pub(in crate::screens::orchestrator) fn matched_label(label: &str, filter: &str,
         (false, true) => text.variant(SlashText::Match.role()),
         (true, false) => text
           .variant(ExtraTypography::PropertyMono.role())
-          .color(PaletteColor::TextSecondary),
+          .color(ExtraColor::TextSecondary.role()),
         (true, true) => text.variant(SlashText::SkillMatch.role()),
       }
     })
@@ -355,9 +356,9 @@ pub(super) fn added(ctx: &Ctx) -> Element {
     .align_items(Alignment::Center)
     .child(caption(
       &ctx.t("orchestrator.watch.picker.added"),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ))
-    .child(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary))
+    .child(icon(Icon::Check, IconSize::Md, PaletteColor::Foreground))
     .into()
 }
 

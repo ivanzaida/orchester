@@ -29,7 +29,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  theme::{ExtraSpacing, IconSize, TaskText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TaskText},
   ui::{
     chip::{BadgeTone, badge},
     icon::{Icon, icon},
@@ -50,7 +50,7 @@ pub fn card(ctx: &mut Ctx, run: &RunView, tests: &TestResults) -> Element {
       let why = Text::new(&words)
         .id("task-tests-unreadable")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .width(Dimension::Pct(100.0))
         .padding(Padding::symmetric(
           ExtraSpacing::Inline.role(),
@@ -109,7 +109,7 @@ fn head(ctx: &Ctx, run: &RunView, tests: &TestResults, record: Option<&TestStepR
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Inset.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::FlaskConical, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::FlaskConical, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t("summary.tests.title"))
         .id("task-tests-title")
@@ -120,7 +120,7 @@ fn head(ctx: &Ctx, run: &RunView, tests: &TestResults, record: Option<&TestStepR
       Text::new(&meta)
         .id("task-tests-meta")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .min_width(Dimension::Px(0.0))
         .nowrap(),
     )

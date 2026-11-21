@@ -326,7 +326,7 @@ fn set_theme_switches_the_colors_and_keeps_the_choice() {
   let answer = set_theme(&appearance, theme, &json!({ "theme": "light" })).expect("a known theme");
   assert_eq!(answer, json!({ "setting": "light", "mode": "light" }));
   assert_eq!(
-    theme.palette_color(PaletteColor::SurfaceBase),
+    theme.palette_color(PaletteColor::Background),
     Color::from_hex("#E4E4E8")
   );
   assert_eq!(settings.theme().expect("stored"), ThemeSetting::Light);
@@ -338,7 +338,7 @@ fn set_theme_switches_the_colors_and_keeps_the_choice() {
   let error = set_theme(&unsaved, theme, &json!({ "theme": "dark" })).expect_err("nowhere to keep it");
   assert_eq!(error.code(), "not_saved");
   assert_eq!(
-    theme.palette_color(PaletteColor::SurfaceBase),
+    theme.palette_color(PaletteColor::Background),
     Color::from_hex("#E4E4E8"),
     "nothing changed"
   );

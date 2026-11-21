@@ -8,7 +8,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::style;
+use super::{palette::text_secondary, typography::style};
 
 /// The dialog's width (`LVCxf`).
 pub const DIALOG_WIDTH: f32 = 500.0;
@@ -61,11 +61,11 @@ impl DialogText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(15.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
-      Self::ChoiceLabel => style(11.0, FontWeight::Medium, 1.4, 0.0, palette.text_secondary),
-      Self::Line => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::Keys | Self::Detail => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
-      Self::Option => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
+      Self::Title => style(15.0, FontWeight::SemiBold, 1.35, 0.0, palette.foreground),
+      Self::ChoiceLabel => style(11.0, FontWeight::Medium, 1.4, 0.0, text_secondary(palette)),
+      Self::Line => style(12.5, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
+      Self::Keys | Self::Detail => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
+      Self::Option => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.foreground),
     }
   }
 }

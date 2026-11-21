@@ -25,7 +25,7 @@ use crate::{
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, OrchesterText},
   ui::{
     button::{ActionButton, ButtonKind},
-    code_box::Copier,
+    clipboard::Clipboard,
     detail_row::{DetailValue, detail_row, detail_row_of},
     icon::Icon,
     notice::{Notice, NoticeTone},
@@ -96,7 +96,7 @@ impl Link {
       DetailValue::Text,
     );
     let username_row = username.map(|username| {
-      let copier = Copier::of(ctx);
+      let copier = Clipboard::of(ctx);
       let copied = username.clone();
       let value = Row::new()
         .spacing(SpacingSize::Sm)
@@ -105,7 +105,7 @@ impl Link {
           Text::new(&username)
             .id("sharing-not-member-username")
             .variant(OrchesterText::Address.role())
-            .color(PaletteColor::TextPrimary),
+            .color(PaletteColor::Foreground),
         )
         .child(
           ActionButton::new("sharing-not-member-copy", ButtonKind::Ghost, ctx.t("common.copy"))
@@ -142,7 +142,7 @@ impl Link {
       .width(Dimension::Pct(100.0))
       .padding(ExtraSpacing::Inset.role())
       .spacing(SpacingSize::Sm)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Tile.role())
       .child(owners)

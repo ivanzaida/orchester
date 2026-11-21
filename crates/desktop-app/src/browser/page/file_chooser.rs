@@ -61,11 +61,11 @@ pub fn hint(ctx: &Ctx, showing: &Showing, tab: &BrowserTabId) -> Option<Element>
     )
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .rounded(RadiusSize::Lg)
     .box_shadow(ShadowStyle::Lg)
-    .child(icon(Icon::FolderOpen, IconSize::Lg, PaletteColor::TextSecondary))
+    .child(icon(Icon::FolderOpen, IconSize::Lg, ExtraColor::TextSecondary.role()))
     .child(words);
   Some(
     Column::new()

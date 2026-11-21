@@ -16,6 +16,7 @@ use lurq::{
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::MenuKeys,
 };
 use orchester_core::{
   time::Timestamp,
@@ -26,13 +27,17 @@ use orchester_workspace::{
   usage::{Dashboard, Facet, UsageQuery},
 };
 
-use super::{Requery, custom_range, filters, words};
+use super::{
+  Requery, custom_range,
+  filters::{self, MenuSearch},
+  words,
+};
 use crate::{
   theme::{ExtraSpacing, ExtraTypography, UsageSpacing, UsageText},
   ui::{
-    filter::{FilterButton, filter_menu_panel},
+    filter::FilterButton,
     icon::Icon,
-    menu::{MenuItem, menu},
+    menu::{MenuItem, MenuPanel, filter_menu_panel, menu},
     pressable::Focus,
     tabs::{Segment, SegmentFace, segmented},
   },
@@ -40,6 +45,8 @@ use crate::{
 
 /// The *Group by* menu's width (`Group by menu` `GdEHA`).
 const GROUP_MENU_WIDTH: f32 = 240.0;
+/// The Group by menu's element id.
+const GROUP_MENU_ID: &str = "usage-group-menu";
 
 #[derive(Clone)]
 pub struct ToolbarProps {
@@ -69,8 +76,12 @@ pub struct UsageToolbar {
   group: (Signal<bool>, ElementRef),
   /// *Custom…*'s range: whether it is open, its segment and the period control, which places it.
   custom: (Signal<bool>, ElementRef, ElementRef),
-  /// What a filter's menu searches for.
+  /// What a filter's menu searches for, the field it is typed in, the menu's keys while that field has the focus, and
+  /// whether the field is to take the focus (a menu just opened).
   search: Signal<String>,
+  search_field: ElementRef,
+  search_keys: MenuKeys,
+  focus_search: Signal<bool>,
 }
 
 impl Component for UsageToolbar {
@@ -78,18 +89,23 @@ impl Component for UsageToolbar {
 
   fn create(ctx: &mut Ctx) -> Self {
     let mut pair = || (ctx.signal(false), ElementRef::default());
+    let search_field = ElementRef::default();
     let toolbar = Self {
       filters: [pair(), pair(), pair(), pair(), pair(), pair()],
       group: pair(),
       custom: (ctx.signal(false), ElementRef::default(), ElementRef::default()),
       search: ctx.signal(String::new()),
+      search_keys: MenuKeys::new(search_field.clone()),
+      search_field,
+      focus_search: ctx.signal(false),
     };
-    // A menu opens on its whole list: what the last one searched for is forgotten.
+    // A menu opens on its whole list, its search taking the focus: what the last one searched for is forgotten.
     for (open, _) in &toolbar.filters {
-      let search = toolbar.search.clone();
+      let (search, focus) = (toolbar.search.clone(), toolbar.focus_search.clone());
       ctx.watch(open, move |open: &bool| {
         if *open {
           search.set(String::new());
+          focus.set(true);
         }
       });
     }
@@ -108,7 +124,7 @@ impl Component for UsageToolbar {
     let readback = Text::new(&readback(ctx, &props))
       .id("usage-readback")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap();
     let buttons: Vec<FilterButton> = self
       .menus(&props)
@@ -265,14 +281,20 @@ impl UsageToolbar {
     let mut popups = Vec::new();
     for (facet, (open, anchor)) in self.menus(props) {
       let panel = if open.get() {
-        filters::menu(ctx, props.dashboard.as_deref(), facet, &self.search, &props.requery)
+        let search = MenuSearch {
+          words: &self.search,
+          field: &self.search_field,
+          keys: &self.search_keys,
+          focus: &self.focus_search,
+        };
+        filters::menu(ctx, props.dashboard.as_deref(), facet, &search, &props.requery)
       } else {
-        Element::new()
+        filters::closed(facet)
       };
       let popup = menu(anchor.clone(), open.clone(), panel);
       // The Provider menu opens 12 under its button, as the Account menu did (`EU0ex`).
       let popup = if facet == Facet::Provider {
-        popup.offset(0.0, ctx.theme().spacing_value(SpacingSize::Md).to_px())
+        popup.offset(SpacingSize::Md)
       } else {
         popup
       };
@@ -281,14 +303,14 @@ impl UsageToolbar {
     let panel = if self.group.0.get() {
       self.group_menu(ctx, props)
     } else {
-      Element::new()
+      filter_menu_panel(GROUP_MENU_ID, GROUP_MENU_WIDTH)
     };
     popups.push(menu(self.group.1.clone(), self.group.0.clone(), panel).into());
     popups.push(custom_range::popover(ctx, props, &self.custom));
     popups
   }
 
-  fn group_menu(&self, ctx: &mut Ctx, props: &ToolbarProps) -> Element {
+  fn group_menu(&self, ctx: &mut Ctx, props: &ToolbarProps) -> MenuPanel {
     let today = local_date(Timestamp::now());
     let range = props.query.range(today);
     let chosen = props.query.grouping(range);
@@ -313,21 +335,9 @@ impl UsageToolbar {
       .without_lock()
     };
     let day = MenuItem::new("usage-group-day", ctx.t("usage.groupBy.day"), choose(GroupBy::Day));
-    let open = self.group.0.clone();
-    filter_menu_panel("usage-group-menu", GROUP_MENU_WIDTH)
-      .child(
-        hour
-          .icon(Icon::Clock3)
-          .chosen(chosen == Grouping::Hour)
-          .render(ctx, &open),
-      )
-      .child(
-        day
-          .icon(Icon::CalendarDays)
-          .chosen(chosen == Grouping::Day)
-          .render(ctx, &open),
-      )
-      .into()
+    filter_menu_panel(GROUP_MENU_ID, GROUP_MENU_WIDTH)
+      .child(hour.icon(Icon::Clock3).chosen(chosen == Grouping::Hour).render(ctx))
+      .child(day.icon(Icon::CalendarDays).chosen(chosen == Grouping::Day).render(ctx))
   }
 }
 

@@ -255,7 +255,7 @@ impl Conflicts<'_> {
       } else {
         tag_words(ctx, count)
       };
-      (path.as_str(), words, PaletteColor::Danger)
+      (path.as_str(), words, PaletteColor::Destructive)
     });
     let list = files_list(entries);
     let open = link(

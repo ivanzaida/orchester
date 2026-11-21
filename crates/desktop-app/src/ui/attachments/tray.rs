@@ -146,7 +146,7 @@ pub fn refusals(ctx: &Ctx, id: &str, draft: &DraftAttachments) -> Option<Element
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::MutedForeground))
       .child(
         Text::new(&message_text(ctx, why))
           .variant(ExtraTypography::Note.role())
@@ -169,7 +169,7 @@ pub fn refusals(ctx: &Ctx, id: &str, draft: &DraftAttachments) -> Option<Element
 /// of folders only turned away, a drop attached.
 pub fn drop_target(boxed: Column, draft: &DraftAttachments) -> Column {
   boxed
-    .drag_over(|style| style.border(Border::inside(BorderSize::Md, PaletteColor::BorderFocus)))
+    .drag_over(|style| style.border(Border::inside(BorderSize::Md, PaletteColor::Ring)))
     .on_file_drag_enter(|event: FileDragEvent| {
       if event.paths.files().next().is_none() {
         event.refuse();

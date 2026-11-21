@@ -96,10 +96,10 @@ fn item(ctx: &Ctx, (limit, account): (&NearLimit, &AgentAccount), at_work: &[AtW
     ),
     (LimitLook::Reached, Some(window)) => (
       ctx.t_args("overview.limits.reached", [("window", window.clone())]),
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
     ),
-    (LimitLook::ResetSince, _) => (ctx.t("overview.limits.unknown"), PaletteColor::TextMuted),
-    (_, None) => (ctx.t("overview.limits.reachedOnly"), PaletteColor::Danger),
+    (LimitLook::ResetSince, _) => (ctx.t("overview.limits.unknown"), PaletteColor::MutedForeground),
+    (_, None) => (ctx.t("overview.limits.reachedOnly"), PaletteColor::Destructive),
   };
   let name = ctx.t_args(
     "overview.limits.name",
@@ -117,9 +117,9 @@ fn item(ctx: &Ctx, (limit, account): (&NearLimit, &AgentAccount), at_work: &[AtW
       Text::new(&name)
         .variant(OverviewText::Line.role())
         .color(if limit.look == LimitLook::ResetSince {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         } else {
-          PaletteColor::TextPrimary
+          PaletteColor::Foreground
         })
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)

@@ -198,7 +198,7 @@ impl Inspector {
       .on_click(move || toggle.update(|open| *open = !*open));
     let button = if open.get() { button.active() } else { button }.render(ctx);
     let (copier, name) = (
-      crate::ui::code_box::Copier::of(ctx),
+      crate::ui::clipboard::Clipboard::of(ctx),
       props.secret.name().as_str().to_owned(),
     );
     let copy = MenuItem::new("secret-copy-name", ctx.t("secrets.copyName"), move || {
@@ -221,9 +221,9 @@ impl Inspector {
     }
     .icon(Icon::Archive);
     let panel = menu_panel("secret-more-menu")
-      .width(Dimension::Px(MENU_WIDTH))
-      .child(copy.render(ctx, &open))
-      .child(archive.render(ctx, &open));
+      .width(MENU_WIDTH)
+      .child(copy.render(ctx))
+      .child(archive.render(ctx));
     Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
   }
 
@@ -338,7 +338,7 @@ fn detail(ctx: &mut Ctx, id: &str, (key, shown): (&str, &str)) -> Element {
 /// *Used by* (`WtpzX`): each tool and MCP server that takes the secret, opening it; or that none does.
 pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecrets, secret: &Secret) -> Element {
   let navigation = Navigation::of(ctx);
-  let rows: Vec<Element> = listed
+  let rows: Vec<_> = listed
     .used_by(secret.id())
     .map(|used| {
       let (glyph, what, page) = match used.kind {
@@ -355,9 +355,9 @@ pub(super) fn uses(ctx: &mut Ctx, project: &ShownProject, listed: &ProjectSecret
       };
       SettingRow::new(format!("secret-use-{:?}", used.kind), used.name.clone())
         .item()
-        .lead(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+        .lead(icon(glyph, IconSize::Md, PaletteColor::MutedForeground))
         .control(value(&format!("secret-use-{:?}-kind", used.kind), &what))
-        .control(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::TextMuted))
+        .control(icon(Icon::ArrowUpRight, IconSize::Md, PaletteColor::MutedForeground))
         .opens(navigation.to(Route::Project(project.open.project.id(), page)))
         .render(ctx)
     })

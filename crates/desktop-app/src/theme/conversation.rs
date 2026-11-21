@@ -10,7 +10,7 @@ use lurq::{
   node::box_shadow::BoxShadow,
 };
 
-use super::{ExtraColor, typography::style};
+use super::{ExtraColor, palette::text_secondary, typography::style};
 
 /// Text of the conversation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,13 +62,13 @@ impl ConversationText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Name => style(12.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
-      Self::Divider => style(11.0, FontWeight::Medium, 1.4, 0.0, palette.text_muted),
-      Self::ProblemDetail => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::ResultTitle => style(12.5, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
-      Self::StateTitle => style(13.5, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
-      Self::ApprovalLead => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::ApprovalDetail => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::Name => style(12.0, FontWeight::SemiBold, 1.35, 0.0, palette.foreground),
+      Self::Divider => style(11.0, FontWeight::Medium, 1.4, 0.0, palette.muted_foreground),
+      Self::ProblemDetail => style(11.5, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
+      Self::ResultTitle => style(12.5, FontWeight::SemiBold, 1.35, 0.0, palette.foreground),
+      Self::StateTitle => style(13.5, FontWeight::SemiBold, 1.35, 0.0, palette.foreground),
+      Self::ApprovalLead => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::ApprovalDetail => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
     }
   }
 }

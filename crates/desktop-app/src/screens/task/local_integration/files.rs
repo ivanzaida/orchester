@@ -316,7 +316,7 @@ impl Component for FileRow {
           ExtraSpacing::Loose.role(),
           ExtraSpacing::Snug.role(),
         ))
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .child(Text::new(&ctx.t(group.key())).variant(LocalText::Note.role()))
         .into(),
       Item::File(entry) => file_row(ctx, &props, entry),

@@ -10,7 +10,7 @@ use lurq::{
   node::box_shadow::BoxShadow,
 };
 
-use super::{ExtraColor, typography::style};
+use super::{ExtraColor, palette::text_secondary, typography::style};
 
 /// Text of the panel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,17 +76,17 @@ impl NeedsYouText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::Title => style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
       Self::Count => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.warning),
-      Self::Project => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Initial => style(10.5, FontWeight::SemiBold, 1.0, 0.0, palette.text_secondary),
+      Self::Project => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Initial => style(10.5, FontWeight::SemiBold, 1.0, 0.0, text_secondary(palette)),
       Self::Tally => style(11.5, FontWeight::Medium, 1.3, 0.0, palette.warning),
       Self::Kind => style(11.5, FontWeight::SemiBold, 1.3, 0.0, palette.warning),
-      Self::ItemTitle => style(13.0, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
-      Self::Task => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Empty => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
-      Self::NoteLine => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::NoteDetail => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::ItemTitle => style(13.0, FontWeight::Medium, 1.4, 0.0, palette.foreground),
+      Self::Task => style(11.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Empty => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.muted_foreground),
+      Self::NoteLine => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::NoteDetail => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
     }
   }
 }

@@ -34,7 +34,7 @@ use super::line::{LineLink, link_element};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorText},
   ui::{
     icon::{Icon, icon},
     pressable::Press,
@@ -57,7 +57,7 @@ pub(super) fn line(
   let facts = facts.unwrap_or(&empty);
   let settled = facts.settled.is_some();
   let (glyph, color) = look(event.kind);
-  let color = if settled { PaletteColor::TextMuted } else { color };
+  let color = if settled { PaletteColor::MutedForeground } else { color };
   let what = what(ctx, event.kind, facts);
   let target = target(ctx, wait, facts);
   let link = link(ctx, event.kind, (wait, facts), project);
@@ -95,7 +95,7 @@ pub(super) fn line(
       Text::new(&what)
         .id(format!("{id}-title"))
         .variant(OrchestratorText::Line.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)

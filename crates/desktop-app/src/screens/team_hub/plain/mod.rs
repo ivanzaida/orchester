@@ -147,7 +147,7 @@ fn on_this_computer(ctx: &Ctx, sheet: &Sheet) -> Column {
 fn used_by_row(ctx: &Ctx, names: &[String], sub: Option<Arc<str>>) -> Row {
   let value: Element = if names.is_empty() {
     rows::words("team-hub-from-team-used-by-value", &ctx.t("team_hub.panel.usedByNone"))
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .into()
   } else {
     rows::tags("team-hub-from-team-used-by-value", names.iter().cloned()).into()

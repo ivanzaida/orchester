@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// The design's line box for 11.5 text: 17 (`Xf3kg`, `aT5aE`).
 const SMALL_LINE: f32 = 17.0 / 11.5;
@@ -58,18 +61,24 @@ impl LocalText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Heading => style(14.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
-      Self::Explanation => style(11.5, FontWeight::Normal, SMALL_LINE, 0.0, palette.text_secondary),
-      Self::Note => style(11.5, FontWeight::Normal, SMALL_LINE, 0.0, palette.text_muted),
-      Self::Value => mono(style(11.5, FontWeight::Normal, SMALL_LINE, 0.0, palette.text_secondary)),
+      Self::Heading => style(14.0, FontWeight::Normal, 1.5, 0.0, palette.foreground),
+      Self::Explanation => style(11.5, FontWeight::Normal, SMALL_LINE, 0.0, text_secondary(palette)),
+      Self::Note => style(11.5, FontWeight::Normal, SMALL_LINE, 0.0, palette.muted_foreground),
+      Self::Value => mono(style(
+        11.5,
+        FontWeight::Normal,
+        SMALL_LINE,
+        0.0,
+        text_secondary(palette),
+      )),
       Self::Letter => mono(style(
         12.0,
         FontWeight::Medium,
         16.0 / 12.0,
         0.0,
-        palette.text_secondary,
+        text_secondary(palette),
       )),
-      Self::Path => mono(style(12.0, FontWeight::Normal, 16.0 / 12.0, 0.0, palette.text_primary)),
+      Self::Path => mono(style(12.0, FontWeight::Normal, 16.0 / 12.0, 0.0, palette.foreground)),
     }
   }
 }

@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// Text of the todo list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,14 +66,14 @@ impl TodoText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::Count => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::Owner => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Item => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::Current => style(12.5, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
-      Self::Action => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
-      Self::Note => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Chip => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
+      Self::Title => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::Count => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground)),
+      Self::Owner => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Item => style(12.5, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
+      Self::Current => style(12.5, FontWeight::Medium, 1.4, 0.0, palette.foreground),
+      Self::Action => style(12.0, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
+      Self::Note => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Chip => style(11.0, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
     }
   }
 }

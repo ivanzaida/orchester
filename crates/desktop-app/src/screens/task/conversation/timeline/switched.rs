@@ -40,7 +40,7 @@ pub(super) fn row(ctx: &Ctx, switched: &SwitchedToManual, at: Timestamp) -> Elem
     .padding(Padding::new().left(ConversationSpacing::ApprovalRow.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Shield, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Shield, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("conversation.approval.switched"))
         .id("conversation-switched-to-manual-text")

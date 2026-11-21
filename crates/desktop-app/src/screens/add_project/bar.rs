@@ -18,7 +18,7 @@ use orchester_workspace::project_setup::{self, Creation, GitHubLink, ProjectDraf
 
 use super::{Actions, FORM_WIDTH, Form};
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -50,13 +50,13 @@ pub(super) fn bar(ctx: &mut Ctx, form: &Form, actions: &Actions, detection: Opti
     Some(failure) => error(&message_text(ctx, &failure.message)),
     None => {
       let (key, color) = match readiness {
-        Readiness::NoFolder => ("setup.bar.chooseFolder", PaletteColor::TextMuted),
-        _ if actions.git.busy() => ("setup.bar.creatingRepository", PaletteColor::TextMuted),
-        Readiness::GitMissing => ("setup.bar.needsGit", PaletteColor::TextMuted),
-        Readiness::NotARepository => ("setup.bar.needsRepository", PaletteColor::TextMuted),
-        Readiness::NoCommits => ("setup.bar.needsCommit", PaletteColor::TextMuted),
-        Readiness::Ready if pending => ("setup.bar.explanation", PaletteColor::TextMuted),
-        Readiness::Ready => ("setup.bar.explanation", PaletteColor::TextSecondary),
+        Readiness::NoFolder => ("setup.bar.chooseFolder", PaletteColor::MutedForeground),
+        _ if actions.git.busy() => ("setup.bar.creatingRepository", PaletteColor::MutedForeground),
+        Readiness::GitMissing => ("setup.bar.needsGit", PaletteColor::MutedForeground),
+        Readiness::NotARepository => ("setup.bar.needsRepository", PaletteColor::MutedForeground),
+        Readiness::NoCommits => ("setup.bar.needsCommit", PaletteColor::MutedForeground),
+        Readiness::Ready if pending => ("setup.bar.explanation", PaletteColor::MutedForeground),
+        Readiness::Ready => ("setup.bar.explanation", ExtraColor::TextSecondary.role()),
       };
       Text::new(&ctx.t(key))
         .id("add-project-status")
@@ -147,12 +147,12 @@ fn error(text: &str) -> Element {
       Row::new()
         .height(Dimension::Px(ERROR_SLOT))
         .align_items(Alignment::Center)
-        .child(icon(Icon::CircleAlert, IconSize::Base, PaletteColor::Danger)),
+        .child(icon(Icon::CircleAlert, IconSize::Base, PaletteColor::Destructive)),
     )
     .child(
       Text::new(text)
         .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

@@ -13,7 +13,7 @@ use lurq::{
 use orchester_exec::external;
 
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, StartupText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, StartupText},
   ui::icon::{Icon, glyph},
 };
 
@@ -24,12 +24,16 @@ const TILE_SIZE: f32 = 40.0;
 /// failure.
 pub fn tile(which: Icon, failure: bool) -> Row {
   let (fill, stroke, color) = if failure {
-    (PaletteColor::DangerMuted, PaletteColor::Danger, PaletteColor::Danger)
+    (
+      PaletteColor::DestructiveMuted,
+      PaletteColor::Destructive,
+      PaletteColor::Destructive,
+    )
   } else {
     (
-      PaletteColor::SurfaceRaised,
+      PaletteColor::Card,
       PaletteColor::Border,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     )
   };
   Row::new()

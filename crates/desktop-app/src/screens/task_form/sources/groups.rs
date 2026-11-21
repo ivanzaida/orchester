@@ -22,7 +22,7 @@ use super::SourcesProps;
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, ProjectSettingsTab, Route},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -42,7 +42,7 @@ pub(super) fn subhead(ctx: &Ctx, id: &str, key: &str, count: usize, link: Option
     .child(
       Text::new(&ctx.t(key))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .child(
       Text::new(&ctx.t_args("task_form.sources.count", [("count", count.to_string())]))
@@ -65,9 +65,9 @@ fn link(ctx: &mut Ctx, id: &str, key: &str, route: Route) -> Element {
         .child(
           Text::new(&ctx.t(key))
             .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextSecondary),
+            .color(ExtraColor::TextSecondary.role()),
         )
-        .child(icon(Icon::ArrowUpRight, IconSize::Xs, PaletteColor::TextSecondary)),
+        .child(icon(Icon::ArrowUpRight, IconSize::Xs, ExtraColor::TextSecondary.role())),
     )
     .into()
 }

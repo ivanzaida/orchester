@@ -32,7 +32,7 @@ use super::{
 };
 use crate::{
   routes::TaskView,
-  theme::{ConversationSpacing, ExtraTypography, IconSize},
+  theme::{ConversationSpacing, ExtraColor, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::Press,
@@ -157,7 +157,7 @@ fn delivering(ctx: &Ctx, id: &str, said: &Said<'_>, queued: &QueueEvent) -> Elem
       let args = [("revision", short_revision(base.as_str())), ("branch", &*names.branch)];
       let title = said.say(ctx, "delivery.conversation.syncCommand", &args);
       let (result, tone) = if files.is_empty() {
-        (ctx.t("delivery.conversation.clean"), PaletteColor::TextSecondary)
+        (ctx.t("delivery.conversation.clean"), ExtraColor::TextSecondary.role())
       } else {
         let count = files.len().to_string();
         (
@@ -183,7 +183,7 @@ fn delivering(ctx: &Ctx, id: &str, said: &Said<'_>, queued: &QueueEvent) -> Elem
       let (key, tone) = if matches!(queued, QueueEvent::CheckPassed { .. }) {
         ("delivery.conversation.checkPassed", PaletteColor::Success)
       } else {
-        ("delivery.conversation.checkFailed", PaletteColor::Danger)
+        ("delivery.conversation.checkFailed", PaletteColor::Destructive)
       };
       let result = said.say(ctx, key, &[("revision", short_revision(base.as_str()))]);
       tool(id, (Icon::Terminal, name), (&result, tone), &said.time)
@@ -208,13 +208,13 @@ fn cleaned(ctx: &Ctx, id: &str, (worktree, branch): (bool, bool), names: &Names,
     rows.push(tool(
       &format!("{id}-worktree"),
       (Icon::FolderX, &worktree_title),
-      (&done, PaletteColor::TextMuted),
+      (&done, PaletteColor::MutedForeground),
       time,
     ));
     rows.push(tool(
       &format!("{id}-index"),
       (Icon::FolderX, &index_title),
-      (&done, PaletteColor::TextMuted),
+      (&done, PaletteColor::MutedForeground),
       time,
     ));
   }
@@ -223,7 +223,7 @@ fn cleaned(ctx: &Ctx, id: &str, (worktree, branch): (bool, bool), names: &Names,
     rows.push(tool(
       &format!("{id}-branch"),
       (Icon::GitBranch, &title),
-      (&done, PaletteColor::TextMuted),
+      (&done, PaletteColor::MutedForeground),
       time,
     ));
   }
@@ -261,12 +261,12 @@ fn tool(id: &str, (glyph, title): (Icon, &str), (result, tone): (&str, PaletteCo
         .padding_horizontal(SpacingSize::Sm)
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+        .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
         .child(
           Text::new(title)
             .id(format!("{id}-title"))
             .variant(TypographyStyle::Mono)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap()
             .text_overflow(TextOverflow::Elipsis)
             .min_width(Dimension::Px(0.0))

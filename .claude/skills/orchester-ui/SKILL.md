@@ -39,7 +39,7 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
     top-level area file of its own: `summary.json`, `conversation.json` and `changes.json`, not
     `task.summary.*`. New task and Edit task are `task_form.json`.
 - Design values: only in `crates/desktop-app/src/theme/` (`palette.rs`, `typography.rs`, `metrics.rs`,
-  `form.rs`, `shadow.rs`); call sites use lurq roles and the `ExtraColor`, `ExtraTypography`,
+  `shadow.rs`, `markdown.rs`); call sites use lurq roles and the `ExtraColor`, `ExtraTypography`,
   `IconSize`, `ExtraSpacing` and `ExtraRadius` roles there. Approval commands use `CardsText::Command` (06b `G8YJb`: mono 12, 1.5, primary).
   Shared roles belong to the UI kit; a value
   only one area uses goes in that area's own `theme/<area>.rs` (`startup.rs`, `shell.rs`), registered
@@ -57,7 +57,7 @@ files; the paths and the mapping tables below are the deprecated `orchester-desk
   unavailable reason. Its own words are in `en/ui.json` (`ui.*`), the shared Copy and Try again in `common.*`; extra roles add `ExtraShadow`, `ControlHeight` and the
   `DISABLED_OPACITY` fader. Tests: `cargo test -p orchester-app --test ui_kit <filter>`;
   every control in its states: `cargo run -p orchester-app --example ui_gallery` (MCP like the app).
-- Grouped rows (`ui::row_group`: `RowGroup`, `GroupRow`, `tag`, `note`; roles `GroupText`) draw a titled group of rows
+- Grouped rows (roles `GroupText`; `ui::row_group` keeps only their `tag` and `note`, the rows themselves went unused) draw a titled group of rows
   in one outline (`Pipelines · redesign` `evQ4U` in the new `orchester.pen`, the Pipelines page before the hub, which
   is gone; no screen draws them today): a row's label and hint, and at its end its control, its value or a chevron to a
   page; a radio row leads with `toggle::radio_mark`. Their notices are `ui::notice::Notice::flat` (no stroke, a 14 icon,
@@ -178,7 +178,7 @@ and element `id`/`class`/`describe` attributes. Icon names.
 | unparsed transcript lines at 60 % (`Ane9j`) | `theme::UNPARSED_OPACITY` |
 | permission option that cannot be chosen at 50 % (`BNliD` in `T1rjv`) | `theme::UNAVAILABLE_OPTION_OPACITY` |
 | switch whose value is fixed: track and label faded together at 45 % (`lW7Sp` in 04.B `W0Owo`) | `theme::LOCKED_SWITCH_OPACITY`, applied by `ui::switch::Switch::locked` |
-| loader (`lucide/loader`) turning while shown, one turn a second (the design draws it still) | `theme::LOADER_TURN`, applied by `ui::icon::icon` through `ui::loader`; each window tree calls `loader::install` |
+| loader (`lucide/loader`) turning while shown, one turn a second in 24 poses, still under reduced motion (the design draws it still) | `theme::SPIN_STEPS`, the theme's `SpinMotion` (`theme::kit::spinner`); lurq's spin applied by `ui::icon::icon` through `ui::loader` |
 | switch on: `accent` track and stroke, `inverse-text` knob at the right (`E1Y9KK`) | `Accent` / `TextInverse`, in `ui::switch` |
 | switch state label 12 `text`, 10 from the track (`q43RMP` in `lW7Sp`, `q4Nelz`); with a detail after it, track, label and detail 12 apart (`k1QWD`) | `ui::switch::Switch::emphasized` (`ExtraSpacing::Inline`), `Switch::detail` (`ExtraSpacing::Stack`) |
 | why an option cannot be chosen: indented 22 past a compact radio and its gap, an 11px lock (`J5RohL`, `L1B0m`, `OoLYh` in 04.B `W0Owo`) | `ExtraSpacing::ReasonIndent.role()` / `IconSize::Reason` (`ExtraTypography::IconReason`), in `ui::option_card::unavailable_reason` |

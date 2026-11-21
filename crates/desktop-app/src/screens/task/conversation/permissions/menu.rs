@@ -39,7 +39,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
-    menu::separator,
+    menu::separator_line,
     message::message_text,
     pressable::{inert, pressable},
   },
@@ -103,8 +103,8 @@ pub(super) fn panel(
     .width(Dimension::Px(WIDTH))
     .padding(ExtraSpacing::Snug.role())
     .spacing(ExtraSpacing::Tight.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(RadiusSize::Lg)
     .box_shadow(ShadowStyle::Lg)
     .child(heading_row(
@@ -123,7 +123,7 @@ pub(super) fn panel(
         .then(|| way_row(ctx, &autopilot_way(ctx, props, shown), props, (permissions, confirming))),
     )
     .child(everything)
-    .child(separator(ctx))
+    .child(separator_line(ctx))
     .child(heading_row(
       "conversation-permissions-similar",
       None,
@@ -143,7 +143,7 @@ pub(super) fn heading_row(id: &str, glyph: Option<Icon>, words: &str) -> Element
     .padding_horizontal(SpacingSize::Sm)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Sm, PaletteColor::TextMuted)))
+    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Sm, PaletteColor::MutedForeground)))
     .child(Text::new(words).variant(PermissionsText::Heading.role()).nowrap())
     .into()
 }
@@ -238,9 +238,9 @@ fn way_row(ctx: &Ctx, way: &Way, props: &ChipProps, presses: (&Permissions, &Sig
     Offer::Unavailable(_) | Offer::Hidden => Tag::None,
   };
   let (name_color, glyph_color) = if unavailable {
-    (PaletteColor::TextMuted, PaletteColor::TextMuted)
+    (PaletteColor::MutedForeground, PaletteColor::MutedForeground)
   } else {
-    (PaletteColor::TextPrimary, PaletteColor::TextSecondary)
+    (PaletteColor::Foreground, ExtraColor::TextSecondary.role())
   };
   let content = Row::new()
     .width(Dimension::Pct(100.0))
@@ -296,13 +296,13 @@ fn sub_line(way: &Way, unavailable: bool) -> Element {
     .child(
       Column::new()
         .padding(Padding::new().top(ExtraSpacing::Tight.role()))
-        .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextSecondary)),
+        .child(icon(Icon::Lock, IconSize::Xs, ExtraColor::TextSecondary.role())),
     )
     .child(
       Text::new(&way.sub)
         .id(format!("{}-reason", way.id))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
@@ -352,7 +352,7 @@ fn tag_of(ctx: &Ctx, tag: Tag) -> Option<Element> {
     Tag::None => return None,
     Tag::Check => Column::new()
       .padding(Padding::new().top(PermissionsSpacing::Glyph.role()))
-      .child(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary))
+      .child(icon(Icon::Check, IconSize::Md, PaletteColor::Foreground))
       .into(),
     Tag::Narrows => Row::new()
       .padding(Padding::new().top(ExtraSpacing::Tight.role()))
@@ -362,7 +362,7 @@ fn tag_of(ctx: &Ctx, tag: Tag) -> Option<Element> {
       .padding(Padding::new().top(ExtraSpacing::Tight.role()))
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
-      .child(icon(Icon::UserRound, IconSize::Xs, PaletteColor::TextMuted))
+      .child(icon(Icon::UserRound, IconSize::Xs, PaletteColor::MutedForeground))
       .child(words("conversation.permissions.tag.onlyYou"))
       .into(),
   };
@@ -462,12 +462,12 @@ fn similar_rule(ctx: &Ctx, props: &ChipProps, permissions: &Permissions, rule: &
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::CheckCheck, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::CheckCheck, IconSize::Sm, PaletteColor::MutedForeground))
     .child(Text::new(&words).variant(ExtraTypography::PropertyMono.role()).nowrap())
     .child(
       Text::new(&detail)
         .variant(PermissionsText::Chip.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),

@@ -21,7 +21,6 @@ use orchester_app::{
   routes::{ProjectPage, Route},
   services::Services,
   theme::{self, Mode},
-  ui::loader,
 };
 use orchester_store::SessionEnd;
 use orchester_workspace::{secrets::Vault, session::AppSession};
@@ -52,7 +51,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   i18n::install(&app)?;
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
   let link = WindowLink::default();
   let settings = McpSettings::of_build().with_environment();
   let config = mcp::config(settings, &link, &appearance, Some(&services), app.i18n()).tool(tools::tool(

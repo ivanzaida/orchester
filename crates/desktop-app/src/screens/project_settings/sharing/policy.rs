@@ -301,6 +301,6 @@ fn locked(id: &str, words: &str) -> Row {
   Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Lock, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Lock, IconSize::Base, PaletteColor::MutedForeground))
     .child(value(id, words))
 }

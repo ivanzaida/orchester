@@ -291,17 +291,17 @@ fn viewed(ctx: &mut Ctx, reason: &Arc<str>) -> Element {
       Row::new()
         .width(box_side)
         .height(box_side)
-        .background(PaletteColor::SurfaceInput)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+        .background(ExtraColor::InputSurface.role())
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
         .rounded(RadiusSize::Sm),
     )
     .child(
       Text::new(&ctx.t("changes.diff.viewed"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
-    .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted));
+    .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground));
   Tooltip::new("changes-diff-viewed", reason.clone()).wrap(ctx, viewed)
 }
 

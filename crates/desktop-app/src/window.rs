@@ -16,7 +16,7 @@ use crate::{
   root::{Root, RootProps},
   startup::{Launch, WindowPosition},
   system_icon, theme,
-  ui::{loader, skeleton, typing},
+  ui::clipboard::Clipboard,
 };
 
 /// For agents that drive the app over MCP while the person works in other windows: `1` opens the
@@ -39,13 +39,11 @@ pub fn open_showing(runtime: &Runtime, launch: &Launch, position: Option<WindowP
   app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app, appearance.mode());
   i18n::install(&app).expect("the bundled locale files are valid JSON; covered by tests/i18n.rs");
+  Clipboard::default().install(&app);
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
-  skeleton::install(&mut tree);
-  typing::install(&mut tree);
-  hold_still(runtime);
+  hold_still(runtime, app.theme().clone());
   let link = WindowLink::default();
   link.attach_appearance(appearance.clone());
   let window_control = stored(workspace, Workspace::mcp_window_control, "window control").flatten();
@@ -87,10 +85,7 @@ pub fn open_showing(runtime: &Runtime, launch: &Launch, position: Option<WindowP
   tree.mount_root::<Root>(&mut app, RootProps { link, mcp, start });
 
   #[cfg(feature = "devtools")]
-  {
-    lurq::app::devtools::load_fonts(&mut app);
-    tree.mount_devtools(&mut app);
-  }
+  tree.mount_devtools(&mut app);
 
   run(app, tree, position);
   // `run` returns once the window has closed: the servers stop and the discovery file goes.
@@ -161,11 +156,12 @@ fn appearance(runtime: &Runtime, workspace: Option<&Workspace>) -> Appearance {
   Appearance::new(theme, system, workspace.cloned())
 }
 
-/// Reads on the runtime's blocking pool whether the operating system asks for reduced motion, for the skeletons'
-/// pulse; until it is read, and when it cannot be, they pulse.
-fn hold_still(runtime: &Runtime) {
-  runtime.spawn_blocking(|| match motion::reduced() {
-    Ok(reduced) => skeleton::hold_still(reduced),
+/// Reads on the runtime's blocking pool whether the operating system asks for reduced motion, and gives it to `theme`:
+/// skeletons' bones and the typing dots stand still then. Until it is read, and when it cannot be, lurq's own reading
+/// of the system holds.
+fn hold_still(runtime: &Runtime, theme: lurq::app::theme::Theme) {
+  runtime.spawn_blocking(move || match motion::reduced() {
+    Ok(reduced) => theme.set_reduced_motion(Some(reduced)),
     Err(error) => tracing::info!(%error, "cannot read whether the system asks for reduced motion"),
   });
 }

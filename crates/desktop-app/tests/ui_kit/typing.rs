@@ -1,17 +1,15 @@
-//! The typing dots (`Message · waiting` `sXET0`, `Dot` `h6EkpB`, ORC-963) move while shown: each fades from the first
-//! dot's opacity to the last's and back once a `REVIEW_TYPING_CYCLE`, a third of a cycle behind the one before it,
-//! and a window without dots stays idle. Their cycle is sampled against lurq's animation clock in real time.
+//! The typing dots (`Message · waiting` `sXET0`, `Dot` `h6EkpB`, ORC-963) move while shown: lurq's wave of dots
+//! (`SPINNER_DOTS`) fades each between whole and its faintest once a `SPINNER_DOTS_PERIOD`, each a little behind the
+//! one before it, and a window without dots stays idle. Their cycle is sampled against lurq's animation clock in real
+//! time.
 
 use std::{
   thread,
   time::{Duration, Instant},
 };
 
-use lurq::{components::Text, layout::quad::QuadContent};
-use orchester_app::{
-  theme::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY},
-  ui::typing::dots,
-};
+use lurq::{components::Text, layout::quad::QuadContent, ui::SPINNER_DOTS_PERIOD};
+use orchester_app::ui::typing::dots;
 
 use crate::harness::Kit;
 
@@ -19,6 +17,9 @@ use crate::harness::Kit;
 const SAMPLE: Duration = Duration::from_millis(11);
 /// What the design draws a dot's side as (`h6EkpB`).
 const DOT_SIDE: f32 = 6.0;
+/// A dot at its brightest and at its faintest: the first's and the last's opacity as the design draws them.
+const OPACITY: [f32; 3] = [1.0, 0.6, 0.3];
+const CYCLE: Duration = SPINNER_DOTS_PERIOD;
 
 fn shown() -> Kit {
   Kit::show(|_| dots("typing"))
@@ -41,13 +42,13 @@ fn opacities(kit: &Kit) -> Vec<f32> {
 }
 
 #[test]
-fn typing_dots_fade_in_a_wave_over_a_cycle_each_a_third_behind_the_one_before() {
+fn typing_dots_fade_in_a_wave_over_a_cycle_each_behind_the_one_before() {
   let mut kit = shown();
   assert_eq!(opacities(&kit).len(), 3, "three dots are drawn");
-  let [bright, _, dim] = REVIEW_TYPING_OPACITY;
+  let [bright, _, dim] = OPACITY;
   let mut seen: [Vec<f32>; 3] = Default::default();
   let mut apart = false;
-  let end = Instant::now() + REVIEW_TYPING_CYCLE + REVIEW_TYPING_CYCLE / 4;
+  let end = Instant::now() + CYCLE + CYCLE / 4;
   while Instant::now() < end {
     kit.pass();
     let now = opacities(&kit);
@@ -70,10 +71,7 @@ fn typing_dots_fade_in_a_wave_over_a_cycle_each_a_third_behind_the_one_before() 
       "dot {dot} fades through most of the range in a cycle: {low}..{high}"
     );
   }
-  assert!(
-    apart,
-    "the dots are not in step: each is a third of a cycle behind the one before"
-  );
+  assert!(apart, "the dots are not in step: each is behind the one before");
 }
 
 #[test]
@@ -82,7 +80,7 @@ fn typing_dots_keep_the_window_animating_and_none_keeps_it_idle() {
   assert!(kit.tree.has_active_timeline(), "dots ask for frames");
   let next = kit.tree.next_timeline_change().expect("the dots change pose");
   assert!(
-    next.saturating_duration_since(Instant::now()) <= REVIEW_TYPING_CYCLE,
+    next.saturating_duration_since(Instant::now()) <= CYCLE,
     "the next frame is due within a cycle"
   );
   let idle = Kit::show(|_| Text::new("nothing moves").into());

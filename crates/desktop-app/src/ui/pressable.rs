@@ -6,14 +6,15 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::events::mouse_event::MouseEvent,
+  app::events::{MouseButton, mouse_event::MouseEvent},
   components::Button,
   layout::Alignment,
   node::{CursorIcon, Style},
+  ui,
 };
 
 use crate::{
-  navigation::link::{Open, keeps_middle_click, navigates},
+  navigation::link::{Open, follow, keeps_middle_click, navigates},
   theme::{ExtraRadius, ExtraShadow},
 };
 
@@ -65,6 +66,32 @@ impl Press {
         action();
       }),
       Self::Open(open) => navigates(button, open),
+    }
+  }
+
+  /// lurq's `button` pressed this way, as [`Self::on`] presses the kit's: an action runs on a click and on a click with
+  /// Ctrl (Cmd on macOS) held, a place opens by a browser's rules, and a middle click is the button's alone.
+  pub fn on_ui(self, button: ui::Button) -> ui::Button {
+    match self {
+      Self::Run(action) => {
+        let aside = action.clone();
+        button
+          .on_click(move |event: MouseEvent| {
+            event.stop_propagation();
+            action();
+          })
+          .on_open_aside(move |event: MouseEvent| {
+            if event.button != MouseButton::Middle {
+              aside();
+            }
+          })
+      }
+      Self::Open(open) => {
+        let aside = open.clone();
+        button
+          .on_click(move |event: MouseEvent| follow(&open, &event))
+          .on_open_aside(move |event: MouseEvent| follow(&aside, &event))
+      }
     }
   }
 

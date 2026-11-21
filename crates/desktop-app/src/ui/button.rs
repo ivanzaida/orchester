@@ -9,29 +9,31 @@
 //! An answer of a decision card with a consequence is as wide as its parent, its label and the consequence under it at
 //! its start, 8 over and under and 12 at its sides (`Option · Skip the exports` `wWuSM`). No button draws the keys that
 //! press it in a cap; the caller handles them.
+//!
+//! lurq's `ui::Button` draws it in the theme's recipe (`theme::kit::button`, `themed`), Tab passing it by unless it is
+//! [`ActionButton::in_form`]. A stacked answer's consequence is its description, `<id>-description`.
 
 mod kind;
+mod themed;
 
 use std::sync::Arc;
 
-pub use kind::ButtonKind;
+pub use kind::{ButtonKind, ButtonSize, state};
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Button, Column, Row, Text},
+  app::theme::{SpacingSize, TypographyStyle},
+  components::{Column, Row, Text},
   core::ElementRef,
-  layout::{Alignment, layout_kind::Justify},
-  node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
+  layout::Alignment,
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 
 use super::{
   icon::{Icon, icon},
-  pressable::{Focus, Press, inert},
+  pressable::{Focus, Press},
 };
 use crate::{
   navigation::link::Open,
-  theme::{
-    CONSEQUENCE_ON_ACCENT_OPACITY, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize,
-  },
+  theme::{ControlHeight, ExtraSpacing, IconSize},
 };
 
 /// Why a button cannot be pressed now. It wins over a handler given in any order.
@@ -413,153 +415,8 @@ pub fn as_wide_as_widest(id: &str, button: ActionButton, sizes: impl IntoIterato
     .child(button.fill_width())
 }
 
-impl ActionButton {
-  /// The frame without its content: 28 high with its content centered, or stacked as wide as its parent, 8 over
-  /// and under and 12 at the sides, its content at the start.
-  fn frame(&self) -> Button {
-    let (height, ..) = self.metrics();
-    let frame = Button::empty()
-      .id(self.id.clone())
-      .align_items(Alignment::Center)
-      .rounded(RadiusSize::Md)
-      .describe("kind", self.kind.name())
-      .describe("state", self.state())
-      .describe("a11y_name", self.label.clone());
-    let frame = if self.stacked {
-      frame
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
-        .spacing(SpacingSize::Md)
-        .justify(Justify::Start)
-    } else {
-      frame
-        .height(Dimension::Px(height.value()))
-        .padding(Padding::horizontal(self.side()))
-        .spacing(ExtraSpacing::Snug.role())
-        .justify(Justify::Center)
-    };
-    let frame = if self.fill || self.kind == ButtonKind::Select {
-      frame.width(Dimension::Pct(100.0))
-    } else {
-      frame
-    };
-    if self.bounded {
-      return frame.max_width(Dimension::Pct(100.0)).min_width(Dimension::Px(0.0));
-    }
-    frame
-  }
-
-  /// The label in `color`; stacked, the label and the consequence under it.
-  fn slot(&self, color: PaletteColor) -> Element {
-    let (_, _, role) = self.metrics();
-    let label = Text::new(&self.label)
-      .id(format!("{}-label", self.id))
-      .color(color)
-      .nowrap();
-    if self.stacked {
-      let words = self.consequence.as_ref().map(|consequence| {
-        let words = Text::new(consequence)
-          .id(format!("{}-consequence", self.id))
-          .variant(ExtraTypography::ButtonConsequence.role())
-          .width(Dimension::Pct(100.0));
-        match self.kind {
-          ButtonKind::Primary => words
-            .color(ExtraColor::OnAccent.role())
-            .opacity(CONSEQUENCE_ON_ACCENT_OPACITY),
-          _ => words,
-        }
-      });
-      let text = Column::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .spacing(ExtraSpacing::Tight.role())
-        .child(label.variant(ExtraTypography::ButtonStacked.role()))
-        .with_children(words);
-      return text.into();
-    }
-    let label = label.variant(role);
-    let label = if self.bounded {
-      label
-        .flex_shrink(1.0)
-        .min_width(Dimension::Px(0.0))
-        .text_overflow(lurq::components::TextOverflow::Elipsis)
-    } else {
-      label
-    };
-    let label = if self.kind == ButtonKind::Select {
-      label.flex(1.0).min_width(Dimension::Px(0.0))
-    } else {
-      label
-    };
-    label.into()
-  }
-}
-
 impl From<ActionButton> for Element {
   fn from(button: ActionButton) -> Self {
-    let color = if button.applied {
-      PaletteColor::TextPrimary
-    } else {
-      button.kind.content()
-    };
-    let (_, glyph, _) = button.metrics();
-    let mut frame = button.frame();
-    if let Some(lead) = button.lead() {
-      frame = frame.child(icon(lead, glyph, color.clone()).id(format!("{}-icon", button.id)));
-    }
-    let after = button
-      .after
-      .filter(|_| button.hold.is_none())
-      .map(|after| icon(after, glyph, color.clone()));
-    frame = button
-      .kind
-      .dressed(frame)
-      .child(button.slot(color))
-      .with_children(after);
-    if button.kind == ButtonKind::Select {
-      frame = frame.child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted));
-    }
-    if button.held {
-      frame = frame.background(ExtraColor::Pressed.role()).describe("held", "true");
-    }
-    if button.menu_open {
-      frame = frame
-        .background(PaletteColor::SurfaceRaised)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-        .describe("menu_open", "true");
-    }
-    if button.applied {
-      frame = frame
-        .background(PaletteColor::AccentMuted)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-        .describe("applied", "true");
-    }
-    if button.invalid {
-      frame = frame
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
-        .describe("invalid", "true");
-    }
-    if let Some(element) = button.element {
-      frame = frame.ref_element(element);
-    }
-    if let Some(on_focus) = button.on_focus {
-      frame = frame.on_focus(move || on_focus());
-    }
-    if let Some(Hold::Unavailable(reason) | Hold::UnavailableWithIcon(reason)) = &button.hold {
-      frame = frame.describe("reason", reason.clone());
-    }
-    match (button.hold, button.action) {
-      (None, Some(press)) => press
-        .on(
-          button
-            .focus
-            .apply(button.kind.interactive(frame))
-            .cursor(CursorIcon::Pointer),
-        )
-        .into(),
-      (Some(Hold::Loading), _) => inert(frame).cursor(CursorIcon::Progress).into(),
-      (Some(Hold::Shown), _) => inert(frame).cursor(CursorIcon::Default).into(),
-      _ => inert(frame).opacity(DISABLED_OPACITY).into(),
-    }
+    button.drawn()
   }
 }

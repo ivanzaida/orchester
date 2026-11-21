@@ -19,7 +19,7 @@ use orchester_core::connection::AgentProvider;
 use orchester_workspace::{close::RunStands, display, runner::ActiveWork, tasks::integration_jobs::BusyJob};
 
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize, LifecycleSpacing, LifecycleText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, LifecycleSpacing, LifecycleText},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -93,7 +93,7 @@ fn framed(id: &str, title: &str, lines: Vec<Line<'_>>) -> Element {
       Text::new(title)
         .id(format!("{id}-title"))
         .variant(TypographyStyle::Label)
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     )
     .child(rows)
     .into()
@@ -104,13 +104,13 @@ fn run_line<'a>(ctx: &Ctx, shown: &Shown<'a>) -> Line<'a> {
   let (glyph, color, words, stands) = match shown.stands {
     RunStands::Running => (
       Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "lifecycle.close.row.running",
       "running",
     ),
     RunStands::Saving => (
       Icon::LoaderCircle,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "lifecycle.close.row.saving",
       "saving",
     ),
@@ -150,7 +150,7 @@ fn job_line<'a>(ctx: &Ctx, (index, job): (usize, &'a BusyJob)) -> Line<'a> {
     key: "",
     title: message_text(ctx, &job.what),
     detail: ctx.t(detail),
-    status: (Icon::LoaderCircle, PaletteColor::TextSecondary, ctx.t(status)),
+    status: (Icon::LoaderCircle, ExtraColor::TextSecondary.role(), ctx.t(status)),
     last: ctx.t("lifecycle.close.row.git"),
     stands,
   }
@@ -200,7 +200,7 @@ fn row(line: Line<'_>, last: bool) -> Element {
     .child(
       Text::new(&words)
         .variant(LifecycleText::RowText.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap(),
     );
   let last_cell = Row::new()
@@ -213,7 +213,7 @@ fn row(line: Line<'_>, last: bool) -> Element {
       Text::new(&line.last)
         .id(format!("closing-last-{id}"))
         .variant(LifecycleText::RowText.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     );

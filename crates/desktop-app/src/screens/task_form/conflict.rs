@@ -32,7 +32,7 @@ use orchester_workspace::{
 
 use super::plan::choice_label;
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     form_section::section,
     icon::{Icon, icon},
@@ -291,9 +291,9 @@ fn card(card: &Card, choose: impl Fn() + Send + Sync + Clone + 'static) -> Eleme
         .map(|meta| Text::new(meta).variant(TypographyStyle::Caption)),
     );
   let (fill, stroke) = if card.on {
-    (PaletteColor::AccentMuted, PaletteColor::Accent)
+    (PaletteColor::Highlight, PaletteColor::Primary)
   } else {
-    (PaletteColor::SurfaceInput, PaletteColor::Border)
+    (ExtraColor::InputSurface.role(), PaletteColor::Border)
   };
   // The card is pressed with the pointer; its radio is the keyboard's stop, so the chosen card has one
   // outline, never a focus ring beside it.
@@ -316,7 +316,7 @@ fn card(card: &Card, choose: impl Fn() + Send + Sync + Clone + 'static) -> Eleme
           Text::new(&card.value)
             .id(format!("{}-value", card.id))
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextPrimary),
+            .color(PaletteColor::Foreground),
         ),
     )
     .into()
@@ -403,11 +403,11 @@ fn same_line(ctx: &Ctx, count: usize) -> Element {
     .id("task-form-conflict-same")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Equal, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Equal, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t_args(key, [("count", count.to_string())]))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }

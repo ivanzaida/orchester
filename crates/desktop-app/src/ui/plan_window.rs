@@ -45,7 +45,7 @@ pub fn plan_window(id: &str, window: &PlanWindow<'_>) -> Element {
   let (tone, used_color) = if window.reached {
     (MeterTone::Reached, PaletteColor::Warning)
   } else {
-    (MeterTone::Plain, PaletteColor::TextPrimary)
+    (MeterTone::Plain, PaletteColor::Foreground)
   };
   Row::new()
     .id(id.to_owned())
@@ -57,7 +57,7 @@ pub fn plan_window(id: &str, window: &PlanWindow<'_>) -> Element {
     .child(
       Text::new(window.name)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Px(NAME_WIDTH)),
     )
     .child(

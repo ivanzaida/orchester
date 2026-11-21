@@ -16,6 +16,7 @@ use lurq::{
   components::{Column, Row, ScrollVertical, Text},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_core::{
   integration::base::{BaseChoice, BranchPick},
@@ -36,7 +37,10 @@ use super::{
 use crate::{
   theme::{ExtraSpacing, TaskFormText},
   ui::{
-    field::FieldInput, filter::filter_menu_panel, icon::Icon, menu::separator, message::message_text,
+    field::FieldInput,
+    icon::Icon,
+    menu::{filter_menu_panel, inline_menu, separator, standalone},
+    message::message_text,
     popover::room_under,
   },
 };
@@ -178,12 +182,12 @@ impl Component for BranchMenuPanel {
       .child(head(&ctx.t("task_form.fields.baseBranch.inherit")))
       .child(from_module(ctx, &props, &chosen))
       .child(checked_out(ctx, &props, (&chosen, menu)))
-      .child(separator(ctx))
+      .child(separator())
       .child(branches(ctx, &props, (&chosen, menu, state.error.as_ref())));
     if let Some(room) = room_under(ctx, &props.anchor, BAR_HEIGHT) {
-      panel = panel.max_height(Dimension::Px(room));
+      panel = panel.max_height(room);
     }
-    panel
+    inline_menu(props.open.clone(), panel)
   }
 }
 
@@ -201,13 +205,13 @@ fn head(text: &str) -> Element {
     .child(
       Text::new(text)
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }
 
 /// *From module · Webhooks v2* with the module's base branch under it (`SBaMd`), or that the task is in no module.
-fn from_module(ctx: &Ctx, props: &MenuProps, chosen: &BasePick) -> Element {
+fn from_module(ctx: &Ctx, props: &MenuProps, chosen: &BasePick) -> ui::MenuItem {
   let (title, help) = match &props.module {
     Some(module) => (
       ctx.t_args(
@@ -238,11 +242,11 @@ fn from_module(ctx: &Ctx, props: &MenuProps, chosen: &BasePick) -> Element {
     status: None,
     chosen: *chosen == BasePick::Inherit,
   }
-  .render(&props.open, move || pick.set(BasePick::Inherit))
+  .render(move || pick.set(BasePick::Inherit))
 }
 
 /// *Checked-out branch* with the branch checked out now under it (`IQv7y`).
-fn checked_out(ctx: &Ctx, props: &MenuProps, (chosen, menu): (&BasePick, Option<&BranchMenu>)) -> Element {
+fn checked_out(ctx: &Ctx, props: &MenuProps, (chosen, menu): (&BasePick, Option<&BranchMenu>)) -> ui::MenuItem {
   let help = match menu {
     Some(BranchMenu {
       checked_out: Some(branch),
@@ -265,7 +269,7 @@ fn checked_out(ctx: &Ctx, props: &MenuProps, (chosen, menu): (&BasePick, Option<
     status: None,
     chosen: *chosen == BasePick::CheckedOut,
   }
-  .render(&props.open, move || pick.set(BasePick::CheckedOut))
+  .render(move || pick.set(BasePick::CheckedOut))
 }
 
 /// *Branches* and *Remote only* that hold what *Find a branch* holds, in a list that scrolls in the room the menu
@@ -309,8 +313,9 @@ fn branches(
         status: None,
         chosen: chosen.branch() == Some(branch),
       }
-      .render(&props.open, move || pick.set(picked.clone()))
+      .render(move || pick.set(picked.clone()))
     })
+    .map(|option| standalone(option, &props.open))
     .collect();
   let remote: Vec<Element> = menu
     .choices
@@ -333,8 +338,9 @@ fn branches(
         status: None,
         chosen: *chosen == picked,
       }
-      .render(&props.open, move || pick.set(picked.clone()))
+      .render(move || pick.set(picked.clone()))
     })
+    .map(|option| standalone(option, &props.open))
     .collect();
   let mut list = list.child(head(&ctx.t("task_form.fields.baseBranch.branches")));
   if local.is_empty() && remote.is_empty() {

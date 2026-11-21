@@ -17,7 +17,8 @@ use lurq::{
   },
   components::Column,
   core::{ElementRef, Signal},
-  node::border::Border,
+  node::{Element, border::Border, dimension::Dimension},
+  ui::{Card, CardPart},
 };
 
 use crate::{
@@ -75,15 +76,25 @@ impl Pointing {
     true
   }
 
-  /// `card`, found by the pointer, and ringed while it is: then it has the class `pointed`.
-  pub fn ring(&self, card: Column) -> Column {
-    let card = card.ref_element(self.card.clone());
+  /// `card`, found by the pointer, and ringed while it is: then it has the class `pointed`. The pointer finds the
+  /// card through a column as large as it, since a card takes no element ref.
+  pub fn ring(&self, card: Card) -> Element {
     self.faded.get();
-    if !self.ringed.load(Ordering::Relaxed) {
-      return card;
-    }
-    card
-      .border(Border::outside(BorderSize::Md, PaletteColor::BorderFocus))
-      .class("pointed")
+    let ringed = self.ringed.load(Ordering::Relaxed);
+    let card: Element = if ringed {
+      card
+        .style(CardPart::Root, |style| {
+          style.border(Border::outside(BorderSize::Md, PaletteColor::Ring))
+        })
+        .into()
+    } else {
+      card.into()
+    };
+    let card = if ringed { card.class("pointed") } else { card };
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .ref_element(self.card.clone())
+      .child(card)
+      .into()
   }
 }

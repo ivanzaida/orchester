@@ -12,7 +12,7 @@ use orchester_workspace::{
   modules::{data::Progress, measure::WorkUnit},
 };
 
-use crate::screens::usage::words::day;
+use crate::{screens::usage::words::day, theme::ExtraColor};
 
 /// `Oct 1 – Oct 15`, `From Oct 1`, `Until Oct 15`, or *No dates*.
 pub fn dates(ctx: &Ctx, details: &ModuleDetails) -> Arc<str> {
@@ -63,12 +63,12 @@ pub fn unit(ctx: &Ctx, unit: WorkUnit) -> Arc<str> {
 /// one; *Not enough history* and *All done* muted.
 pub fn forecast_row(ctx: &Ctx, forecast: &Forecast, target: Option<NaiveDate>) -> (Arc<str>, PaletteColor) {
   let Outlook::Dates { likely, .. } = &forecast.outlook else {
-    return (forecast_line(ctx, forecast), PaletteColor::TextMuted);
+    return (forecast_line(ctx, forecast), PaletteColor::MutedForeground);
   };
   let (key, tone) = match target {
     Some(target) if *likely > target => ("modules.forecast.afterTarget", PaletteColor::Warning),
     Some(_) => ("modules.forecast.likely", PaletteColor::Success),
-    None => ("modules.forecast.likely", PaletteColor::TextSecondary),
+    None => ("modules.forecast.likely", ExtraColor::TextSecondary.role()),
   };
   (ctx.t_args(key, [("date", day(ctx, *likely))]), tone)
 }

@@ -43,12 +43,12 @@ impl Mark {
   fn glyph(self) -> (Icon, PaletteColor) {
     match self {
       Self::Chosen => (Icon::Check, PaletteColor::Success),
-      Self::Orchestrator => (Icon::MessagesSquare, PaletteColor::TextMuted),
-      Self::Automation => (Icon::Plug, PaletteColor::TextMuted),
-      Self::Ended => (Icon::Clock3, PaletteColor::TextMuted),
-      Self::Stopped => (Icon::CirclePause, PaletteColor::TextMuted),
+      Self::Orchestrator => (Icon::MessagesSquare, PaletteColor::MutedForeground),
+      Self::Automation => (Icon::Plug, PaletteColor::MutedForeground),
+      Self::Ended => (Icon::Clock3, PaletteColor::MutedForeground),
+      Self::Stopped => (Icon::CirclePause, PaletteColor::MutedForeground),
       Self::Waiting => (Icon::MessageCircleQuestion, PaletteColor::Warning),
-      Self::Reviewer => (Icon::ShieldCheck, PaletteColor::TextMuted),
+      Self::Reviewer => (Icon::ShieldCheck, PaletteColor::MutedForeground),
     }
   }
 }
@@ -165,7 +165,7 @@ impl AnsweredLine {
               .flex(1.0)
               .min_width(Dimension::Px(0.0)),
           )
-          .child(icon(chevron, IconSize::Base, PaletteColor::TextMuted).id(format!("{id}-chevron"))),
+          .child(icon(chevron, IconSize::Base, PaletteColor::MutedForeground).id(format!("{id}-chevron"))),
       )
       .into()
   }

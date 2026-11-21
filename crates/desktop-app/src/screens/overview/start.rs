@@ -32,7 +32,7 @@ use crate::{
   project::ShownProject,
   routes::{AccountsView, ProjectPage, Route},
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     failure::LastFailure,
     icon::{Icon, icon},
@@ -149,8 +149,8 @@ fn start_head(title: &str, done: Option<&str>) -> Row {
     .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .child(icon(Icon::ListChecks, IconSize::Base, PaletteColor::TextSecondary))
+    .background(PaletteColor::Card)
+    .child(icon(Icon::ListChecks, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(Text::new(title).variant(OverviewText::Head.role()).nowrap())
     .with_children(done.map(|done| muted(done).id("overview-start-done")))
 }
@@ -158,9 +158,17 @@ fn start_head(title: &str, done: Option<&str>) -> Row {
 fn step_line(ctx: &mut Ctx, project: ProjectId, line: &StartLine) -> Row {
   let id = format!("overview-start-{}", line.step.name());
   let (glyph, color, words) = if line.done {
-    (Icon::CircleCheck, PaletteColor::Success, PaletteColor::TextSecondary)
+    (
+      Icon::CircleCheck,
+      PaletteColor::Success,
+      ExtraColor::TextSecondary.role(),
+    )
   } else {
-    (Icon::CircleDashed, PaletteColor::TextMuted, PaletteColor::TextPrimary)
+    (
+      Icon::CircleDashed,
+      PaletteColor::MutedForeground,
+      PaletteColor::Foreground,
+    )
   };
   let (label, open) = destination(ctx, project, line.step);
   Row::new()
@@ -187,7 +195,7 @@ fn step_line(ctx: &mut Ctx, project: ProjectId, line: &StartLine) -> Row {
           Text::new(&message_text(ctx, &line.found))
             .id(format!("{id}-found"))
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .width(Dimension::Pct(100.0)),
         ),
     )

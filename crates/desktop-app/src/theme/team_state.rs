@@ -7,7 +7,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::style;
+use super::{palette::text_secondary, typography::style};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TeamStateText {
@@ -36,9 +36,9 @@ impl TeamStateText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Title => style(15.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_primary),
-      Self::Detail => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
-      Self::Reason => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
+      Self::Title => style(15.0, FontWeight::SemiBold, 1.35, 0.0, palette.foreground),
+      Self::Detail => style(12.0, FontWeight::Normal, 1.5, 0.0, text_secondary(palette)),
+      Self::Reason => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.foreground),
     }
   }
 }

@@ -5,15 +5,11 @@
 //! `text_muted`, `warning` near full and `danger` once full. It is as wide as its parent.
 
 use lurq::{
-  app::theme::PaletteColor,
-  components::{Column, Row},
-  node::{Element, dimension::Dimension},
+  node::Element,
+  ui::{Progress, Styled},
 };
 
-use crate::theme::ExtraRadius;
-
-/// The track's height (`wtAQI`).
-const HEIGHT: f32 = 4.0;
+use crate::theme::kit::meter as variant;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeterTone {
@@ -29,35 +25,29 @@ pub enum MeterTone {
   Full,
 }
 
-/// A meter of `used` out of `of`, with the element id `id`; more than `of` fills the whole track.
+impl MeterTone {
+  const fn variant(self) -> &'static str {
+    match self {
+      Self::Plain => variant::PLAIN,
+      Self::Reached => variant::REACHED,
+      Self::Progress => variant::PROGRESS,
+      Self::Quiet => variant::QUIET,
+      Self::Full => variant::FULL,
+    }
+  }
+}
+
+/// A meter of `used` out of `of`, with the element id `id` (its fill `<id>-fill`): lurq's `ui::Progress` in the
+/// theme's recipe (`theme::kit::meter`), which says the share as `share` to tooling. More than `of` fills the whole
+/// track, and so does an `of` of nothing.
 pub fn meter(id: &str, (used, of): (u64, u64), tone: MeterTone) -> Element {
-  // A share of a few hundred pixels: f32 is precise enough.
-  let percent = if of == 0 {
-    100.0
-  } else {
-    (used as f32 / of as f32 * 100.0).min(100.0)
-  };
-  let fill = match tone {
-    MeterTone::Plain => PaletteColor::TextSecondary,
-    MeterTone::Reached => PaletteColor::Warning,
-    MeterTone::Progress => PaletteColor::Info,
-    MeterTone::Quiet => PaletteColor::TextMuted,
-    MeterTone::Full => PaletteColor::Danger,
-  };
-  Row::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(HEIGHT))
-    .background(PaletteColor::Border)
-    .rounded(ExtraRadius::Meter.role())
+  // A share of a few hundred pixels: f64 of a count is precise enough.
+  let (used, of) = if of == 0 { (1.0, 1.0) } else { (used as f64, of as f64) };
+  let percent = (used / of * 100.0).min(100.0);
+  Progress::new(used)
+    .max(of)
+    .variant(tone.variant())
     .describe("share", format!("{percent:.0}"))
-    .child(
-      Column::new()
-        .id(format!("{id}-fill"))
-        .width(Dimension::Pct(percent))
-        .height(Dimension::Pct(100.0))
-        .background(fill)
-        .rounded(ExtraRadius::Meter.role()),
-    )
+    .id(id.to_owned())
     .into()
 }

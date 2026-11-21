@@ -1,8 +1,8 @@
-//! Notice (`Notice` `R3Pyx`): a 16 icon, a title in 13/500 `text_primary` with its explanation 2 under
-//! it in 12/1.45 `text_secondary`, and actions at the end, 10 apart and 8 between actions; radius 10,
-//! 12 over and under and 14 at its sides, inside a 1 stroke. Its tone colors the fill, the stroke and
-//! the icon: information on `info_muted` in `info`, as the redesigned screens draw it (`Notice · info`
-//! `byr8E` in `cC55E`, `HfwWH` in `P21bwh`), a warning on `warning_muted` in `warning` (`iw9rS`), a
+//! Notice (`Notice` `R3Pyx`): lurq's `ui::Alert` in the kit's recipe (`theme::kit::notice`); a 16 icon, a title in
+//! 13/500 `text_primary` with its explanation 2 under it in 12/1.45 `text_secondary`, and actions at the end, 10 apart
+//! and 8 between actions; radius 10, 12 over and under and 14 at its sides, inside a 1 stroke. Its tone colors the
+//! fill, the stroke and the icon: information on `info_muted` in `info`, as the redesigned screens draw it (`Notice ·
+//! info` `byr8E` in `cC55E`, `HfwWH` in `P21bwh`), a warning on `warning_muted` in `warning` (`iw9rS`), a
 //! failure on `danger_muted` in `danger` (`kXWCj`, `fRrDA`), a success on `success_muted` in `success`
 //! (`nqp68`). The text wraps and the icon stays with the first line.
 //!
@@ -22,14 +22,18 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Column, Row, Text},
-  layout::{Alignment, layout_kind::Justify},
+  app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  components::{Row, Text},
+  layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::{Alert, AlertPart, AlertVariant, Styled},
 };
 
 use super::icon::{Icon, icon};
-use crate::theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{
+  ExtraSpacing, IconSize,
+  kit::notice::{FLAT, HANDLING, RAISED, STROKED},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NoticeTone {
@@ -57,20 +61,31 @@ impl NoticeTone {
   /// The fill, the stroke and the icon's color.
   pub(crate) const fn colors(self) -> (PaletteColor, PaletteColor, PaletteColor) {
     match self {
-      Self::Neutral => (
-        PaletteColor::SurfaceRaised,
-        PaletteColor::Border,
-        PaletteColor::TextMuted,
-      ),
+      Self::Neutral => (PaletteColor::Card, PaletteColor::Border, PaletteColor::MutedForeground),
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info, PaletteColor::Info),
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning, PaletteColor::Warning),
-      Self::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger, PaletteColor::Danger),
+      Self::Danger => (
+        PaletteColor::DestructiveMuted,
+        PaletteColor::Destructive,
+        PaletteColor::Destructive,
+      ),
       Self::Success => (PaletteColor::SuccessMuted, PaletteColor::Success, PaletteColor::Success),
     }
   }
 
+  /// The variant of the notice's recipe (`theme::kit::notice`) that draws this tone.
+  pub(crate) const fn variant(self) -> AlertVariant {
+    match self {
+      Self::Neutral => AlertVariant::Neutral,
+      Self::Info => AlertVariant::Info,
+      Self::Warning => AlertVariant::Warning,
+      Self::Danger => AlertVariant::Destructive,
+      Self::Success => AlertVariant::Success,
+    }
+  }
+
   /// The icon a notice of this tone shows unless it names its own.
-  const fn icon(self) -> Icon {
+  pub(crate) const fn icon(self) -> Icon {
     match self {
       Self::Neutral | Self::Info => Icon::Info,
       Self::Warning => Icon::TriangleAlert,
@@ -190,189 +205,43 @@ impl Notice {
 
 impl From<Notice> for Element {
   fn from(notice: Notice) -> Self {
-    match notice.layout {
-      NoticeLayout::Inspector => return inspector_notice(notice),
-      NoticeLayout::Raised => return raised_notice(notice),
-      NoticeLayout::Inline | NoticeLayout::Stacked => {}
-    }
-    let (fill, stroke, mark) = notice.tone.colors();
-    let flat = notice.flat;
-    let text = words(&notice, flat);
-    let mark = notice.mark.unwrap_or(mark);
-    let actions = (!notice.actions.is_empty()).then(|| {
-      Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .with_children(notice.actions)
-    });
-    // A flat notice keeps its actions under its words, as a stacked one does.
-    let (text, actions) = if flat || notice.layout == NoticeLayout::Stacked {
-      (
-        Column::new()
-          .flex(1.0)
-          .spacing(if flat {
-            ExtraSpacing::Snug.role()
-          } else {
-            ExtraSpacing::Loose.role()
-          })
-          .child(text)
-          .with_children(notice.parts)
-          .with_children(actions),
-        None,
-      )
-    } else {
-      (text.flex(1.0).with_children(notice.parts), actions)
-    };
-    let row = Row::new()
+    let layout = notice.layout;
+    let flat = notice.flat && matches!(layout, NoticeLayout::Inline | NoticeLayout::Stacked);
+    // A flat notice has a stroke only where it is neutral: the others are their tone's fill alone.
+    let stroked = !flat || notice.tone == NoticeTone::Neutral;
+    let mut alert = Alert::new(&notice.title)
       .id(notice.id.clone())
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Loose.role())
-      .align_items(Alignment::Start)
-      .background(fill)
+      .variant(notice.tone.variant())
+      .icon(notice.icon.name().as_str())
+      .children(notice.parts)
+      .actions(notice.actions)
+      .align_top(layout == NoticeLayout::Inline && !flat)
+      .stacked(flat || matches!(layout, NoticeLayout::Stacked | NoticeLayout::Raised))
+      .actions_end(layout == NoticeLayout::Raised)
+      .compact(layout == NoticeLayout::Inspector)
+      .state(FLAT, flat)
+      .state(RAISED, layout == NoticeLayout::Raised)
+      .state(STROKED, stroked)
       .describe("tone", notice.tone.name());
-    let (row, mark_size) = if flat {
-      let row = row
-        .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-        .rounded(RadiusSize::Md);
-      // Only a neutral one has a stroke: the others are their tone's fill alone.
-      let row = if notice.tone == NoticeTone::Neutral {
-        row.border(Border::inside(BorderSize::Sm, stroke))
-      } else {
-        row
-      };
-      (row, IconSize::Md)
-    } else {
-      (
-        row
-          .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-          .border(Border::inside(BorderSize::Sm, stroke))
-          .rounded(RadiusSize::Lg),
-        IconSize::Lg,
-      )
-    };
-    row
-      .child(icon(notice.icon, mark_size, mark).id(format!("{}-icon", notice.id)))
-      .child(text)
-      .with_children(actions)
-      .into()
+    if let Some(body) = &notice.body {
+      alert = alert.description(body);
+    }
+    if let Some(mark) = notice.mark {
+      alert = alert.style(AlertPart::Icon, |style| style.foreground(mark));
+    }
+    if let Some(title) = notice.title_style {
+      alert = alert.style(AlertPart::Title, |style| style.typography(title));
+    }
+    alert.into()
   }
 }
 
-/// A notice's title and its explanation under it.
-fn words(notice: &Notice, flat: bool) -> Column {
-  Column::new()
-    .id(format!("{}-text", notice.id))
-    .spacing(if flat {
-      ExtraSpacing::Snug.role()
-    } else if notice.layout == NoticeLayout::Stacked {
-      ExtraSpacing::Fine.role()
-    } else {
-      ExtraSpacing::Tight.role()
-    })
-    .child(
-      Text::new(&notice.title)
-        .id(format!("{}-title", notice.id))
-        .variant(notice.title_style.unwrap_or_else(|| ExtraTypography::Strong.role())),
-    )
-    .with_children(notice.body.as_deref().map(|body| {
-      Text::new(body)
-        .id(format!("{}-body", notice.id))
-        .variant(ExtraTypography::Prose.role())
-    }))
+/// A handling notice: `text` beside `glyph` (`<id>-description`).
+pub fn handling_notice(id: &str, glyph: Icon, text: &str) -> Alert {
+  handling_notice_content(id, glyph, text)
 }
 
-fn inspector_notice(notice: Notice) -> Element {
-  let (fill, stroke, mark) = notice.tone.colors();
-  Column::new()
-    .id(notice.id.clone())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-    .spacing(ExtraSpacing::Snug.role())
-    .background(fill)
-    .border(Border::inside(BorderSize::Sm, stroke))
-    .rounded(ExtraRadius::Tile.role())
-    .describe("tone", notice.tone.name())
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Start)
-        .child(icon(notice.icon, IconSize::Base, mark))
-        .child(
-          Text::new(&notice.title)
-            .variant(lurq::app::theme::TypographyStyle::Label)
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0)),
-        ),
-    )
-    .with_children(notice.body.map(|body| {
-      Text::new(&body)
-        .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
-        .width(Dimension::Pct(100.0))
-    }))
-    .with_children(notice.parts)
-    .with_children(
-      (!notice.actions.is_empty()).then(|| Row::new().wrap().spacing(SpacingSize::Sm).with_children(notice.actions)),
-    )
-    .into()
-}
-
-fn raised_notice(notice: Notice) -> Element {
-  let (_, stroke, mark) = notice.tone.colors();
-  let mark = notice.mark.unwrap_or(mark);
-  let words = Column::new()
-    .id(format!("{}-text", notice.id))
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(SpacingSize::Xs)
-    .child(
-      Text::new(&notice.title)
-        .id(format!("{}-title", notice.id))
-        .variant(ExtraTypography::Strong.role()),
-    )
-    .with_children(notice.body.as_deref().map(|body| {
-      Text::new(body)
-        .id(format!("{}-body", notice.id))
-        .variant(ExtraTypography::Prose.role())
-    }))
-    .with_children(notice.parts);
-  let actions = (!notice.actions.is_empty()).then(|| {
-    Row::new()
-      .id(format!("{}-actions", notice.id))
-      .width(Dimension::Pct(100.0))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .justify(Justify::End)
-      .with_children(notice.actions)
-  });
-  Column::new()
-    .id(notice.id.clone())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, stroke))
-    .rounded(RadiusSize::Md)
-    .describe("tone", notice.tone.name())
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Loose.role())
-        .align_items(Alignment::Start)
-        .child(icon(notice.icon, IconSize::Nav, mark).id(format!("{}-icon", notice.id)))
-        .child(words),
-    )
-    .with_children(actions)
-    .into()
-}
-
-/// A handling notice: `text` beside `glyph`.
-pub fn handling_notice(id: &str, glyph: Icon, text: &str) -> Row {
-  handling_notice_content(id, glyph, text, None)
-}
-
-/// The in-notice link of mERxM/AuGQr, used to open an existing credential (Gam8g).
+/// The in-notice link of mERxM/AuGQr, used to open an existing credential (Gam8g), under the words.
 pub fn handling_notice_action(
   id: &str,
   action_id: &str,
@@ -380,40 +249,26 @@ pub fn handling_notice_action(
   text: &str,
   label: &str,
   on_click: impl Fn() + Send + Sync + 'static,
-) -> Row {
+) -> Alert {
   let action = super::pressable::pressable(on_click)
     .id(action_id.to_owned())
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
     .child(Text::new(label).variant(TypographyStyle::Label))
-    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextPrimary));
-  handling_notice_content(id, glyph, text, Some(action.into()))
+    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::Foreground));
+  handling_notice_content(id, glyph, text).stacked(true).action(action)
 }
 
-fn handling_notice_content(id: &str, glyph: Icon, text: &str, action: Option<Element>) -> Row {
-  Row::new()
+fn handling_notice_content(id: &str, glyph: Icon, text: &str) -> Alert {
+  Alert::untitled()
     .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Start)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(ExtraRadius::Tile.role())
-    .child(icon(glyph, IconSize::Nav, PaletteColor::TextSecondary))
-    .child(
-      Column::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .spacing(ExtraSpacing::Snug.role())
-        .child(
-          Text::new(text)
-            .id(format!("{id}-text"))
-            .variant(ExtraTypography::Prose.role()),
-        )
-        .with_children(action),
-    )
+    .variant(AlertVariant::Neutral)
+    .icon(glyph.name().as_str())
+    .description(text)
+    .state(HANDLING, true)
+    .state(STROKED, true)
 }
+
 /// Inline publication result below the editor header (GxmNs, state 7).
 pub fn result_notice(id: &str, text: &str, dismiss: Element) -> Row {
   Row::new()

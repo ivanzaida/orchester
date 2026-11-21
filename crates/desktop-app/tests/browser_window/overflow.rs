@@ -176,6 +176,27 @@ fn browser_overflow_choosing_a_row_gives_the_focus_back() {
   assert_eq!(browser.focused().as_deref(), PAGE);
 }
 
+#[test]
+fn browser_overflow_arrows_move_through_the_rows_and_enter_chooses_one_with_the_focus_in_the_filter() {
+  let Some(mut browser) = on_used_page() else {
+    return;
+  };
+  open_menu(&mut browser);
+  type_keys(&mut browser, "rust");
+  browser.until("the rows to be filtered", |browser| rows(browser).len() == 2);
+  tap(&mut browser, "ArrowDown", "ArrowDown");
+  assert_eq!(
+    browser.focused().as_deref(),
+    FILTER,
+    "the arrows leave the focus in the filter"
+  );
+  tap(&mut browser, "Enter", "Enter");
+  browser.until("the menu to close", |browser| !browser.shows("browser-overflow-menu"));
+  browser.pass();
+  assert_eq!(browser.focused().as_deref(), PAGE);
+  assert_eq!(inputs(&browser), Vec::<String>::new(), "no key reaches the tab");
+}
+
 /// The press that closes a menu only closes it, so the focus goes back where it was, though that was not the page.
 #[test]
 fn browser_overflow_press_outside_gives_the_address_line_its_focus_back() {

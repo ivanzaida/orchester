@@ -27,7 +27,7 @@ use crate::{
   navigation::Navigation,
   routes::{AccountsPanel, AccountsView, Route},
   screens::settings::frame,
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -195,7 +195,7 @@ fn own_terminal(ctx: &mut Ctx, account: &AgentAccount) -> Element {
     .child(
       Text::new(&ta(ctx, "accounts.signIn.ownTerminal", [("shell", own.shell)]))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     )
     .child(command_row(ctx, "account-sign-in-own", &own.text))
     .child(

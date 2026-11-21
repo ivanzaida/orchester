@@ -19,7 +19,7 @@ use parking_lot::Mutex;
 use tokio::sync::watch;
 
 use super::{WINDOW_HEIGHT, WINDOW_NAME, WINDOW_WIDTH, root::BrowserRoot};
-use crate::{navigation::Navigation, routes::Route, services::Services, ui::loader};
+use crate::{navigation::Navigation, routes::Route, services::Services};
 
 /// A request to show a project's browser: its tab `tab` when given, else the tab it showed last.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -116,7 +116,6 @@ impl BrowserLink {
         .undecorated()
         .window_name(WINDOW_NAME),
       move |app, tree| {
-        loader::install(tree);
         tree.mount_root::<BrowserRoot>(app, link);
       },
     );

@@ -71,7 +71,7 @@ pub(super) fn write_error(editor: &Editor, ctx: &Ctx, pane: Column) -> Column {
   // What was typed stays: the `danger` icon only, no red fill (`SsC16`).
   let notice = Notice::new("instruction-write-error", NoticeTone::Info, title)
     .icon(Icon::CircleAlert)
-    .mark(lurq::app::theme::PaletteColor::Danger)
+    .mark(lurq::app::theme::PaletteColor::Destructive)
     .body(explanation)
     .action(if valid { retry } else { retry.disabled() });
   pane.child(notice.stacked())

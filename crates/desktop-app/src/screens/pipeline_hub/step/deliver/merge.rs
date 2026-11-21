@@ -101,6 +101,6 @@ fn hint(ctx: &Ctx, id: &str, key: &str) -> Text {
   Text::new(&ctx.t(key))
     .id(id.to_owned())
     .variant(HubText::Status.role())
-    .color(lurq::app::theme::PaletteColor::TextMuted)
+    .color(lurq::app::theme::PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
 }

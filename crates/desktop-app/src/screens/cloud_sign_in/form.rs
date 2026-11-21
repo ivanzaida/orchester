@@ -32,7 +32,7 @@ use super::{WIDTH, step::Step};
 use crate::{
   screens::settings::orchester::{PersonOnly, Said, cloud_said},
   services::Services,
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing},
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchesterSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -435,9 +435,9 @@ fn create_row(ctx: &mut Ctx, form: &Form) -> Element {
     .child(
       Text::new(&label)
         .variant(ExtraTypography::NoteStrong.role())
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextPrimary));
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::Foreground));
   Row::new()
     .id("sign-in-create")
     .width(Dimension::Pct(100.0))
@@ -489,7 +489,7 @@ fn forgot_link(ctx: &mut Ctx, form: &Form) -> Element {
     .child(
       Text::new(&label)
         .variant(ExtraTypography::NoteStrong.role())
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     )
     .into()
 }

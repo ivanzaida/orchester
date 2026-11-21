@@ -93,7 +93,7 @@ fn hint(words: &str) -> Text {
   Text::new(words)
     .id(HINT)
     .variant(HubText::Status.role())
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
 }
 

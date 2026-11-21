@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, core::Signal, node::Element};
+use lurq::{app::ctx::Ctx, ui};
 
 use crate::ui::{
   button::{ActionButton, ButtonKind},
@@ -86,9 +86,9 @@ impl Control {
     }
   }
 
-  /// The control as a row of the menu `open` shows, in `danger` when it destroys; one under way or waiting says so
-  /// in place of why.
-  pub fn item(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Element {
+  /// The control as an item of a menu, which a choice closes, in `danger` when it destroys; one under way or waiting
+  /// says so in place of why.
+  pub fn item(&self, ctx: &mut Ctx) -> ui::MenuItem {
     let (id, label) = (self.id.clone(), self.label.clone());
     let item = match &self.offer {
       Offer::Ready(Press::Run(run)) => {
@@ -108,6 +108,6 @@ impl Control {
       item = item.shortcut(keys.clone());
     }
     let danger = matches!(self.kind, ButtonKind::Danger | ButtonKind::DangerGhost);
-    if danger { item.danger() } else { item }.render(ctx, open)
+    if danger { item.danger() } else { item }.render(ctx)
   }
 }

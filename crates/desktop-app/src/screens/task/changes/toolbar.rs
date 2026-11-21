@@ -21,7 +21,7 @@ use orchester_workspace::{
 
 use super::grouped;
 use crate::{
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     button::ActionButton,
     chip::{BadgeTone, badge},
@@ -49,15 +49,15 @@ pub fn toolbar(ctx: &Ctx, run: &RunView, checkpointed: &Checkpointed, try_locall
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::GitCompare, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::GitCompare, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&base)
         .id("changes-base")
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
-    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::MutedForeground));
   let (head, size) = match checkpointed {
     Checkpointed::NoCheckpoint => {
       return row
@@ -98,7 +98,7 @@ pub fn toolbar(ctx: &Ctx, run: &RunView, checkpointed: &Checkpointed, try_locall
       Text::new(&size_text(ctx, size))
         .id("changes-size")
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .child(try_locally)
@@ -109,7 +109,7 @@ fn detail(text: &str) -> Text {
   Text::new(text)
     .id("changes-checkpoint")
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .nowrap()
 }
 

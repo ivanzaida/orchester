@@ -18,7 +18,7 @@ use crate::{
   navigation::Navigation,
   project::Projects,
   routes::{ProjectPage, Route},
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography},
   ui::{
     icon::Icon,
     icon_button::IconButton,
@@ -66,7 +66,7 @@ pub(super) fn card(ctx: &mut Ctx, project: ProjectId, navigation: &Navigation) -
       Text::new(&value)
         .id("sidebar-usage-value")
         .variant(ExtraTypography::MonoNote.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     );
   let meter = budget.map(|(used, budget)| {
@@ -100,7 +100,7 @@ pub(super) fn card(ctx: &mut Ctx, project: ProjectId, navigation: &Navigation) -
     .spacing(SpacingSize::Sm)
     .rounded(ExtraRadius::Tile.role())
     // A panel's fill: the light theme's border alone is lost on the sidebar's surface.
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .align_items(Alignment::Center)
     .child(usage)

@@ -138,6 +138,6 @@ fn line(glyph: Icon, text: &str) -> Row {
     .id("conversation-working")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(text).variant(ExtraTypography::Note.role()))
 }

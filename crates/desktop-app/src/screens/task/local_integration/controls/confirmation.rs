@@ -180,8 +180,8 @@ impl Inspector {
     decision: Decision,
   ) -> Element {
     let mut panel = action_panel(ctx, decision.title, Some(decision.body))
-      .with_children(field(ctx, props, mode))
-      .with_children(edited_since_restoration(ctx, props, mode));
+      .children(field(ctx, props, mode))
+      .children(edited_since_restoration(ctx, props, mode));
     if *mode == Mode::Preserve {
       // Restoration always follows the merge and pauses on conflicts; the box says so and cannot be changed.
       panel = panel.child(
@@ -245,8 +245,8 @@ impl Inspector {
         ));
     }
     panel
-      .with_children(self.additional_decisions(ctx, props, (mode, phase), decision.back))
-      .with_children(decision.note.map(|note| guard_note(ctx, note)))
+      .children(self.additional_decisions(ctx, props, (mode, phase), decision.back))
+      .children(decision.note.map(|note| guard_note(ctx, note)))
       .into()
   }
 

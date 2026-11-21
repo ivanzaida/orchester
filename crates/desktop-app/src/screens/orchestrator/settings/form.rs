@@ -64,11 +64,11 @@ pub(super) fn form(ctx: &mut Ctx, project: &ShownProject, setup: &OrchestratorSe
     .id("orchestrator-settings-note")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Pin, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Pin, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("orchestrator.settings.note"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     );
   let section = section(
     "orchestrator-settings-connection",
@@ -95,7 +95,7 @@ fn limits(ctx: &Ctx, project: &str) -> Row {
     .id("orchestrator-settings-limits")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Gauge, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Gauge, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t_args(
         "orchestrator.settings.limits",
@@ -106,7 +106,7 @@ fn limits(ctx: &Ctx, project: &str) -> Row {
         ],
       ))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted),
+      .color(PaletteColor::MutedForeground),
     )
 }
 
@@ -154,7 +154,7 @@ fn connection_row(ctx: &mut Ctx, connections: &[ConnectionChoice], choices: &Cho
         Text::new(&text)
           .id(format!("orchestrator-connection-why-{index}"))
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .width(Dimension::Px(SELECT_WIDTH)),
       )
     })

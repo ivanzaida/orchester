@@ -11,7 +11,7 @@ use super::{
   icon::{Icon, icon},
   pressable::pressable,
 };
-use crate::theme::{ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
 
 pub const WIDTH: f32 = 240.0;
 pub const HEIGHT: f32 = 74.0;
@@ -19,7 +19,7 @@ pub const HEIGHT: f32 = 74.0;
 pub fn add_slot(ctx: &Ctx, id: &str, title: &str, hint: &str, action: impl Fn() + Send + Sync + 'static) -> Element {
   let outline = Svg::new(
     SvgData::from_str(crate::theme::pipelines::slot_outline())
-      .with_stroke(ctx.theme().palette_color(PaletteColor::BorderStrong)),
+      .with_stroke(ctx.theme().palette_color(PaletteColor::Input)),
   )
   .size(Dimension::Px(WIDTH), Dimension::Px(HEIGHT))
   .hit_test(HitTestBehavior::None);
@@ -41,7 +41,7 @@ pub fn add_slot(ctx: &Ctx, id: &str, title: &str, hint: &str, action: impl Fn() 
               Row::new()
                 .spacing(ExtraSpacing::Snug.role())
                 .align_items(Alignment::Center)
-                .child(icon(Icon::Plus, IconSize::Md, PaletteColor::TextSecondary))
+                .child(icon(Icon::Plus, IconSize::Md, ExtraColor::TextSecondary.role()))
                 .child(Text::new(title).variant(ExtraTypography::Strong.role())),
             )
             .child(Text::new(hint).variant(ExtraTypography::Note.role())),

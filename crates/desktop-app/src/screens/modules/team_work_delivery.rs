@@ -132,7 +132,7 @@ fn pending_kind(pending: &TeamDelivery, authorizes: bool, holder_here: bool) -> 
 
 /// The line of a delivery by what this computer recorded of it.
 fn recorded_kind(delivery: &ShownDelivery) -> Line {
-  let plain = (Icon::GitPullRequest, PaletteColor::TextMuted);
+  let plain = (Icon::GitPullRequest, PaletteColor::MutedForeground);
   let authorized = (Icon::ShieldCheck, PaletteColor::Success);
   match &delivery.status {
     DeliveryStatus::Requested | DeliveryStatus::AwaitingAuthorization => (
@@ -231,7 +231,7 @@ fn not_requested(ctx: &Ctx, view: &View<'_>) -> Strip {
   let module = &view.props.module;
   let base = base_named(ctx, view);
   let id = "module-team-delivery";
-  let glyph = (Icon::GitPullRequest, PaletteColor::TextMuted);
+  let glyph = (Icon::GitPullRequest, PaletteColor::MutedForeground);
   let holder = module.claim.as_ref().filter(|claim| !claim.stale);
   match holder {
     Some(claim) if claim.here => {

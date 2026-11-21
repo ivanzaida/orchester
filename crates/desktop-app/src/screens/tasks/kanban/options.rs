@@ -10,10 +10,11 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, Spacer, Text},
+  components::{Column, Row, Spacer, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_workspace::tasks::browse::TaskSort;
 
@@ -22,7 +23,7 @@ use crate::{
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_panel, separator},
+    menu::{MenuItem, menu_at_end, menu_panel, separator_line},
     pressable::{Focus, pressable},
     tabs::{Segment, SegmentFace, segmented},
     toggle::{Toggle, ToggleKind},
@@ -135,7 +136,7 @@ impl Component for BoardOptions {
         Row::new()
           .spacing(ExtraSpacing::Snug.role())
           .align_items(Alignment::Center)
-          .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+          .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
           .child(Text::new(&ctx.t("tasks.display.note")).variant(ExtraTypography::Note.role())),
       );
     let list = self.list(ctx, &props, open);
@@ -145,13 +146,13 @@ impl Component for BoardOptions {
       .padding(SpacingSize::Md)
       .spacing(ExtraSpacing::Loose.role())
       .rounded(RadiusSize::Lg)
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .child(layout_switch(ctx, &props.display, "tasks-board-options-layout", true))
       .child(groups)
-      .child(separator(ctx))
+      .child(separator_line(ctx))
       .child(properties(ctx, &props.display, &display))
-      .child(separator(ctx))
+      .child(separator_line(ctx))
       .child(checks(ctx, &props.display, &display))
       .child(foot(ctx, &props.display))
       .with_children(list)
@@ -181,26 +182,26 @@ impl BoardOptions {
       .padding(Padding::horizontal(SpacingSize::Sm))
       .spacing(ExtraSpacing::Snug.role())
       .rounded(RadiusSize::Md)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border(Border::inside(
         BorderSize::Sm,
         if chosen {
-          PaletteColor::BorderFocus
+          PaletteColor::Ring
         } else {
           PaletteColor::Border
         },
       ))
       .describe("a11y_name", ctx.t(label))
-      .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
       .child(
         Text::new(&ctx.t(value))
           .id(format!("tasks-board-options-{name}-value"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .flex(1.0)
           .nowrap(),
       )
-      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground));
     Row::new()
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(SELECT_ROW))
@@ -216,7 +217,7 @@ impl BoardOptions {
   }
 
   /// The open select's list.
-  fn list(&self, ctx: &mut Ctx, props: &OptionsProps, open: Open) -> Option<Popup> {
+  fn list(&self, ctx: &mut Ctx, props: &OptionsProps, open: Open) -> Option<ui::Menu> {
     let display = props.display.clone();
     let now = display.get();
     let (rows, anchor): (Vec<MenuItem>, &ElementRef) = match open {
@@ -266,18 +267,14 @@ impl BoardOptions {
         &self.anchors[2],
       ),
     };
-    let rows: Vec<Element> = rows.into_iter().map(|row| row.render(ctx, &self.shown)).collect();
-    Some(
-      Popup::new(
-        anchor.clone(),
-        menu_panel("tasks-board-options-list")
-          .width(Dimension::Px(LIST_WIDTH))
-          .with_children(rows),
-      )
-      .open(self.shown.clone())
-      .placement(Placement::BottomEnd)
-      .offset(0.0, ExtraSpacing::Snug.value()),
-    )
+    let rows: Vec<_> = rows.into_iter().map(|row| row.render(ctx)).collect();
+    Some(menu_at_end(
+      anchor.clone(),
+      self.shown.clone(),
+      menu_panel("tasks-board-options-list")
+        .width(LIST_WIDTH)
+        .with_children(rows),
+    ))
   }
 }
 
@@ -327,7 +324,7 @@ fn properties(ctx: &Ctx, display: &Signal<Display>, now: &Display) -> Column {
     .child(
       Text::new(&ctx.t("tasks.board.options.properties"))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .with_children(rows)
 }
@@ -353,8 +350,8 @@ fn chip(ctx: &Ctx, display: &Signal<Display>, now: &Display, property: Property)
     );
   if on {
     chip
-      .background(PaletteColor::AccentMuted)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Highlight)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
   } else {
     chip.border(Border::inside(BorderSize::Sm, PaletteColor::Border))
   }

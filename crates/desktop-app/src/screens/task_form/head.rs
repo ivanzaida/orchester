@@ -42,14 +42,14 @@ pub fn head(ctx: &mut Ctx, view: &View, nav: &Nav) -> Element {
     .height(Dimension::Px(HEAD_HEIGHT))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(crumbs(ctx, view, nav))
     .child(Spacer::new().flex(1.0))
     .child(save_status(ctx, view))
     .into()
 }
 
-fn crumbs(ctx: &mut Ctx, view: &View, nav: &Nav) -> Row {
+fn crumbs(ctx: &mut Ctx, view: &View, nav: &Nav) -> Element {
   let tasks = Crumb::to(ctx.t("task_form.crumbs.tasks"), nav.to_tasks());
   let here = match view.subject.task() {
     None => Crumb::here(ctx.t("task_form.crumbs.newTask")),
@@ -107,7 +107,7 @@ fn note(id: &str, glyph: Icon, words: &str) -> Element {
     .align_items(Alignment::Center)
     .background(ExtraColor::Note.role())
     .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))
@@ -155,7 +155,7 @@ fn save_status(ctx: &Ctx, view: &View) -> Row {
 }
 
 fn status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
-  let doing = |key| (Icon::LoaderCircle, PaletteColor::TextSecondary, ctx.t(key));
+  let doing = |key| (Icon::LoaderCircle, ExtraColor::TextSecondary.role(), ctx.t(key));
   match &view.phase {
     Phase::Saving if view.subject.is_new() => doing("task_form.status.creating"),
     Phase::Saving => doing("task_form.status.saving"),
@@ -189,7 +189,7 @@ fn editing_status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
   match (&view.subject, view.changed) {
     (Subject::New, _) => (
       Icon::CircleDashed,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("task_form.status.notSaved"),
     ),
     (_, true) => (
@@ -197,7 +197,15 @@ fn editing_status(ctx: &Ctx, view: &View) -> (Icon, PaletteColor, Arc<str>) {
       PaletteColor::Warning,
       ctx.t("task_form.status.unsaved"),
     ),
-    (Subject::Draft(_), false) => (Icon::Check, PaletteColor::TextMuted, ctx.t("task_form.status.saved")),
-    (Subject::Ran(_), false) => (Icon::Check, PaletteColor::TextMuted, ctx.t("task_form.status.savedRan")),
+    (Subject::Draft(_), false) => (
+      Icon::Check,
+      PaletteColor::MutedForeground,
+      ctx.t("task_form.status.saved"),
+    ),
+    (Subject::Ran(_), false) => (
+      Icon::Check,
+      PaletteColor::MutedForeground,
+      ctx.t("task_form.status.savedRan"),
+    ),
   }
 }

@@ -12,23 +12,27 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
+    events::MouseEvent,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
   layout::{Alignment, layout_kind::Justify},
-  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::{Length, ListItem, ListItemPart},
 };
 
 use super::{
   icon::{Icon, icon},
-  pressable::opening,
-  skeleton,
   tooltip::Tooltip,
 };
 use crate::{
-  navigation::link::Open,
+  navigation::link::{Open, follow},
   shell::status_bar::dot,
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, SettingsSpacing, SettingsText},
+  theme::{
+    ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, SettingsText,
+    kit::setting_row::{DANGER, DEPENDENT, FADED, SUCCESS, WARNING},
+    skeleton_line,
+  },
 };
 
 /// A row's tile (`Tile` `BpusX` in `03 · Accounts`) and a page head's (`Tile` `KG1Td` in `03b · Account`).
@@ -46,12 +50,13 @@ pub enum HintTone {
 }
 
 impl HintTone {
-  const fn color(self) -> PaletteColor {
+  /// The row's state that colors its hint (`theme::kit::setting_row`); a muted hint is the row's own.
+  const fn state(self) -> Option<&'static str> {
     match self {
-      Self::Muted => PaletteColor::TextMuted,
-      Self::Warning => PaletteColor::Warning,
-      Self::Danger => PaletteColor::Danger,
-      Self::Success => PaletteColor::Success,
+      Self::Muted => None,
+      Self::Warning => Some(WARNING),
+      Self::Danger => Some(DANGER),
+      Self::Success => Some(SUCCESS),
     }
   }
 }
@@ -142,7 +147,7 @@ impl SettingGroup {
     let words = Text::new(foot)
       .id(format!("{id}-text"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .flex(1.0)
       .min_width(Dimension::Px(0.0));
     self.foot = Some(
@@ -152,7 +157,7 @@ impl SettingGroup {
         .padding(Padding::all(ExtraSpacing::Tight.role()))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+        .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
         .child(words)
         .into(),
     );
@@ -171,7 +176,7 @@ impl From<SettingGroup> for Element {
         Text::new(&meta)
           .id(format!("{}-meta", group.id))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap()
@@ -232,11 +237,13 @@ pub fn group_note(id: &str, text: &str) -> Text {
   Text::new(text)
     .id(id.to_owned())
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
 }
 
-/// A row of a group.
+/// A row of a group: lurq's `ui::ListItem` in the theme's recipe (`theme::kit::setting_row`). Given the id `x`, the row
+/// is `x` (what a press of a row that opens a page presses), its label `x-title`, its hint `x-description`, its (i)
+/// `x-info`, what it says under itself `x-below`, and the row with that `x-item`. Pointer-only.
 pub struct SettingRow {
   id: Arc<str>,
   label: Arc<str>,
@@ -258,8 +265,8 @@ pub struct SettingRow {
 }
 
 impl SettingRow {
-  /// The row of `id` (its frame `<id>-row`, its label `<id>-label`, its hint `<id>-hint`, its tooltip's anchor
-  /// `<id>-info`).
+  /// The row of `id` (its label `<id>-title`, its hint `<id>-description`, its tooltip's anchor `<id>-info`). `id` is
+  /// the row's own: a row whose control is named for the setting takes `<setting>-row`.
   pub fn new(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
     Self {
       id: id.into(),
@@ -375,110 +382,77 @@ impl SettingRow {
     self
   }
 
-  /// The label with its (i), its detail and the hint under them.
-  fn text(&mut self, ctx: &mut Ctx) -> Column {
-    let label: Element = match self.bones.0 {
-      Some(width) => skeleton::line(ctx, ExtraTypography::Strong.role(), width).into(),
-      None => Text::new(&self.label)
-        .id(format!("{}-label", self.id))
-        .variant(ExtraTypography::Strong.role())
-        .color(match (self.faded, self.label_color.clone()) {
-          (true, _) => PaletteColor::TextMuted,
-          (false, Some(color)) => color,
-          (false, None) => PaletteColor::TextPrimary,
-        })
-        .into(),
-    };
-    let info = self.info.clone().map(|info| {
-      let mark = Row::new()
-        .id(format!("{}-info", self.id))
-        .describe("a11y_name", info.clone())
-        .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted));
-      Tooltip::new(format!("{}-info", self.id), info).wrap(ctx, mark)
-    });
-    let hint: Option<Element> = match (&self.hint, self.bones.1) {
-      (Some((hint, tone)), _) => Some(
-        Text::new(hint)
-          .id(format!("{}-hint", self.id))
-          .variant(TypographyStyle::Description)
-          .color(tone.color())
-          .width(Dimension::Pct(100.0))
-          .into(),
-      ),
-      (None, Some(width)) => Some(skeleton::line(ctx, TypographyStyle::Description, width).into()),
-      (None, None) => None,
-    };
-    Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Tight.role())
-      .child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(label)
-          .with_children(info),
-      )
-      .with_children(self.detail.take())
-      .with_children(hint)
+  /// The (i) after the label, `<id>-info`, with the rest of what the setting does in its tooltip: pointer-only.
+  fn info_mark(&self, ctx: &mut Ctx, info: Arc<str>) -> Element {
+    let id = format!("{}-info", self.id);
+    let mark = Row::new()
+      .id(id.clone())
+      .describe("a11y_name", info.clone())
+      .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground));
+    Tooltip::new(id, info).wrap(ctx, mark)
+  }
+
+  /// The label, or its bone while it is read, in its color; the hint under it in its tone, or its bone.
+  fn words(&self, ctx: &Ctx, mut item: ListItem) -> ListItem {
+    if let Some(width) = self.bones.0 {
+      let (_, high) = skeleton_line(ctx.theme(), ExtraTypography::Strong.role());
+      item = item.title_pending(true).style(ListItemPart::TitleSkeleton, |style| {
+        style.width(Length::Px(width)).height(Length::Px(high))
+      });
+    }
+    if let Some(color) = self.label_color.clone().filter(|_| !self.faded) {
+      item = item.style(ListItemPart::Title, |style| style.foreground(color));
+    }
+    match (&self.hint, self.bones.1) {
+      (Some((hint, tone)), _) => match tone.state() {
+        Some(state) => item.description(hint).state(state, true),
+        None => item.description(hint),
+      },
+      (None, Some(width)) => {
+        let (_, high) = skeleton_line(ctx.theme(), TypographyStyle::Description);
+        item
+          .description_pending(true)
+          .style(ListItemPart::DescriptionSkeleton, |style| {
+            style.width(Length::Px(width)).height(Length::Px(high))
+          })
+      }
+      (None, None) => item,
+    }
   }
 
   pub fn render(mut self, ctx: &mut Ctx) -> Element {
-    let link = self.link.take().map(|link| {
-      Row::new()
-        .padding(Padding::new().top(ExtraSpacing::Tight.role()))
-        .child(link)
-    });
-    let text = self.text(ctx).with_children(link);
-    let padding = Padding::symmetric(ExtraSpacing::Inset.role(), SettingsSpacing::RowY.role());
-    let padding = if self.dependent {
-      padding.left(SettingsSpacing::Dependent.role())
-    } else {
-      padding
-    };
-    let line = Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding(padding)
-      .spacing(SpacingSize::Md)
-      .align_items(Alignment::Center)
-      .with_children(self.lead)
-      .child(text)
-      .with_children(self.control);
-    let line: Element = match self.opens {
-      Some(open) => {
-        let row = opening(open)
-          .id(format!("{}-open", self.id))
-          .width(Dimension::Pct(100.0))
-          .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-          .child(line);
-        if self.selected {
-          row.background(ExtraColor::Hover.role()).into()
-        } else {
-          row.into()
-        }
-      }
-      None => line.into(),
-    };
-    let below = (!self.below.is_empty()).then(|| {
-      Column::new()
-        .id(format!("{}-below", self.id))
-        .width(Dimension::Pct(100.0))
-        .padding(
-          Padding::new()
-            .left(ExtraSpacing::Inset.role())
-            .right(ExtraSpacing::Inset.role())
-            .bottom(SpacingSize::Md),
-        )
-        .spacing(SpacingSize::Sm)
-        .with_children(self.below)
-    });
-    Column::new()
-      .id(format!("{}-row", self.id))
-      .width(Dimension::Pct(100.0))
-      .describe("selected", if self.selected { "true" } else { "false" })
-      .child(line)
-      .with_children(below)
-      .into()
+    let mut item = ListItem::new(&self.label)
+      .id(self.id.clone())
+      .tab_stop(false)
+      .selected(self.selected)
+      .state(DEPENDENT, self.dependent)
+      .state(FADED, self.faded);
+    item = self.words(ctx, item);
+    if let Some(info) = self.info.take() {
+      item = item.tag(self.info_mark(ctx, info));
+    }
+    if let Some(detail) = self.detail.take() {
+      item = item.subtitle(detail);
+    }
+    if let Some(link) = self.link.take() {
+      item = item.detail(link);
+    }
+    if let Some(lead) = self.lead.take() {
+      item = item.leading(lead);
+    }
+    if let Some(control) = self.control.take() {
+      item = item.trailing(control);
+    }
+    for part in self.below {
+      item = item.below(part);
+    }
+    if let Some(open) = self.opens {
+      let aside = open.clone();
+      item = item
+        .on_click(move |event: MouseEvent| follow(&open, &event))
+        .on_open_aside(move |event: MouseEvent| follow(&aside, &event));
+    }
+    item.into()
   }
 }
 
@@ -496,7 +470,7 @@ pub fn mono_value(id: &str, text: &str) -> Text {
   Text::new(text)
     .id(id.to_owned())
     .variant(ExtraTypography::PropertyMono.role())
-    .color(PaletteColor::TextSecondary)
+    .color(ExtraColor::TextSecondary.role())
     .nowrap()
     .min_width(Dimension::Px(0.0))
     .text_overflow(TextOverflow::Elipsis)
@@ -522,7 +496,7 @@ pub fn status(id: &str, (dot_color, color): (PaletteColor, PaletteColor), words:
 
 /// A row's chevron: the row opens a page (`Open` `w8dpO`).
 pub fn opens_mark() -> Text {
-  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)
+  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)
 }
 
 /// A 28 tile with `content` in its middle (`Tile` `BpusX`).
@@ -542,7 +516,7 @@ fn tile(side: f32, radius: RadiusSize, content: impl Into<Element>) -> Row {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(radius)
     .child(content)
@@ -556,7 +530,7 @@ pub fn marked_words(id: &str, glyph: Icon, words: &str) -> Row {
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Xs, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Xs, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))

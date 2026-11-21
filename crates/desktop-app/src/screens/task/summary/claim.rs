@@ -32,6 +32,7 @@ use crate::{
     pages::{TeamClaim, minutes},
     strip::{Strip, StripTone},
   },
+  theme::ExtraColor,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -129,7 +130,7 @@ fn strip(ctx: &mut Ctx, task: &TaskContext, line: &Line<'_>) -> Strip {
         ctx.t_args("summary.team.claim.nobodyDetail", [("pipeline", pipeline)])
       };
       let title = ctx.t_args("summary.team.claim.nobodyTitle", [("task", key.as_str())]);
-      let strip = Strip::new(id, (Icon::CircleDashed, PaletteColor::TextMuted), title, detail);
+      let strip = Strip::new(id, (Icon::CircleDashed, PaletteColor::MutedForeground), title, detail);
       let acquire = task.team.as_ref().is_some_and(|team| team.task.abilities.acquire);
       match ask_button(
         ctx,
@@ -157,7 +158,7 @@ fn strip(ctx: &mut Ctx, task: &TaskContext, line: &Line<'_>) -> Strip {
         "summary.team.claim.moduleDetail",
         [("holder", holder), ("task", key.as_str())],
       );
-      Strip::new(id, (Icon::Target, PaletteColor::TextSecondary), title, detail)
+      Strip::new(id, (Icon::Target, ExtraColor::TextSecondary.role()), title, detail)
     }
     Line::YoursStale => {
       let detail = ctx.t_args("summary.team.claim.yoursStaleDetail", [("task", key.as_str())]);
@@ -177,7 +178,7 @@ fn strip(ctx: &mut Ctx, task: &TaskContext, line: &Line<'_>) -> Strip {
     Line::Yours(claim, running) => yours(ctx, claim, *running),
     Line::Elsewhere => Strip::new(
       id,
-      (Icon::Monitor, PaletteColor::TextSecondary),
+      (Icon::Monitor, ExtraColor::TextSecondary.role()),
       ctx.t("summary.team.claim.elsewhereTitle"),
       ctx.t("summary.team.claim.elsewhereDetail"),
     ),
@@ -210,7 +211,7 @@ fn other(ctx: &Ctx, task: &TaskContext, claim: &TeamClaim) -> Strip {
   };
   Strip::new(
     "task-team-claim",
-    (Icon::User, PaletteColor::TextSecondary),
+    (Icon::User, ExtraColor::TextSecondary.role()),
     title,
     detail,
   )
@@ -358,7 +359,7 @@ fn lost(ctx: &mut Ctx, task: &TaskContext, (fence, run, claim): (TeamFence, &Run
       ctx.t_args("summary.team.claim.unassignedDetail", [("run", number.as_str())]),
     ),
   };
-  let strip = Strip::new("task-team-claim", (glyph, PaletteColor::Danger), title, detail).tone(StripTone::Danger);
+  let strip = Strip::new("task-team-claim", (glyph, PaletteColor::Destructive), title, detail).tone(StripTone::Danger);
   match open_worktree(ctx, task, run) {
     Some(button) => strip.action(button),
     None => strip,

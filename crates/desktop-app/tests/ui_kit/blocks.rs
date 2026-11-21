@@ -238,7 +238,7 @@ fn empty_loading_and_failed_states_never_look_alike() {
   );
   let (failed, words, again) = (
     kit.bounds("failed"),
-    kit.bounds("failed-text"),
+    kit.bounds("failed-description"),
     kit.bounds("failed-retry"),
   );
   assert_close(gap_under(words, again), 10.0, "Try again under the words");
@@ -267,6 +267,7 @@ fn a_code_box_holds_the_whole_value_8_over_and_10_beside_it_with_copy() {
   assert_close(value.x - frame.x, 10.0, "side");
   assert_close(value.y - frame.y, 8.0, "top");
   assert_eq!(kit.texts("command"), [command]);
+  assert!(kit.exists("command-code"), "the value is lurq's code block");
   assert_close(gap_under(kit.bounds("command-copy"), frame), 6.0, "label row to box");
   assert!(kit.texts("command-copy").contains(&"Copy".to_owned()));
 }
@@ -297,7 +298,7 @@ fn markdown_with_a_blank_line_between_paragraphs_keeps_one_line_of_its_body_betw
   let mut kit = Kit::show(|ctx| {
     let view = |id: &str, text: &str| {
       MarkdownView::new(id, text, Arc::new(|_: &str, _: &lurq::app::events::MouseEvent| {}))
-        .style(TaskText::Brief.role(), PaletteColor::TextPrimary)
+        .style(TaskText::Brief.role(), PaletteColor::Foreground)
         .blank_line_between_blocks()
     };
     Column::new()
@@ -334,16 +335,16 @@ fn a_menu_row_is_28_high_8_in_an_unavailable_row_says_why_and_a_choice_closes_it
       })
       .icon(Icon::Workflow)
       .chosen(true)
-      .render(ctx, &shown),
+      .render(ctx),
       MenuItem::new("quick", "Quick fix v2", || {})
         .icon(Icon::Workflow)
         .shortcut("Ctrl 2")
-        .render(ctx, &shown),
+        .render(ctx),
       MenuItem::unavailable("draft", "Release v1", "Not published yet")
         .icon(Icon::Workflow)
-        .render(ctx, &shown),
+        .render(ctx),
     ];
-    let panel = menu_panel("menu").width(Dimension::Px(300.0)).with_children(rows);
+    let panel = menu_panel("menu").width(300.0).with_children(rows);
     Row::new()
       .child(
         Row::new()
@@ -404,6 +405,27 @@ fn a_popover_opens_6_under_its_control_14_over_and_16_beside_its_content() {
   assert_close(gap_under(chip, panel), 6.0, "under its control");
   assert_close(title.x - panel.x, 16.0, "side");
   assert_close(title.y - panel.y, 14.0, "top");
+}
+
+#[test]
+fn a_popover_over_its_control_stands_6_clear_of_it() {
+  let open = Signal::new(true);
+  let mut kit = Kit::show(move |ctx| {
+    let anchor = ctx.element_ref();
+    let panel = popover_panel("operations", 360.0).child(Text::new("Background operations"));
+    Column::new()
+      .padding(Padding::new().top(400.0))
+      .child(
+        Row::new()
+          .id("item")
+          .ref_element(anchor.clone())
+          .child(Text::new("2 running")),
+      )
+      .child(popover(anchor, open.clone(), PopoverSide::Above, panel))
+      .into()
+  });
+  let (item, panel) = (kit.bounds("item"), kit.bounds("operations"));
+  assert_close(gap_under(panel, item), 6.0, "over its control, never into it");
 }
 
 #[test]
@@ -468,7 +490,7 @@ fn framed_cut_text_hangs_its_tooltip_from_the_control_it_names() {
     Truncated::new("name", "Kontur", ExtraTypography::Strong.role())
       .hint("H:/projects/kontur", "Kontur · H:/projects/kontur")
       .mono()
-      .framed(PaletteColor::TextPrimary, |row, _| {
+      .framed(PaletteColor::Foreground, |row, _| {
         row
           .id("control")
           .padding(Padding::horizontal(SpacingSize::Sm))

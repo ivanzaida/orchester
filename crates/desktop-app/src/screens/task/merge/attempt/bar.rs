@@ -53,7 +53,7 @@ fn frame(words: Words, body_id: &str, actions: Vec<Element>) -> Element {
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(icon(words.glyph.0, IconSize::Nav, words.glyph.1))

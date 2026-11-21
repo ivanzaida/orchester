@@ -10,8 +10,9 @@ use lurq::{
     ctx::Ctx,
     theme::{SpacingSize, TypographyStyle},
   },
-  components::{Column, Popup, Text},
+  components::{Column, Text},
   node::{Element, dimension::Dimension, padding::Padding},
+  ui,
 };
 use orchester_workspace::{
   display::{short_revision, shorten_path},
@@ -65,7 +66,7 @@ fn name(ctx: &Ctx, version: &Version, run: Option<&RunFacts>) -> String {
 
 /// The picker and, once the versions are read, its menu: declared while closed too, so that a press on the picker
 /// switches to it from another open dropdown.
-pub fn switch(ctx: &mut Ctx, page: &Page<'_>) -> (Element, Option<Popup>) {
+pub fn switch(ctx: &mut Ctx, page: &Page<'_>) -> (Element, Option<ui::Menu>) {
   let view = page.view;
   let shown = label(ctx, page);
   let gone = page.versions.is_some() && page.shown_choice().is_none();
@@ -87,9 +88,13 @@ pub fn switch(ctx: &mut Ctx, page: &Page<'_>) -> (Element, Option<Popup>) {
   let picker = if gone { picker.warning() } else { picker };
   let menu = page.versions.is_some().then(|| {
     if !view.version_open.get() {
-      return menu_at_end(view.version_anchor.clone(), view.version_open.clone(), Element::new());
+      return menu_at_end(
+        view.version_anchor.clone(),
+        view.version_open.clone(),
+        menu_panel("files-version-menu"),
+      );
     }
-    let mut panel = menu_panel("files-version-menu").width(Dimension::Px(MENU_WIDTH)).child(
+    let mut panel = menu_panel("files-version-menu").width(MENU_WIDTH).child(
       Column::new()
         .padding(
           Padding::new()
@@ -102,9 +107,9 @@ pub fn switch(ctx: &mut Ctx, page: &Page<'_>) -> (Element, Option<Popup>) {
     );
     for choice in page.choices() {
       let item = option(ctx, page, choice);
-      panel = panel.child(item.render(ctx, &view.version_open));
+      panel = panel.child(item.render(ctx));
     }
-    panel = panel.child(separator(ctx)).child(note(ctx, page));
+    panel = panel.child(separator()).child(note(ctx, page));
     menu_at_end(view.version_anchor.clone(), view.version_open.clone(), panel)
   });
   (picker.into(), menu)

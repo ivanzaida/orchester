@@ -15,7 +15,7 @@ use orchester_workspace::agents::team_text::{Reaches, TeamInstructionSheet};
 use super::{added_row, from_team, used_by_row};
 use crate::{
   screens::team_hub::rows::{self, FromTeam},
-  theme::{HubSpacing, HubText},
+  theme::{ExtraColor, HubSpacing, HubText},
 };
 
 pub(in crate::screens::team_hub) fn sections(ctx: &Ctx, sheet: &TeamInstructionSheet, note: FromTeam) -> Vec<Element> {
@@ -81,7 +81,7 @@ fn text(ctx: &Ctx, text: &str) -> Column {
         .id("team-hub-text-area")
         .width(Dimension::Pct(100.0))
         .padding(Padding::symmetric(SpacingSize::Md, HubSpacing::RowY.role()))
-        .background(PaletteColor::SurfaceInput)
+        .background(ExtraColor::InputSurface.role())
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .rounded(RadiusSize::Md)
         .child(

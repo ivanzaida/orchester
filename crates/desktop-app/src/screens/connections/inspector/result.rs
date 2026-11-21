@@ -24,7 +24,7 @@ use orchester_workspace::{connections::probe::COMMAND_TIMEOUT, display, messages
 use super::{Inspecting, Tested};
 use crate::{
   screens::connections::words::{CHECKING, Shown, Tone, agent_status, github_status},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     message::message_text,
@@ -147,7 +147,7 @@ impl Said {
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
       .spacing(ExtraSpacing::Fine.role())
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
       .describe("state", self.heading)

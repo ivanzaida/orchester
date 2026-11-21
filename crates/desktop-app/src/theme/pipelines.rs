@@ -8,7 +8,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// The Pipelines page's list rows and step cards in bones: the first two whole, then fading (`Item bone` `vaAc2`, `Step
 /// bone` `FfeE8` in P5 `TF9O3`).
@@ -40,8 +43,8 @@ impl PipelinesText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::ReadReason => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Slug => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::ReadReason => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Slug => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
     }
   }
 }

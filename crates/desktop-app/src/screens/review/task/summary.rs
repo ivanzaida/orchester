@@ -20,7 +20,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  theme::{ExtraSpacing, IconSize},
+  theme::{ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::opening,
@@ -38,7 +38,7 @@ pub(super) fn summary(ctx: &Ctx, env: &Env) -> Option<Element> {
   let words = Text::new(&sentence)
     .id("review-summary-text")
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextSecondary)
+    .color(ExtraColor::TextSecondary.role())
     .selectable(true)
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
@@ -68,7 +68,7 @@ fn row(words: impl Into<Element>, link: Element) -> Element {
     .align_items(Alignment::Center)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::Bot, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Bot, IconSize::Base, PaletteColor::MutedForeground))
     .child(words)
     .child(link)
     .into()
@@ -85,7 +85,7 @@ fn link(ctx: &Ctx, navigation: &Navigation, project: &ShownProject, key: &TaskKe
     .child(
       Text::new(&ctx.t("review_page.summary.link"))
         .variant(TypographyStyle::Button)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap(),
     )
     .into()

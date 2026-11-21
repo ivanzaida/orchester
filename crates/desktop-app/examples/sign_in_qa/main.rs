@@ -34,7 +34,6 @@ use orchester_app::{
   startup::{Launch, WindowPosition},
   test_support::signed_in,
   theme::{self, Mode},
-  ui::loader,
 };
 use orchester_workspace::sharing::cloud::BUILD_ADDRESS;
 use signed_in::account_cloud::AccountCloud;
@@ -266,7 +265,6 @@ fn window(
   theme::install(&mut app, Mode::Dark);
   i18n::install(&app)?;
   let mut tree = Tree::new();
-  loader::install(&mut tree);
   let link = WindowLink::default();
   let settings = McpSettings::with_window_control(true);
   let config = mcp::config(settings, &link, &appearance, launch.services(), app.i18n());

@@ -18,7 +18,7 @@ pub fn active_task_text() -> TypographyStyle {
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   std::iter::once((
     Arc::from("agents_active_task"),
-    super::typography::style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
+    super::typography::style(12.5, FontWeight::Normal, 1.3, 0.0, palette.foreground),
   ))
 }
 

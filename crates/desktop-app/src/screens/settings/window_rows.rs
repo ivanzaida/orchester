@@ -35,7 +35,7 @@ pub fn look_at_the_window(ctx: &mut Ctx) -> Element {
         .hide_label()
         .settled(),
     );
-  SettingRow::new(LOOK, title)
+  SettingRow::new(format!("{LOOK}-row"), title)
     .hint(ctx.t("settings.automation.lookAtWindow.hint"))
     .info(ctx.t("settings.automation.lookAtWindow.description"))
     .control(control)

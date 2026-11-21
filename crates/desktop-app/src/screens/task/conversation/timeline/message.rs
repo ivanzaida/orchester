@@ -240,12 +240,12 @@ fn fix_delivery(ctx: &Ctx, by: FixedBy, at: Timestamp) -> (Icon, PaletteColor, A
   match by {
     FixedBy::Hand => (
       Icon::CheckCheck,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t_args("ci.message.sent", [("time", time)]),
     ),
     FixedBy::Automatically { count, limit } => (
       Icon::Repeat,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t_args(
         "ci.message.sentAuto",
         [
@@ -259,7 +259,7 @@ fn fix_delivery(ctx: &Ctx, by: FixedBy, at: Timestamp) -> (Icon, PaletteColor, A
 }
 
 fn delivery(ctx: &Ctx, state: &EntryState) -> (Icon, PaletteColor, Arc<str>) {
-  let muted = PaletteColor::TextMuted;
+  let muted = PaletteColor::MutedForeground;
   match state {
     EntryState::Queued(queue) => queued(ctx, queue),
     EntryState::Delivered {
@@ -287,7 +287,7 @@ fn delivery(ctx: &Ctx, state: &EntryState) -> (Icon, PaletteColor, Arc<str>) {
         "conversation.delivery.notDelivered",
         [("agent", &**agent), ("reason", &*reason)],
       );
-      (Icon::CircleAlert, PaletteColor::TextPrimary, words)
+      (Icon::CircleAlert, PaletteColor::Foreground, words)
     }
     EntryState::Reply { step } => (
       Icon::Check,
@@ -315,5 +315,5 @@ fn queued(ctx: &Ctx, queue: &Queue) -> (Icon, PaletteColor, Arc<str>) {
     Queue::RunEnded => (Icon::CircleX, ctx.t("conversation.delivery.notDeliveredEnded")),
     Queue::WorktreeRemoved => (Icon::CircleX, ctx.t("conversation.delivery.notDeliveredWorktree")),
   };
-  (glyph, PaletteColor::TextMuted, words)
+  (glyph, PaletteColor::MutedForeground, words)
 }

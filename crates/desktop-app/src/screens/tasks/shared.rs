@@ -116,7 +116,7 @@ pub(super) fn line(ctx: &mut Ctx, project: ProjectId, shared: &Shared) -> Row {
     .id("tasks-shared-server")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Cloud, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(Icon::Cloud, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t_args("tasks.shared.on", [("server", sharing.server_name())]))
         .variant(TypographyStyle::Label)
@@ -163,7 +163,7 @@ pub(super) fn line(ctx: &mut Ctx, project: ProjectId, shared: &Shared) -> Row {
 fn separator(ctx: &Ctx) -> Text {
   Text::new(&ctx.t("tasks.shared.separator"))
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
 }
 
 /// How the list stands with the server, with the one action that state needs.
@@ -183,8 +183,11 @@ fn state(ctx: &mut Ctx, sharing: &ProjectSharing) -> Row {
   }
   if sharing.certificate_changed {
     return row
-      .child(icon(Icon::ShieldAlert, IconSize::Base, PaletteColor::Danger))
-      .child(label(&ctx.t("tasks.shared.certificateChanged"), PaletteColor::Danger))
+      .child(icon(Icon::ShieldAlert, IconSize::Base, PaletteColor::Destructive))
+      .child(label(
+        &ctx.t("tasks.shared.certificateChanged"),
+        PaletteColor::Destructive,
+      ))
       .child(action(ctx, "tasks-shared-check-code", "tasks.shared.checkCode", server));
   }
   match sharing.connection {
@@ -193,11 +196,11 @@ fn state(ctx: &mut Ctx, sharing: &ProjectSharing) -> Row {
         "tasks.shared.synced",
         [("time", moment(ctx, sharing.link.last_synced_at))],
       ),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     )),
-    Some(Connection::Reconnecting { attempt, .. }) => row.child(dot(PaletteColor::TextMuted)).child(label(
+    Some(Connection::Reconnecting { attempt, .. }) => row.child(dot(PaletteColor::MutedForeground)).child(label(
       &ctx.t_args("tasks.shared.reconnecting", [("attempt", attempt.to_string())]),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     )),
     Some(Connection::Offline { since, .. }) => {
       let servers = Services::of(ctx).servers;
@@ -254,7 +257,7 @@ fn role(ctx: &Ctx, sharing: &ProjectSharing) -> Row {
     .id("tasks-shared-role")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::User, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::User, IconSize::Base, PaletteColor::MutedForeground))
     .child(label(
       &match sharing.username.as_deref() {
         Some(username) => ctx.t_args(
@@ -263,7 +266,7 @@ fn role(ctx: &Ctx, sharing: &ProjectSharing) -> Row {
         ),
         None => ctx.t(key),
       },
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ))
 }
 

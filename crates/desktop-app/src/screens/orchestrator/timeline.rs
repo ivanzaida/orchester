@@ -302,7 +302,7 @@ impl Component for TurnView {
           Text::new(&words)
             .id("orchestrator-not-ready")
             .variant(TypographyStyle::Description)
-            .color(PaletteColor::TextMuted)
+            .color(PaletteColor::MutedForeground)
             .width(Dimension::Pct(100.0)),
         ),
         false,

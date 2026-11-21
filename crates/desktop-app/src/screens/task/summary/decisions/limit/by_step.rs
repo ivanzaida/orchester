@@ -35,7 +35,7 @@ pub fn section(ctx: &mut Ctx, stop: &Stop<'_>, now: Timestamp) -> Option<Element
   }
   let list = card("raise-limit-by-step", CardSurface::Outline)
     .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Sm))
-    .with_children(rows);
+    .children(rows);
   Some(
     Column::new()
       .id("raise-limit-tokens-by-step")
@@ -73,7 +73,7 @@ fn step_row(ctx: &Ctx, stop: &Stop<'_>, row: &ProgressRow) -> Option<Element> {
     (value, PaletteColor::Warning)
   } else {
     let value = ctx.t_args("decisions.limit.byStep", [("tokens", used.as_str()), ("agent", agent)]);
-    (value, PaletteColor::TextPrimary)
+    (value, PaletteColor::Foreground)
   };
   let id = format!("raise-limit-step-{}", row.id);
   let text = Text::new(&value)

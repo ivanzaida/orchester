@@ -18,7 +18,7 @@ use orchester_workspace::sharing::project::ReviewTask;
 use super::plan::{Planned, Unticked};
 use crate::{
   screens::settings::orchester::PersonOnly,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
     status::{Status, workflow_chip},
@@ -55,7 +55,7 @@ pub(super) fn table(
   let mut table = Column::new()
     .id("sharing-join-table")
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
     .clip()
@@ -106,11 +106,11 @@ fn line(ctx: &mut Ctx, planned: &Planned<'_>, (key, unticked, person): (&str, &S
     Some(becomes) => Text::new(&becomes.to_string())
       .id(format!("{id}-becomes"))
       .variant(ExtraTypography::MonoKey.role())
-      .color(PaletteColor::TextPrimary),
+      .color(PaletteColor::Foreground),
     None => Text::new(&ctx.t("sharing.join.notShared"))
       .id(format!("{id}-becomes"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted),
+      .color(PaletteColor::MutedForeground),
   };
   Row::new()
     .id(id.clone())
@@ -124,7 +124,7 @@ fn line(ctx: &mut Ctx, planned: &Planned<'_>, (key, unticked, person): (&str, &S
       KEY,
       Text::new(&local)
         .variant(ExtraTypography::MonoKey.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .into(),
     ))
@@ -174,7 +174,7 @@ fn title(ctx: &Ctx, id: &str, (task, key): (&ReviewTask, &str)) -> Column {
       Text::new(task.task.details().title.as_str())
         .id(format!("{id}-title"))
         .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .width(Dimension::Pct(100.0)),
     )
     .with_children(hint.map(|(glyph, words, kind)| {
@@ -183,7 +183,7 @@ fn title(ctx: &Ctx, id: &str, (task, key): (&ReviewTask, &str)) -> Column {
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Start)
-        .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+        .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
         .child(Text::new(&words).variant(ExtraTypography::Note.role()).flex(1.0))
     }))
 }

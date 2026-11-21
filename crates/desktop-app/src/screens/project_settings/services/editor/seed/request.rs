@@ -162,7 +162,7 @@ fn closed(ctx: &Ctx, props: &RequestProps, id: &str) -> Element {
   let url = if line.url.trim().is_empty() {
     Text::new(&ctx.t("project_settings.services.editor.seed.noUrl"))
       .variant(ExtraTypography::PropertyMono.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
   } else {
     Text::new(&line.url).variant(ExtraTypography::PropertyMono.role())
   };
@@ -215,7 +215,7 @@ fn closed(ctx: &Ctx, props: &RequestProps, id: &str) -> Element {
         .child(head)
         .with_children(detail),
     )
-    .child(icon(Icon::GripVertical, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::GripVertical, IconSize::Base, PaletteColor::MutedForeground))
     .into()
 }
 
@@ -242,14 +242,14 @@ fn pill(id: &str, at: usize, capture: &CaptureLine) -> Element {
     .padding(Padding::horizontal(ExtraSpacing::Inline.role()))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Full.role())
-    .child(icon(Icon::CornerDownRight, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::CornerDownRight, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&format!("{} {READ_FROM} {}", capture.name, capture.path))
         .variant(ExtraTypography::MonoKey.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap(),
     )
     .into()

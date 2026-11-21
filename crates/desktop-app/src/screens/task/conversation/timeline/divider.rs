@@ -97,7 +97,7 @@ fn event_with(id: String, glyph: Icon, text: &str, (link, badge): (Option<Link>,
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Sm, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(text)
         .id(format!("{id}-text"))

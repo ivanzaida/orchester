@@ -11,6 +11,7 @@ use lurq::{
 };
 
 use super::{ExtraRadius, ExtraTypography, Mode};
+use crate::theme::ExtraColor;
 
 /// Colors of the composer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,7 +73,7 @@ impl ComposerRadius {
 /// `text_secondary` on `surface_raised`, 8 at its sides, round ends. lurq draws an input's chip with no stroke and no
 /// icon, so the design's `border` stroke and glyph are not drawn.
 pub fn mention_chip() -> InputTokenStyle {
-  InputTokenStyle::new(PaletteColor::TextSecondary, PaletteColor::SurfaceRaised)
+  InputTokenStyle::new(ExtraColor::TextSecondary.role(), PaletteColor::Card)
     .padding(SpacingSize::Sm)
     .radius(ExtraRadius::Full.role())
     .typography(ExtraTypography::MonoNote.role())

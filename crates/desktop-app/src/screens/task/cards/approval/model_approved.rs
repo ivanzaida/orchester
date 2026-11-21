@@ -136,7 +136,7 @@ fn details(ctx: &Ctx, id: &str, decision: &DecisionVerdict) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceBase)
+    .background(PaletteColor::Background)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(
@@ -181,14 +181,14 @@ fn risk_row(ctx: &Ctx, id: &str, risk: Risk, probability: f64) -> Row {
       Row::new()
         .width(Dimension::Px(TRACK_WIDTH))
         .height(Dimension::Px(RISK_TRACK_HEIGHT))
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .rounded(ExtraRadius::Full.role())
         .child(
           Row::new()
             .id(format!("{id}-bar"))
             .width(Dimension::Pct((probability * 100.0) as f32))
             .height(Dimension::Pct(100.0))
-            .background(PaletteColor::TextMuted)
+            .background(PaletteColor::MutedForeground)
             .rounded(ExtraRadius::Full.role()),
         ),
     )

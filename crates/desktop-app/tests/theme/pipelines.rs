@@ -30,7 +30,7 @@ fn theme_pipelines_and_grouped_rows_follow_the_design() {
   }
   assert_eq!(
     theme.typography_style(GroupText::Hint.role()).color,
-    theme.palette_color(PaletteColor::TextMuted)
+    theme.palette_color(PaletteColor::MutedForeground)
   );
   assert_eq!(
     theme.typography_style(GroupText::Tag.role()).color,
@@ -38,11 +38,11 @@ fn theme_pipelines_and_grouped_rows_follow_the_design() {
   );
   assert_eq!(
     theme.typography_style(PipelinesText::ReadReason.role()).color,
-    theme.palette_color(PaletteColor::TextSecondary)
+    theme.palette_color(ExtraColor::TextSecondary.role())
   );
   assert_eq!(
     theme.typography_style(PipelinesText::Slug.role()).color,
-    theme.palette_color(PaletteColor::TextPrimary)
+    theme.palette_color(PaletteColor::Foreground)
   );
   // The bones of P5 `TF9O3`: the first two rows and cards whole, then fading (`vaAc2`, `FfeE8`).
   assert_eq!(PIPELINES_BONE_FADE, [1.0, 1.0, 0.7, 0.45]);

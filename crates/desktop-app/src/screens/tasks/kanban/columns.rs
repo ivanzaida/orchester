@@ -35,7 +35,7 @@ pub fn columns(
     if folded(shared.display, &column.key) {
       // The collapsed Canceled strip stands out in a stronger stroke (`05 Collapsed and empty`).
       let stroke = if column.key == ColumnKey::Status(WorkflowStatus::Canceled) {
-        PaletteColor::BorderStrong
+        PaletteColor::Input
       } else {
         PaletteColor::Border
       };

@@ -9,8 +9,8 @@ fn decision_test_roles_follow_frame_02() {
     let app = themed(mode);
     let theme = app.theme();
     for (role, size, height, color) in [
-      (ConnectionsText::TestLead, 12.0, 1.45, PaletteColor::TextMuted),
-      (ConnectionsText::TestCell, 12.0, 1.3, PaletteColor::TextSecondary),
+      (ConnectionsText::TestLead, 12.0, 1.45, PaletteColor::MutedForeground),
+      (ConnectionsText::TestCell, 12.0, 1.3, ExtraColor::TextSecondary.role()),
     ] {
       let style = theme.typography_style(role.role());
       assert_eq!((style.font_size, style.line_height), (size, height));

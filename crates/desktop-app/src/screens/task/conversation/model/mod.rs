@@ -339,14 +339,14 @@ impl Component for ModelChip {
 fn face(ctx: &Ctx, step: &StepModel) -> Row {
   let (glyph, color) = match (step.waiting.is_some(), step.fixed()) {
     (true, _) => (Icon::Hourglass, PaletteColor::Warning),
-    (false, true) => (Icon::Lock, PaletteColor::TextSecondary),
-    (false, false) => (Icon::Cpu, PaletteColor::TextSecondary),
+    (false, true) => (Icon::Lock, ExtraColor::TextSecondary.role()),
+    (false, false) => (Icon::Cpu, ExtraColor::TextSecondary.role()),
   };
   let after = step.waiting.is_some().then(|| {
     Text::new(&ctx.t("conversation.model.chip.afterTurn"))
       .id("conversation-model-after")
       .variant(ModelText::Chip.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap()
   });
   Row::new()
@@ -360,7 +360,7 @@ fn face(ctx: &Ctx, step: &StepModel) -> Row {
         .nowrap(),
     )
     .with_children(after)
-    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground))
 }
 
 /// A model and its effort as the chip says them, *claude-opus-5-5 · Medium*; the model alone without an effort.

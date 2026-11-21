@@ -138,12 +138,12 @@ fn create(ctx: &mut Ctx, form: &Form, actions: &Actions, git: &Git<'_>) -> Eleme
     section = section
       .child(line(
         Icon::GitBranch,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
         &words::branch_line(ctx, git.surveyed),
       ))
       .child(line(
         Icon::GitCommitHorizontal,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
         &ctx.t("setup.git.create.then"),
       ));
   }
@@ -223,7 +223,7 @@ fn progress_lines(ctx: &Ctx, progress: &Progress, git: &Git<'_>) -> Column {
         .id("git-init-working")
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::LoaderCircle, IconSize::Base, PaletteColor::TextMuted))
+        .child(icon(Icon::LoaderCircle, IconSize::Base, PaletteColor::MutedForeground))
         .child(Text::new(&working).variant(ExtraTypography::Note.role())),
     )
 }
@@ -239,11 +239,11 @@ fn failure_lines(ctx: &mut Ctx, failure: &InitError, folder: &Path) -> Vec<Eleme
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Start)
       .describe("role", "form-error")
-      .child(slot(ERROR_SLOT, Icon::CircleAlert, PaletteColor::Danger))
+      .child(slot(ERROR_SLOT, Icon::CircleAlert, PaletteColor::Destructive))
       .child(
         Text::new(&line)
           .variant(ExtraTypography::Prose.role())
-          .color(PaletteColor::Danger)
+          .color(PaletteColor::Destructive)
           .flex(1.0)
           .min_width(Dimension::Px(0.0)),
       )
@@ -443,7 +443,7 @@ fn hint_line(glyph: Icon, text: &str) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(slot(LINE_SLOT, glyph, PaletteColor::TextMuted))
+    .child(slot(LINE_SLOT, glyph, PaletteColor::MutedForeground))
     .child(
       Text::new(text)
         .variant(ExtraTypography::Note.role())

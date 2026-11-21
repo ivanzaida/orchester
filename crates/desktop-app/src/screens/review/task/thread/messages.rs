@@ -43,7 +43,7 @@ use crate::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   theme::{ExtraSpacing, IconSize, ReviewSpacing, ReviewText},
   ui::{
-    avatar::{agent_avatar, initials, person_avatar},
+    avatar::{agent_avatar, person_avatar},
     button::{ActionButton, ButtonKind},
     chat::{self, agent_text, names::ProjectNames},
     icon::{Icon, icon},
@@ -173,10 +173,10 @@ fn project(env: &Env) -> ProjectId {
 fn you(ctx: &Ctx, id: &str, meta: Arc<str>) -> Who {
   let you = ctx.t("review_page.thread.you");
   Who {
-    avatar: person_avatar(&format!("{id}-avatar"), &initials(&you)),
+    avatar: person_avatar(&format!("{id}-avatar"), &you),
     name: you,
     meta,
-    meta_color: PaletteColor::TextMuted,
+    meta_color: PaletteColor::MutedForeground,
   }
 }
 
@@ -236,14 +236,14 @@ fn conversation_link(ctx: &Ctx, env: &Env, id: &str) -> Element {
     .id(format!("{id}-conversation"))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::MessagesSquare, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::MessagesSquare, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
-    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::MutedForeground))
     .into()
 }
 
@@ -259,17 +259,17 @@ fn agent_message(
   let empty = message.body().trim().is_empty();
   let meta = match (said.writing, &said.activity) {
     (true, Some(activity)) => (Arc::from(activity.as_str()), PaletteColor::Success),
-    (true, None) if empty => (ctx.t("review_page.thread.starting"), PaletteColor::TextMuted),
+    (true, None) if empty => (ctx.t("review_page.thread.starting"), PaletteColor::MutedForeground),
     (true, None) => (ctx.t("review_page.thread.writing"), PaletteColor::Success),
     (false, _) if stopped => (
       ctx.t_args("review_page.thread.stoppedAt", [("time", time)]),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (false, _) if answered => (
       ctx.t_args("review_page.thread.answeredAt", [("time", time)]),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
-    (false, _) => (time.into(), PaletteColor::TextMuted),
+    (false, _) => (time.into(), PaletteColor::MutedForeground),
   };
   let body: Vec<Element> = match (said.writing, empty) {
     (true, true) => vec![dots(id)],
@@ -279,7 +279,7 @@ fn agent_message(
       Text::new(&ctx.t("review_page.thread.answerStopped"))
         .id(format!("{id}-stopped"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .into(),
     ],
     (false, _) => vec![agent_words(ctx, env, &format!("{id}-body"), message.body())],
@@ -290,7 +290,7 @@ fn agent_message(
 /// Implement's row before anything arrived: *Starting…* over three dots.
 fn starting(ctx: &Ctx, env: &Env, id: &str) -> Element {
   let id = format!("{id}-starting");
-  let meta = (ctx.t("review_page.thread.starting"), PaletteColor::TextMuted);
+  let meta = (ctx.t("review_page.thread.starting"), PaletteColor::MutedForeground);
   frame(&id, implement(ctx, env, &id, meta), vec![dots(&id)], None)
 }
 
@@ -355,7 +355,7 @@ fn orchester(ctx: &Ctx, env: &Env, (id, view): (&str, &ThreadView), reason: &str
     avatar: agent_avatar(&format!("{id}-avatar"), Icon::CircleAlert),
     name: ctx.t("review_page.thread.orchester"),
     meta: clock(view.thread.latest_ask().at()).into(),
-    meta_color: PaletteColor::TextMuted,
+    meta_color: PaletteColor::MutedForeground,
   };
   let mut body = vec![words(&format!("{id}-body"), reason)];
   if let ThreadState::NotAsked(_) = view.state {

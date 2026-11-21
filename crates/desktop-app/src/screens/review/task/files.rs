@@ -100,7 +100,7 @@ fn head(ctx: &Ctx, (viewed, total): (usize, usize), conflicting: Option<usize>) 
       .color(color)
       .nowrap()
   };
-  let muted = |id: &str, words: &str| coloured(id, words, PaletteColor::TextMuted);
+  let muted = |id: &str, words: &str| coloured(id, words, PaletteColor::MutedForeground);
   let count = ctx.t_args(
     "review_page.files.viewed",
     [("viewed", viewed.to_string()), ("total", total.to_string())],
@@ -108,9 +108,9 @@ fn head(ctx: &Ctx, (viewed, total): (usize, usize), conflicting: Option<usize>) 
   let (end, end_color) = match conflicting {
     Some(files) => (
       ctx.t_args("review_page.files.conflicting", [("count", files.to_string())]),
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
     ),
-    None => (count, PaletteColor::TextMuted),
+    None => (count, PaletteColor::MutedForeground),
   };
   Row::new()
     .id("review-files-head")
@@ -148,13 +148,13 @@ fn row(ctx: &mut Ctx, env: &Env, (at, path): (usize, Arc<str>), shown: &Shown) -
   let id = format!("review-files-{at}");
   let open = shown.counts.comments + shown.counts.questions > 0;
   let (glyph, color) = if shown.conflicting {
-    (Icon::GitCompareArrows, PaletteColor::Danger)
+    (Icon::GitCompareArrows, PaletteColor::Destructive)
   } else if shown.viewed {
     (Icon::CircleCheck, PaletteColor::Success)
   } else if open {
     (Icon::MessageSquare, PaletteColor::Info)
   } else {
-    (file_icon(&path), PaletteColor::TextMuted)
+    (file_icon(&path), PaletteColor::MutedForeground)
   };
   let name = path.rsplit('/').next().unwrap_or(&path).to_owned();
   let (added, removed) = shown.lines;
@@ -179,9 +179,9 @@ fn row(ctx: &mut Ctx, env: &Env, (at, path): (usize, Arc<str>), shown: &Shown) -
       .id(format!("{id}-name"))
       .variant(TypographyStyle::Description)
       .color(if shown.chosen {
-        PaletteColor::TextPrimary
+        PaletteColor::Foreground
       } else {
-        PaletteColor::TextSecondary
+        ExtraColor::TextSecondary.role()
       })
       .nowrap()
       .text_overflow(TextOverflow::Elipsis)
@@ -198,7 +198,7 @@ fn row(ctx: &mut Ctx, env: &Env, (at, path): (usize, Arc<str>), shown: &Shown) -
   .child(
     Text::new(&ctx.t_args("review_page.files.removed", [("count", removed.to_string())]))
       .variant(ExtraTypography::MonoNote.role())
-      .color(PaletteColor::Danger)
+      .color(PaletteColor::Destructive)
       .nowrap(),
   );
   if shown.chosen {

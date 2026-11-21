@@ -7,7 +7,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text},
   core::Signal,
@@ -23,7 +23,7 @@ use orchester_workspace::{
 
 use super::{Failed, ReadFailed, tasks, words};
 use crate::{
-  theme::{ARCHIVE_DIALOG_WIDTH, ArchiveText, DialogSpacing, ExtraRadius, ExtraSpacing, LOCAL_ARCHIVE_DIALOG_WIDTH},
+  theme::{ARCHIVE_DIALOG_WIDTH, ArchiveText, DialogSpacing, ExtraSpacing, LOCAL_ARCHIVE_DIALOG_WIDTH},
   ui::{
     button::{ActionButton, ButtonKind},
     dialog::over_window,
@@ -77,7 +77,7 @@ pub(in crate::screens) fn dialog(
   if let Some(message) = &state.stopped {
     return left_running(ctx, props, message, open);
   }
-  let mut dialog = frame(props)
+  let mut dialog = frame()
     .child(
       Text::new(&ctx.t_args("team_archive.title", [("name", name)]))
         .id("team-hub-archive-title")
@@ -127,24 +127,23 @@ pub(in crate::screens) fn dialog(
   let dialog = dialog
     .with_children(failure)
     .child(buttons(ctx, stops, state.archiving, (open, confirm)));
-  over_window("team-hub-archive-dialog", dialog, open, None)
+  over_window("team-hub-archive-dialog", width(props), vec![dialog.into()], open)
 }
 
-/// The dialog's box, which the question and the notice share.
-fn frame(props: &DialogProps) -> Column {
+/// What the question and the notice share in the dialog's box: their parts, 14 apart.
+fn frame() -> Column {
   Column::new()
-    .id("team-hub-archive-dialog")
-    .width(Dimension::Px(if props.local {
-      LOCAL_ARCHIVE_DIALOG_WIDTH
-    } else {
-      ARCHIVE_DIALOG_WIDTH
-    }))
-    .padding(Padding::all(DialogSpacing::Side.role()))
+    .width(Dimension::Pct(100.0))
     .spacing(DialogSpacing::Parts.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-    .rounded(ExtraRadius::Tile.role())
-    .box_shadow(ShadowStyle::Lg)
+}
+
+/// The dialog's width (`MdjVb`): a local project's is narrower.
+const fn width(props: &DialogProps) -> f32 {
+  if props.local {
+    LOCAL_ARCHIVE_DIALOG_WIDTH
+  } else {
+    ARCHIVE_DIALOG_WIDTH
+  }
 }
 
 /// A local resource was archived, but some of the runs that use it could not be stopped and keep working on it: said
@@ -158,7 +157,7 @@ fn left_running(ctx: &Ctx, props: &DialogProps, message: &Message, open: &Signal
   )
   .in_form()
   .on_click(move || shut.set(false));
-  let dialog = frame(props)
+  let dialog = frame()
     .child(
       Text::new(&ctx.t_args("local_archive.doneTitle", [("name", props.name.as_ref())]))
         .id("team-hub-archive-title")
@@ -177,7 +176,7 @@ fn left_running(ctx: &Ctx, props: &DialogProps, message: &Message, open: &Signal
         .justify(Justify::End)
         .child(close),
     );
-  over_window("team-hub-archive-dialog", dialog, open, None)
+  over_window("team-hub-archive-dialog", width(props), vec![dialog.into()], open)
 }
 
 /// A list's heading over its rows in one outline (`Used by` `pC90U`, `Runs that stop` `SWl1b`).
@@ -185,7 +184,7 @@ pub(super) fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, noth
   let list = Column::new()
     .id(format!("{id}-list"))
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .clip();

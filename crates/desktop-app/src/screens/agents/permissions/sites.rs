@@ -143,7 +143,7 @@ fn site_note(id: &str, glyph: Icon, text: &str) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground).flex_shrink(0.0))
     .child(
       Text::new(text)
         .id(format!("{id}-text"))

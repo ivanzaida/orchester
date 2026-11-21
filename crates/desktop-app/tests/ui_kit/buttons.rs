@@ -316,12 +316,56 @@ fn a_select_keeps_its_label_at_the_start_and_its_chevron_at_the_end_bounded_or_n
     let (frame, label) = (kit.bounds(id), kit.bounds(&format!("{id}-label")));
     assert_close(frame.width, 300.0, &format!("{id} is as wide as its parent"));
     assert_close(label.x - frame.x, 12.0, &format!("{id} label at the start"));
-    assert!(
-      label.width > frame.width / 2.0,
-      "{id} label fills the room up to the chevron: {}",
-      label.width
+    let chevron = kit.bounds(&format!("{id}-trailing"));
+    assert_close(
+      frame.x + frame.width - chevron.x - chevron.width,
+      12.0,
+      &format!("{id} chevron at the end"),
     );
+    assert!(chevron.x > label.x + label.width, "{id} chevron after the label");
   }
+}
+
+#[test]
+fn a_stacked_answer_fills_its_parent_its_consequence_2_under_its_label() {
+  let focused = Arc::new(AtomicUsize::new(0));
+  let focus = focused.clone();
+  let mut kit = Kit::show(move |_| {
+    let focus = focus.clone();
+    Column::new()
+      .width(Dimension::Px(300.0))
+      .child(
+        ActionButton::new("skip", ButtonKind::Secondary, "Skip the exports")
+          .consequence("Builder finishes without PNGs, and the review goes on without them.")
+          .in_form()
+          .on_focus(move || {
+            focus.fetch_add(1, Ordering::SeqCst);
+          })
+          .on_click(|| {}),
+      )
+      .into()
+  });
+  let (frame, label, words) = (
+    kit.bounds("skip"),
+    kit.bounds("skip-label"),
+    kit.bounds("skip-description"),
+  );
+  assert_close(frame.width, 300.0, "as wide as its parent");
+  assert_close(label.x - frame.x, 12.0, "12 at its side");
+  assert_close(label.y - frame.y, 8.0, "8 over its label");
+  assert_close(gap_under(label, words), 2.0, "the consequence 2 under the label");
+  assert_close(
+    frame.y + frame.height - words.y - words.height,
+    8.0,
+    "8 under its consequence",
+  );
+  assert!(
+    words.height > label.height * 1.5,
+    "the consequence wraps: {}",
+    words.height
+  );
+  kit.click("skip");
+  assert!(focused.load(Ordering::SeqCst) >= 1, "it says what it does when focused");
 }
 
 /// A title bar's control keeps its press from the bar, which hands a press it receives to the OS to move the

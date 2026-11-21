@@ -26,7 +26,7 @@ use orchester_app::{
   root::{Root, RootProps},
   startup::{Launch, WindowPosition},
   theme::{self, Mode},
-  ui::{loader, skeleton, typing},
+  ui::clipboard::Clipboard,
 };
 use orchester_workspace::sharing::project::clone::Clones;
 use tokio::runtime::Runtime;
@@ -50,10 +50,8 @@ pub fn open(
   app.set_tokio_handle(runtime.handle().clone());
   theme::install(&mut app, Mode::Dark);
   i18n::install(&app)?;
+  Clipboard::default().install(&app);
   let mut tree = Tree::new();
-  loader::install(&mut tree);
-  skeleton::install(&mut tree);
-  typing::install(&mut tree);
   let link = WindowLink::default();
   link.attach_appearance(appearance.clone());
   let settings = McpSettings::of_build().with_environment();

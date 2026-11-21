@@ -153,9 +153,9 @@ fn step((id, mark, title): (&str, Mark, &str), head: Vec<Element>, content: Opti
     .id(format!("{id}-title"))
     .variant(OrchesterText::StepTitle.role())
     .color(if later {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     } else {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     })
     .flex(1.0)
     .min_width(Dimension::Px(0.0));
@@ -211,19 +211,17 @@ fn dot(mark: Mark) -> Row {
         .background(PaletteColor::SuccessMuted)
         .child(icon(Icon::Check, IconSize::Sm, PaletteColor::Success))
     }
-    Mark::Current(number) => base.background(PaletteColor::TextPrimary).child(
+    Mark::Current(number) => base.background(PaletteColor::Foreground).child(
       Text::new(&number.to_string())
         .variant(OrchesterText::StepNumber.role())
         .nowrap(),
     ),
-    Mark::Later(number) => base
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-      .child(
-        Text::new(&number.to_string())
-          .variant(OrchesterText::StepNumber.role())
-          .color(PaletteColor::TextMuted)
-          .nowrap(),
-      ),
+    Mark::Later(number) => base.border(Border::inside(BorderSize::Sm, PaletteColor::Input)).child(
+      Text::new(&number.to_string())
+        .variant(OrchesterText::StepNumber.role())
+        .color(PaletteColor::MutedForeground)
+        .nowrap(),
+    ),
   }
 }
 
@@ -231,7 +229,7 @@ fn dot(mark: Mark) -> Row {
 fn later(ctx: &Ctx, key: &str) -> Element {
   Text::new(&ctx.t(key))
     .variant(ExtraTypography::Lead.role())
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
     .into()
 }
@@ -243,7 +241,7 @@ fn later_with(ctx: &Ctx, key: &str, found: Option<&Found>) -> Element {
   );
   Text::new(&ctx.t_args(key, [("server", server)]))
     .variant(ExtraTypography::Lead.role())
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
     .into()
 }

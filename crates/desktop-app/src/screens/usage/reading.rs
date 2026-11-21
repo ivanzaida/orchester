@@ -15,6 +15,7 @@ use lurq::{
   components::{Column, Row, Spacer, Text},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::Length,
 };
 use orchester_core::{
   time::Timestamp,
@@ -128,10 +129,12 @@ fn chart(names: &[Option<AxisName>]) -> Column {
     .align_items(Alignment::End)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .with_children(names.iter().map(|_| {
+      // 60 % of its slot, at most a bar's width.
       slot().child(
-        bone(BAR.0, BAR.1)
+        Row::new()
           .width(Dimension::Pct(60.0))
-          .max_width(Dimension::Px(BAR.0)),
+          .max_width(Dimension::Px(BAR.0))
+          .child(bone(BAR.0, BAR.1).width(Length::Fill)),
       )
     }));
   let days = Row::new()
@@ -141,9 +144,9 @@ fn chart(names: &[Option<AxisName>]) -> Column {
     .with_children(names.iter().map(|name| {
       slot().with_children(name.as_ref().map(|name| {
         let color = if name.today {
-          PaletteColor::TextPrimary
+          PaletteColor::Foreground
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         };
         Text::new(&name.text)
           .variant(TypographyStyle::Caption)
@@ -187,7 +190,7 @@ pub(super) fn limits(ctx: &mut Ctx) -> Element {
             .child(Spacer::new().flex(1.0))
             .child(skeleton::line(ctx, TypographyStyle::Caption, 36.0)),
         )
-        .child(bone(1.0, 6.0).width(Dimension::Pct(100.0)))
+        .child(bone(1.0, 6.0).width(Length::Fill))
         .child(skeleton::line(ctx, TypographyStyle::Caption, 162.0))
     })
     .collect();

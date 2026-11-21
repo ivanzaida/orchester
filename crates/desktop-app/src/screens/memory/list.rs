@@ -219,7 +219,7 @@ fn earlier_handoffs(ctx: &mut Ctx, state: &MemoryState, input: ListInput<'_>, ea
     .child(icon(
       if open { Icon::ChevronDown } else { Icon::ChevronRight },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .child(Text::new(&label).variant(TypographyStyle::FieldLabel).nowrap());
   if !open && !steps.is_empty() {

@@ -33,7 +33,7 @@ use lurq::{
     component::Component,
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextInput},
   core::{ElementRef, Signal},
@@ -66,7 +66,7 @@ use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
   routes::{ProjectPage, Route, TaskView},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TextRole},
   ui::{
     attachments::tray::{self, PutBack},
     chat::follow::Follow,
@@ -232,7 +232,7 @@ impl Component for Composer {
     let focused = ctx.signal(false);
     let (draft, skill) = (props.composing.state.draft, props.composing.state.skill);
     let mention = MentionField::new(ctx, draft.clone(), focused.clone());
-    let slash = SlashField::new(ctx, draft, (focused.clone(), skill));
+    let slash = SlashField::new(ctx, (draft, mention.element()), (focused.clone(), skill));
     Self {
       menu: ctx.signal(false),
       focused,
@@ -336,9 +336,9 @@ impl Composer {
       (side, model, permissions, context),
     );
     let stroke = if self.focused.get() {
-      PaletteColor::BorderFocus
+      PaletteColor::Ring
     } else {
-      PaletteColor::BorderStrong
+      PaletteColor::Input
     };
     let draft = composing.state.draft.clone();
     let put_back: PutBack = Arc::new(move |text: String| draft.update(|words| tray::put_back_into(words, &text)));
@@ -351,7 +351,7 @@ impl Composer {
       .padding_vertical(ExtraSpacing::Loose.role())
       .padding_horizontal(SpacingSize::Md)
       .spacing(SpacingSize::Sm)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Lg)
       .with_children(chips)
@@ -417,7 +417,7 @@ impl Composer {
   ) -> Element {
     let theme = ctx.theme();
     let resolve = |color| {
-      FormTextRole {
+      TextRole {
         typography: TypographyStyle::Body,
         color,
       }
@@ -433,9 +433,9 @@ impl Composer {
     let (slash, mention) = (self.slash.clone(), self.mention.clone());
     let draft = &props.composing.state.draft;
     let chips = draft.with(|text| MentionField::tokens(text));
-    let input = TextInput::styled(draft.clone(), resolve(PaletteColor::TextPrimary))
-      .placeholder_style(resolve(PaletteColor::TextMuted))
-      .caret_color(PaletteColor::TextPrimary)
+    let input = TextInput::styled(draft.clone(), resolve(PaletteColor::Foreground))
+      .placeholder_style(resolve(PaletteColor::MutedForeground))
+      .caret_color(PaletteColor::Foreground)
       .id("composer-input")
       .describe("a11y_name", placeholder.clone())
       .textarea()
@@ -483,10 +483,10 @@ fn closed(reason: &str) -> Element {
     .padding_horizontal(SpacingSize::Md)
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(ExtraColor::InputSurface.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(RadiusSize::Lg)
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(reason)
         .id("composer-closed-reason")

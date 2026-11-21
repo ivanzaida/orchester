@@ -148,7 +148,7 @@ impl Component for AutoRow {
       .child(
         Text::new(&ctx.t("ci.auto.upTo"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       );
     if !props.readable {
@@ -203,7 +203,7 @@ fn end(ctx: &Ctx, id: &str, props: &AutoProps) -> Element {
     Text::new(&words)
       .id(format!("{id}-hint"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap()
       .into()
   };

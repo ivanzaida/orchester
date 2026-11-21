@@ -49,7 +49,7 @@ impl Sub {
   pub(in crate::screens) const fn quiet(words: Arc<str>) -> Self {
     Self {
       words,
-      color: PaletteColor::TextMuted,
+      color: PaletteColor::MutedForeground,
     }
   }
 }

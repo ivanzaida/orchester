@@ -163,7 +163,7 @@ pub(super) fn line(ctx: &Ctx, words: &Words) -> Element {
   let color = if refused {
     PaletteColor::Warning
   } else {
-    PaletteColor::Accent
+    PaletteColor::Primary
   };
   let bar = Row::new()
     .id("pipeline-hub-flow-landing-bar")
@@ -174,13 +174,13 @@ pub(super) fn line(ctx: &Ctx, words: &Words) -> Element {
   let text: Vec<Element> = match words {
     Words::Goes { title, hint } => vec![
       title_text(title).into(),
-      wrapping(hint, FlowText::Hint, PaletteColor::TextMuted),
+      wrapping(hint, FlowText::Hint, PaletteColor::MutedForeground),
     ],
     Words::Refused(text) | Words::Parallel(text) => {
       let tone = if refused {
         PaletteColor::Warning
       } else {
-        PaletteColor::TextPrimary
+        PaletteColor::Foreground
       };
       vec![wrapping(text, FlowText::Hint, tone)]
     }
@@ -222,7 +222,7 @@ pub(super) fn card_words(text: &str, refused: bool) -> Element {
   let tone = if refused {
     PaletteColor::Warning
   } else {
-    PaletteColor::TextPrimary
+    PaletteColor::Foreground
   };
   Row::new()
     .id("pipeline-hub-flow-landing-parallel")
@@ -235,7 +235,7 @@ pub(super) fn card_words(text: &str, refused: bool) -> Element {
 fn title_text(text: &str) -> Text {
   Text::new(text)
     .variant(FlowText::Landing.role())
-    .color(PaletteColor::TextPrimary)
+    .color(PaletteColor::Foreground)
     .nowrap()
 }
 

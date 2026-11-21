@@ -199,7 +199,7 @@ fn project_settings_sources_theme_roles_resolve_the_design() {
     (path.font_size, path.weight, &*path.font_family),
     (12.5, FontWeight::Normal, "Geist Mono")
   );
-  assert_eq!(path.color, theme.palette_color(PaletteColor::TextPrimary));
+  assert_eq!(path.color, theme.palette_color(PaletteColor::Foreground));
   for (role, value) in [(SourcesSpacing::Section, 14.0), (SourcesSpacing::EmptyTop, 18.0)] {
     assert_eq!(theme.spacing_value(role.role()), Dimension::Px(value), "{role:?}");
   }

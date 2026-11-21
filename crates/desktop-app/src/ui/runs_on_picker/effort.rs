@@ -73,7 +73,7 @@ pub(super) fn row(
     .height(Dimension::Px(ControlHeight::Md.value()))
     .padding(ExtraSpacing::Tight.role())
     .spacing(ExtraSpacing::Tight.role())
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .rounded(RadiusSize::Md)
     .with_children(segments);
   let segmented = if efforts.is_some() {

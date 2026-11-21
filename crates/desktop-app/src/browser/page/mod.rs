@@ -19,9 +19,14 @@ mod select;
 
 use std::sync::Arc;
 
+#[expect(
+  deprecated,
+  reason = "`ui::Picture` loads as a component with a skeleton; a page's live frame is pixels shown as they come"
+)]
+use lurq::components::Image;
 use lurq::{
   app::{component::Component, ctx::Ctx, theme::PaletteColor},
-  components::{Image, Stack},
+  components::Stack,
   core::{ElementRef, Signal},
   images::ImageData,
   node::{Element, dimension::Dimension},
@@ -74,6 +79,10 @@ impl Component for Page {
     }
   }
 
+  #[expect(
+    deprecated,
+    reason = "`ui::Picture` loads as a component with a skeleton; a page's live frame is pixels shown as they come"
+  )]
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let showing = ctx.props::<Showing>().clone();
     let size = self.measured();
@@ -98,7 +107,7 @@ impl Component for Page {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0))
       .clip()
-      .background(PaletteColor::SurfacePanel);
+      .background(PaletteColor::Canvas);
     if let Some(image) = image {
       page = page
         .child(

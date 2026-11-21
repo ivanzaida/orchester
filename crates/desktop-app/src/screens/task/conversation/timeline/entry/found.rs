@@ -155,7 +155,7 @@ fn head(
         .child(
           Text::new(&ctx.t("conversation.search.showAllOutput"))
             .variant(TypographyStyle::Link)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap(),
         ),
     )
@@ -188,7 +188,7 @@ fn line(entry: &Entry, at: usize, text: &str, found: &[Place]) -> Element {
         .align_items(Alignment::Center)
         .with_children(marked(
           text,
-          (TypographyStyle::Mono, PaletteColor::TextSecondary),
+          (TypographyStyle::Mono, ExtraColor::TextSecondary.role()),
           (base, found),
         )),
     )

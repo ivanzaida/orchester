@@ -72,17 +72,17 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
     (Some(set), Some(ProgramProblem::FileGone(_))) => (
       Sub {
         words: ctx.t("team_hub.mcp.path.gone"),
-        color: PaletteColor::Danger,
+        color: PaletteColor::Destructive,
       },
       fill::input_box(
         &format!("{id}-value"),
-        (Icon::FileX, PaletteColor::Danger),
+        (Icon::FileX, PaletteColor::Destructive),
         Text::new(&set.path.display().to_string())
           .id(format!("{id}-value-text"))
           .variant(HubText::PanelMono.role())
           .nowrap(),
       )
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Danger)),
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Destructive)),
     ),
     (Some(set), _) => (
       Sub::quiet(ctx.t_args(
@@ -115,11 +115,11 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
         .align_items(Alignment::Center)
         .child(fill::input_box(
           &format!("{id}-field"),
-          (Icon::File, PaletteColor::TextMuted),
+          (Icon::File, PaletteColor::MutedForeground),
           Text::new(&ctx.t("team_hub.mcp.path.notSet"))
             .id(format!("{id}-value-text"))
             .variant(HubText::Value.role())
-            .color(PaletteColor::TextMuted),
+            .color(PaletteColor::MutedForeground),
         ))
         .child(choose(ctx, view)),
     ),

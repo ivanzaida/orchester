@@ -11,7 +11,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, ScrollVertical, Spacer, Text, TextInput},
   layout::Alignment,
@@ -27,7 +27,7 @@ use orchester_workspace::{background, decisions::DecisionKind, messages, tasks::
 use super::{SideQuestions, thread};
 use crate::{
   project::{ShownProject, run_changes, settled_read::settled_read},
-  theme::{ExtraSpacing, IconSize, SideSpacing, SideText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, SideSpacing, SideText, TextRole},
   ui::{
     button::{ActionButton, ButtonKind},
     composer::message_scrollbar,
@@ -90,7 +90,7 @@ impl Component for SidePane {
       .width(Dimension::Px(PANE_WIDTH))
       .flex_shrink(0.0)
       .height(Dimension::Pct(100.0))
-      .background(PaletteColor::SurfacePanel)
+      .background(PaletteColor::Canvas)
       .border_left(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .child(head(ctx, &props, &state))
       .child(scope(ctx, &props))
@@ -160,7 +160,7 @@ fn head(ctx: &mut Ctx, props: &PaneProps, state: &SideQuestions) -> Element {
     .justify(lurq::layout::layout_kind::Justify::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(lurq::node::Style::new().background(crate::theme::ExtraColor::Hover.role()))
-    .child(icon(Icon::X, IconSize::Md, PaletteColor::TextMuted));
+    .child(icon(Icon::X, IconSize::Md, PaletteColor::MutedForeground));
   Row::new()
     .id("side-question-head")
     .width(Dimension::Pct(100.0))
@@ -173,7 +173,7 @@ fn head(ctx: &mut Ctx, props: &PaneProps, state: &SideQuestions) -> Element {
     .child(icon(
       Icon::MessageCircleQuestion,
       IconSize::Md,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ))
     .child(
       Text::new(&ctx.t("side_question.title"))
@@ -211,7 +211,7 @@ fn scope(ctx: &mut Ctx, props: &PaneProps) -> Element {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::EyeOff, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::EyeOff, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .id("side-question-scope-text")
@@ -259,15 +259,15 @@ fn question_input(
 ) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
-    FormTextRole {
+    TextRole {
       typography: TypographyStyle::Body,
       color,
     }
     .resolve(&theme.typography(), &theme.palette())
   };
-  TextInput::styled(state.draft.clone(), resolve(PaletteColor::TextPrimary))
-    .placeholder_style(resolve(PaletteColor::TextMuted))
-    .caret_color(PaletteColor::TextPrimary)
+  TextInput::styled(state.draft.clone(), resolve(PaletteColor::Foreground))
+    .placeholder_style(resolve(PaletteColor::MutedForeground))
+    .caret_color(PaletteColor::Foreground)
     .id("side-question-input")
     .describe("a11y_name", placeholder.to_owned())
     .textarea()
@@ -323,7 +323,7 @@ fn question_box(ctx: &mut Ctx, (props, state): (&PaneProps, &SideQuestions), fol
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("side_question.composer.readOnly"))
         .variant(SideText::Quiet.role())
@@ -342,8 +342,8 @@ fn question_box(ctx: &mut Ctx, (props, state): (&PaneProps, &SideQuestions), fol
         .bottom(SpacingSize::Sm),
     )
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(ExtraColor::InputSurface.role())
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(RadiusSize::Lg)
     .child(input)
     .child(bar)

@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CiText {
@@ -32,7 +35,7 @@ impl CiText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::LogTail => mono(style(11.5, FontWeight::Normal, 1.6, 0.0, palette.text_secondary)),
+      Self::LogTail => mono(style(11.5, FontWeight::Normal, 1.6, 0.0, text_secondary(palette))),
     }
   }
 }

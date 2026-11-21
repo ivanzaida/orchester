@@ -59,10 +59,10 @@ impl From<ToolRow> for Element {
           .height(Dimension::Px(GLYPH))
           .align_items(Alignment::Center)
           .justify(Justify::Center)
-          .background(PaletteColor::SurfaceRaised)
+          .background(PaletteColor::Card)
           .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
           .rounded(RadiusSize::Md)
-          .child(icon(row.glyph, IconSize::Md, PaletteColor::TextSecondary)),
+          .child(icon(row.glyph, IconSize::Md, ExtraColor::TextSecondary.role())),
       )
       .child(
         Column::new()
@@ -102,7 +102,7 @@ impl From<ToolRow> for Element {
           .child(Row::new().width(Dimension::Px(OPEN)).child(icon(
             Icon::ChevronRight,
             IconSize::Md,
-            PaletteColor::TextMuted,
+            PaletteColor::MutedForeground,
           ))),
       )
       .into()

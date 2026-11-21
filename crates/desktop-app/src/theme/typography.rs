@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{ThemePalette, ThemeTypography, TypographyStyle},
+  app::theme::{PaletteColor, ThemePalette, ThemeTypography, TypographyStyle},
   layout::text_style::{FontFeature, FontFeatures, FontWeight, TextStyle},
   node::color::Color,
 };
@@ -9,6 +9,7 @@ use lurq::{
 use super::{
   ExtraColor,
   fonts::{ICONS, MONO, SANS},
+  palette::text_secondary,
 };
 
 /// Design text styles without a built-in lurq role, registered as `TypographyStyle::Extra`.
@@ -126,28 +127,28 @@ impl ExtraTypography {
     let sans = |size, weight, line_height, color| style(size, weight, line_height, 0.0, color);
     let mono = |size, color| mono(style(size, FontWeight::Normal, 1.4, 0.0, color));
     match self {
-      Self::Display => style(28.0, FontWeight::SemiBold, 1.15, -0.5, palette.text_primary),
-      Self::Strong => sans(13.0, FontWeight::Medium, 1.3, palette.text_primary),
-      Self::TabCurrent => sans(13.0, FontWeight::Medium, 1.5, palette.text_primary),
-      Self::Note => sans(11.5, FontWeight::Normal, 1.4, palette.text_muted),
-      Self::NoteStrong => sans(11.5, FontWeight::Medium, 1.4, palette.text_primary),
-      Self::Prose => sans(12.0, FontWeight::Normal, 1.45, palette.text_secondary),
-      Self::Lead => sans(12.5, FontWeight::Normal, 1.5, palette.text_secondary),
-      Self::ColumnHeading => style(10.5, FontWeight::Medium, 1.35, 0.4, palette.text_muted),
-      Self::MonoKey => mono(11.5, palette.text_muted),
-      Self::MonoNote => mono(11.0, palette.text_muted),
-      Self::MonoSmall => mono(10.0, palette.text_secondary),
-      Self::MonoLabel => self::mono(style(11.0, FontWeight::Medium, 1.35, 0.0, palette.text_secondary)),
-      Self::Initials => sans(9.0, FontWeight::SemiBold, 1.0, palette.text_primary),
-      Self::OptionTitle => sans(12.5, FontWeight::Medium, 1.3, palette.text_primary),
-      Self::Property => sans(12.0, FontWeight::Normal, 1.3, palette.text_secondary),
-      Self::InspectorSection => sans(12.0, FontWeight::SemiBold, 1.3, palette.text_primary),
-      Self::PropertyMono => self::mono(sans(12.0, FontWeight::Normal, 1.3, palette.text_primary)),
-      Self::FormSection => sans(13.0, FontWeight::SemiBold, 1.3, palette.text_primary),
-      Self::MonoArea => self::mono(sans(12.0, FontWeight::Normal, 1.7, palette.text_primary)),
-      Self::ButtonLarge => sans(13.0, FontWeight::Medium, 1.2, palette.text_primary),
-      Self::ButtonStacked => sans(12.0, FontWeight::Medium, 1.4, palette.text_primary),
-      Self::ButtonConsequence => sans(12.0, FontWeight::Normal, 1.4, palette.text_muted),
+      Self::Display => style(28.0, FontWeight::SemiBold, 1.15, -0.5, palette.foreground),
+      Self::Strong => sans(13.0, FontWeight::Medium, 1.3, palette.foreground),
+      Self::TabCurrent => sans(13.0, FontWeight::Medium, 1.5, palette.foreground),
+      Self::Note => sans(11.5, FontWeight::Normal, 1.4, palette.muted_foreground),
+      Self::NoteStrong => sans(11.5, FontWeight::Medium, 1.4, palette.foreground),
+      Self::Prose => sans(12.0, FontWeight::Normal, 1.45, text_secondary(palette)),
+      Self::Lead => sans(12.5, FontWeight::Normal, 1.5, text_secondary(palette)),
+      Self::ColumnHeading => style(10.5, FontWeight::Medium, 1.35, 0.4, palette.muted_foreground),
+      Self::MonoKey => mono(11.5, palette.muted_foreground),
+      Self::MonoNote => mono(11.0, palette.muted_foreground),
+      Self::MonoSmall => mono(10.0, text_secondary(palette)),
+      Self::MonoLabel => self::mono(style(11.0, FontWeight::Medium, 1.35, 0.0, text_secondary(palette))),
+      Self::Initials => sans(9.0, FontWeight::SemiBold, 1.0, palette.foreground),
+      Self::OptionTitle => sans(12.5, FontWeight::Medium, 1.3, palette.foreground),
+      Self::Property => sans(12.0, FontWeight::Normal, 1.3, text_secondary(palette)),
+      Self::InspectorSection => sans(12.0, FontWeight::SemiBold, 1.3, palette.foreground),
+      Self::PropertyMono => self::mono(sans(12.0, FontWeight::Normal, 1.3, palette.foreground)),
+      Self::FormSection => sans(13.0, FontWeight::SemiBold, 1.3, palette.foreground),
+      Self::MonoArea => self::mono(sans(12.0, FontWeight::Normal, 1.7, palette.foreground)),
+      Self::ButtonLarge => sans(13.0, FontWeight::Medium, 1.2, palette.foreground),
+      Self::ButtonStacked => sans(12.0, FontWeight::Medium, 1.4, palette.foreground),
+      Self::ButtonConsequence => sans(12.0, FontWeight::Normal, 1.4, palette.muted_foreground),
     }
   }
 }
@@ -222,77 +223,101 @@ impl IconSize {
 
 /// The type roles of the Theme board (`w3uvVL`): the dense desktop scale, body 13.
 pub fn typography(palette: &ThemePalette) -> ThemeTypography {
-  let primary = palette.text_primary;
+  let primary = palette.foreground;
   let extras = ExtraTypography::ALL
     .into_iter()
     .map(|extra| (Arc::from(extra.name()), extra.style(palette)));
   let icons = IconSize::ALL.into_iter().map(|size| {
     let glyph = TextStyle {
       font_family: Arc::from(ICONS),
-      ..style(size.size(), FontWeight::Normal, 1.0, 0.0, palette.text_secondary)
+      ..style(size.size(), FontWeight::Normal, 1.0, 0.0, text_secondary(palette))
     };
     (Arc::from(size.name()), glyph)
   });
+  document_roles(
+    ThemeTypography {
+      sans: Arc::from(SANS),
+      mono_family: Arc::from(MONO),
+      heading: style(20.0, FontWeight::SemiBold, 1.25, -0.2, primary),
+      title: style(15.0, FontWeight::SemiBold, 1.35, -0.1, primary),
+      body: style(13.0, FontWeight::Normal, 1.5, 0.0, primary),
+      description: style(12.0, FontWeight::Normal, 1.5, 0.0, text_secondary(palette)),
+      caption: style(11.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
+      label: style(12.0, FontWeight::Medium, 1.35, 0.0, primary),
+      field_label: style(11.0, FontWeight::Medium, 1.35, 0.0, text_secondary(palette)),
+      button: style(12.0, FontWeight::Medium, 1.2, 0.0, primary),
+      link: style(
+        13.0,
+        FontWeight::Normal,
+        1.5,
+        0.0,
+        palette.get(ExtraColor::AccentText.role()),
+      ),
+      mono: mono(style(12.0, FontWeight::Normal, 1.5, 0.0, primary)),
+      extra: extras
+        .chain(icons)
+        .chain(super::startup::typography(palette))
+        .chain(super::settings::typography(palette))
+        .chain(super::accounts::typography(palette))
+        .chain(super::orchester::typography(palette))
+        .chain(super::sign_in::typography(palette))
+        .chain(super::task::typography(palette))
+        .chain(super::decisions::typography(palette))
+        .chain(super::shell::typography(palette))
+        .chain(super::code::typography(palette))
+        .chain(super::files::typography(palette))
+        .chain(super::task_form::typography(palette))
+        .chain(super::conversation::typography(palette))
+        .chain(super::cards::typography(palette))
+        .chain(super::lifecycle::typography(palette))
+        .chain(super::local_integration::typography(palette))
+        .chain(super::connections::typography(palette))
+        .chain(super::context::typography(palette))
+        .chain(super::secrets::typography(palette))
+        .chain(super::projects::typography(palette))
+        .chain(super::agents::typography(palette))
+        .chain(super::instructions::typography(palette))
+        .chain(super::skills::typography(palette))
+        .chain(super::orchestrator::typography(palette))
+        .chain(super::overview::typography(palette))
+        .chain(super::needs_you::typography(palette))
+        .chain(super::usage::typography(palette))
+        .chain(super::memory::typography(palette))
+        .chain(super::delivery::typography(palette))
+        .chain(super::merge_attempt::typography(palette))
+        .chain(super::review::typography(palette))
+        .chain(super::sources::typography(palette))
+        .chain(super::project_settings::typography(palette))
+        .chain(super::hub::typography(palette))
+        .chain(super::archive::typography(palette))
+        .chain(super::failure::typography(palette))
+        .chain(super::groups::typography(palette))
+        .chain(super::pipelines::typography(palette))
+        .chain(super::date_picker::typography(palette))
+        .chain(super::browser::typography(palette))
+        .chain(later_areas(palette))
+        .collect(),
+      ..ThemeTypography::default()
+    },
+    primary,
+  )
+}
+
+/// `typography` with the roles of a Markdown document: its text where it names no style, in the body, and its
+/// headings, each its level's role scaled by `markdown`'s `heading_1` to `heading_6` from the body.
+fn document_roles(typography: ThemeTypography, primary: Color) -> ThemeTypography {
+  let body = style(13.0, FontWeight::Normal, 1.5, 0.0, primary);
+  let heading = style(13.0, FontWeight::SemiBold, 1.5, 0.0, primary);
   ThemeTypography {
-    heading: style(20.0, FontWeight::SemiBold, 1.25, -0.2, primary),
-    title: style(15.0, FontWeight::SemiBold, 1.35, -0.1, primary),
-    body: style(13.0, FontWeight::Normal, 1.5, 0.0, primary),
-    description: style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
-    caption: style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
-    label: style(12.0, FontWeight::Medium, 1.35, 0.0, primary),
-    field_label: style(11.0, FontWeight::Medium, 1.35, 0.0, palette.text_secondary),
-    button: style(12.0, FontWeight::Medium, 1.2, 0.0, primary),
-    link: style(
-      13.0,
-      FontWeight::Normal,
-      1.5,
-      0.0,
-      palette.get(ExtraColor::AccentText.role()),
-    ),
-    mono: mono(style(12.0, FontWeight::Normal, 1.5, 0.0, primary)),
-    extra: extras
-      .chain(icons)
-      .chain(super::startup::typography(palette))
-      .chain(super::settings::typography(palette))
-      .chain(super::accounts::typography(palette))
-      .chain(super::orchester::typography(palette))
-      .chain(super::sign_in::typography(palette))
-      .chain(super::task::typography(palette))
-      .chain(super::decisions::typography(palette))
-      .chain(super::shell::typography(palette))
-      .chain(super::code::typography(palette))
-      .chain(super::files::typography(palette))
-      .chain(super::task_form::typography(palette))
-      .chain(super::conversation::typography(palette))
-      .chain(super::cards::typography(palette))
-      .chain(super::lifecycle::typography(palette))
-      .chain(super::local_integration::typography(palette))
-      .chain(super::connections::typography(palette))
-      .chain(super::context::typography(palette))
-      .chain(super::secrets::typography(palette))
-      .chain(super::projects::typography(palette))
-      .chain(super::agents::typography(palette))
-      .chain(super::instructions::typography(palette))
-      .chain(super::skills::typography(palette))
-      .chain(super::orchestrator::typography(palette))
-      .chain(super::overview::typography(palette))
-      .chain(super::needs_you::typography(palette))
-      .chain(super::usage::typography(palette))
-      .chain(super::memory::typography(palette))
-      .chain(super::delivery::typography(palette))
-      .chain(super::merge_attempt::typography(palette))
-      .chain(super::review::typography(palette))
-      .chain(super::sources::typography(palette))
-      .chain(super::project_settings::typography(palette))
-      .chain(super::hub::typography(palette))
-      .chain(super::archive::typography(palette))
-      .chain(super::failure::typography(palette))
-      .chain(super::groups::typography(palette))
-      .chain(super::pipelines::typography(palette))
-      .chain(super::date_picker::typography(palette))
-      .chain(super::browser::typography(palette))
-      .chain(later_areas(palette))
-      .collect(),
+    heading1: heading.clone(),
+    heading2: heading.clone(),
+    heading3: heading.clone(),
+    heading4: heading.clone(),
+    heading5: heading.clone(),
+    heading6: heading,
+    prose: body.clone(),
+    article: body,
+    ..typography
   }
 }
 
@@ -342,5 +367,21 @@ pub(super) fn style(
     letter_spacing,
     color,
     ..TextStyle::default()
+  }
+}
+
+/// A typography role in a palette color: the text style of a field's value or of a text a component sets itself.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextRole {
+  pub typography: TypographyStyle,
+  pub color: PaletteColor,
+}
+
+impl TextRole {
+  /// The role's style in `typography`, in `palette`'s color.
+  pub fn resolve(&self, typography: &ThemeTypography, palette: &ThemePalette) -> TextStyle {
+    let mut style = typography.resolve(self.typography);
+    style.color = palette.resolve(&self.color);
+    style
   }
 }

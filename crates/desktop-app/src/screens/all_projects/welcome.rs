@@ -121,7 +121,7 @@ fn footer(ctx: &Ctx) -> Row {
     .spacing(SpacingSize::Lg)
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::HardDrive, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::HardDrive, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("startup.start.footer"))
         .variant(StartupText::Footer.role())

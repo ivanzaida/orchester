@@ -13,6 +13,7 @@ use lurq::{
   components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::Skeleton as UiSkeleton,
 };
 use orchester_core::{integration::attempt::AttemptStage, project::TaskKey, run::RunNumber};
 
@@ -26,7 +27,7 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  theme::{AttemptText, DeliveryText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{AttemptText, DeliveryText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -181,8 +182,8 @@ fn strip() -> Row {
 }
 
 /// A bone that gives way when the room is short.
-fn shrinking(width: f32) -> Column {
-  bone(width, BONE_HEIGHT).flex_shrink(1.0).min_width(Dimension::Px(0.0))
+fn shrinking(width: f32) -> UiSkeleton {
+  bone(width, BONE_HEIGHT).flex_shrink(1.0).min_width(0.0)
 }
 
 /// The facts' keys with a bone for each value, and *Runner log folder*, which needs nothing read.
@@ -194,7 +195,7 @@ fn facts(ctx: &Ctx, project: &ShownProject) -> Row {
       .child(
         Text::new(&ctx.t(key))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
       .child(bone(*width, BONE_HEIGHT))
@@ -237,7 +238,7 @@ fn sections(ctx: &Ctx) -> Column {
         .child(
           Text::new(&stage_name(ctx, *stage))
             .variant(TypographyStyle::Body)
-            .color(PaletteColor::TextSecondary)
+            .color(ExtraColor::TextSecondary.role())
             .nowrap(),
         )
         .child(touches)

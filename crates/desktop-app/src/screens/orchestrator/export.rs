@@ -10,7 +10,7 @@ use lurq::{
   app::ctx::Ctx,
   components::Row,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::Element,
 };
 use orchester_core::time::Timestamp;
 use orchester_workspace::{
@@ -64,15 +64,15 @@ impl ChatExport {
         exporting.copy_messages(source.clone());
       })
       .icon(Icon::Copy)
-      .render(ctx, &self.menu);
+      .render(ctx);
       let exporting = self.exporting.clone();
       let export = MenuItem::new("orchestrator-export", ctx.t("ui.chat.export.menu"), move || {
         exporting.show()
       })
       .icon(Icon::Download)
-      .render(ctx, &self.menu);
+      .render(ctx);
       let panel = menu_panel("orchestrator-more-panel")
-        .width(Dimension::Px(MENU_WIDTH))
+        .width(MENU_WIDTH)
         .child(copy)
         .child(export);
       menu_at_end(self.anchor.clone(), self.menu.clone(), panel)

@@ -24,6 +24,7 @@ use orchester_app::{
     tabs::{PageTab, Segment, SegmentFace, page_tabs, segmented},
   },
 };
+use parking_lot::Mutex;
 
 use crate::sections;
 
@@ -93,6 +94,41 @@ pub struct State {
   pub link: LinkHandler,
 }
 
+/// Where the gallery's copies go, every one of them (`Clipboard::install`): said in its header, never the person's
+/// clipboard. The header's line is the gallery's signal, which it hands over as it renders.
+#[derive(Clone)]
+pub struct Copies {
+  clipboard: Clipboard,
+  said: Arc<Mutex<Option<Signal<String>>>>,
+}
+
+impl Copies {
+  pub fn new() -> Self {
+    let said: Arc<Mutex<Option<Signal<String>>>> = Arc::default();
+    let line = said.clone();
+    let clipboard = Clipboard::new(move |text| {
+      if let Some(pressed) = &*line.lock() {
+        pressed.set(format!("copy {text}"));
+      }
+      true
+    });
+    Self { clipboard, said }
+  }
+
+  pub fn clipboard(&self) -> &Clipboard {
+    &self.clipboard
+  }
+}
+
+/// The gallery keeps one for its life.
+impl PartialEq for Copies {
+  fn eq(&self, other: &Self) -> bool {
+    self.clipboard == other.clipboard
+  }
+}
+
+impl DevtoolsInspectable for Copies {}
+
 pub struct Gallery {
   section: Signal<Section>,
   light: Signal<bool>,
@@ -100,7 +136,7 @@ pub struct Gallery {
 }
 
 impl Component for Gallery {
-  type Props = ();
+  type Props = Copies;
 
   fn create(ctx: &mut Ctx) -> Self {
     let pressed = ctx.signal(String::new());
@@ -144,11 +180,9 @@ impl Component for Gallery {
       })
     });
     // The gallery leaves the person's clipboard alone: a copy says in the header what it would put there.
-    let copied = self.state.pressed.clone();
-    ctx.provide(Clipboard::new(move |text| {
-      copied.set(format!("copy {text}"));
-      true
-    }));
+    let copies = ctx.props::<Copies>().clone();
+    copies.said.lock().get_or_insert_with(|| self.state.pressed.clone());
+    ctx.provide(copies.clipboard);
     let body = sections::section(ctx, current, &self.state);
     let tabs = page_tabs(ctx, "gallery-tabs", tabs);
     Column::new()
@@ -157,7 +191,7 @@ impl Component for Gallery {
       .height(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Section, SpacingSize::Xl))
       .spacing(SpacingSize::Md)
-      .background(PaletteColor::SurfacePanel)
+      .background(PaletteColor::Canvas)
       .child(self.header(ctx))
       .child(tabs)
       .child(

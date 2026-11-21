@@ -71,7 +71,7 @@ fn project_settings_orchestrator_has_one_switch_which_is_the_projects_and_only_a
       "the {old} switch is folded into Let the Orchestrator drive"
     );
   }
-  page.until("the switch read", |p| p.exists(&format!("{SWITCH}-mark")));
+  page.until("the switch read", |p| p.exists(&format!("{SWITCH}-track")));
   assert!(page.text(&format!("{SWITCH}-row")).contains(LABEL));
   assert!(!page.switch_on(SWITCH), "{LABEL} is off until turned on");
   assert!(

@@ -94,7 +94,7 @@ fn foot(id: &str, words: &str) -> Row {
     .padding(Padding::all(ExtraSpacing::Tight.role()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))

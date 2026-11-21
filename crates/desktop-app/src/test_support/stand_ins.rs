@@ -30,7 +30,7 @@ use crate::{
     save_picker::{SaveAsk, SavePicker},
   },
   startup::Launch,
-  ui::code_box::Copier,
+  ui::clipboard::Clipboard,
 };
 
 /// What the stand-in pickers hand over next, what the stand-in save dialog was asked, what the stand-in copier was
@@ -129,9 +129,9 @@ impl StandIns {
     })
   }
 
-  fn copier(&self) -> Copier {
+  fn copier(&self) -> Clipboard {
     let copied = self.copied.clone();
-    Copier::other(move |text| {
+    Clipboard::new(move |text| {
       copied.lock().push(text.to_owned());
       true
     })
@@ -154,7 +154,7 @@ struct HostProps {
   picker: PathPicker,
   attach: AttachmentPicker,
   save: SavePicker,
-  copier: Copier,
+  copier: Clipboard,
   cli_search: CliSearch,
   clones: Clones,
 }
@@ -213,6 +213,7 @@ impl Window {
       cli_search: stand_ins.cli_search(),
       clones: stand_ins.clones(),
     };
+    props.copier.install(&window.app);
     window.tree.mount_root::<Host>(&mut window.app, props);
     window.pass();
     (window, stand_ins)

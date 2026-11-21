@@ -23,7 +23,7 @@ use super::{CheckAction, FolderRefusal, PickAction};
 use crate::{
   navigation::Navigation,
   routes::{Route, RouteFolder},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ShellSpacing, ShellText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ShellSpacing, ShellText},
   ui::{
     button::{ActionButton, ButtonKind},
     code_box::CodeBox,
@@ -121,7 +121,7 @@ pub fn block(ctx: &mut Ctx, step: &FolderStep, picks: &Picks) -> Option<Element>
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(text);
   let state = match step {
     FolderStep::Checking(_) => "checking",
@@ -135,7 +135,7 @@ pub fn block(ctx: &mut Ctx, step: &FolderStep, picks: &Picks) -> Option<Element>
     .padding(Padding::all(ExtraSpacing::Loose.role()).top(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceBase)
+    .background(PaletteColor::Background)
     .child(head);
   if !actions.is_empty() {
     block = block.child(

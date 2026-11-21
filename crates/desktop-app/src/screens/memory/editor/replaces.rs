@@ -70,14 +70,14 @@ impl RecordEditor {
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
       .spacing(ExtraSpacing::Snug.role())
-      .background(PaletteColor::SurfacePanel)
+      .background(PaletteColor::Canvas)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Tile.role())
       .child(
         Row::new()
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center)
-          .child(icon(Icon::Replace, IconSize::Base, PaletteColor::TextSecondary))
+          .child(icon(Icon::Replace, IconSize::Base, ExtraColor::TextSecondary.role()))
           .child(Text::new(&title).variant(TypographyStyle::Label)),
       )
       .child(Text::new(&ctx.t("memory.editor.replacesText")).variant(MemoryText::NoticeText.role()));
@@ -92,12 +92,12 @@ impl RecordEditor {
               .top(ExtraSpacing::Tight.role())
               .bottom(ExtraSpacing::Tight.role()),
           )
-          .border_left(Border::inside(BorderSize::Md, PaletteColor::BorderStrong))
+          .border_left(Border::inside(BorderSize::Md, PaletteColor::Input))
           .child(
             Text::new(&quoted)
               .flex(1.0)
               .variant(MemoryText::NoticeText.role())
-              .color(PaletteColor::TextMuted),
+              .color(PaletteColor::MutedForeground),
           ),
       )
       .into()
@@ -134,7 +134,7 @@ impl RecordEditor {
       Text::new(&words::join(ctx, &proposed))
         .id(format!("{id}-diff-head"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Pct(100.0))
     });
     Column::new()
@@ -166,7 +166,7 @@ fn diff_line(ctx: &Ctx, (id, side): (&str, Side), text: &str, meta: &str) -> Row
     Side::Removed => (
       ExtraColor::DiffRemoved,
       "memory.editor.removedSign",
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       "removed",
     ),
     Side::Added => (
@@ -184,7 +184,7 @@ fn diff_line(ctx: &Ctx, (id, side): (&str, Side), text: &str, meta: &str) -> Row
       Text::new(text)
         .id(format!("{id}-text"))
         .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     );
   if !meta.is_empty() {
     body = body.child(

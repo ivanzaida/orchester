@@ -182,7 +182,7 @@ fn hunk(ctx: &Ctx, (old, new, section): (&str, &str, &str), width: Dimension) ->
 
 fn line_row(ctx: &Ctx, line: &LineRow, row_width: Dimension, press: Option<LinePress>) -> Element {
   let (background, sign, sign_color, kind) = match line.kind {
-    LineKind::Context => (None, None, PaletteColor::TextMuted, "context"),
+    LineKind::Context => (None, None, PaletteColor::MutedForeground, "context"),
     LineKind::Added => (
       Some(ExtraColor::DiffAdded.role()),
       Some("changes.diff.added"),
@@ -192,7 +192,7 @@ fn line_row(ctx: &Ctx, line: &LineRow, row_width: Dimension, press: Option<LineP
     LineKind::Removed => (
       Some(ExtraColor::DiffRemoved.role()),
       Some("changes.diff.removed"),
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       "removed",
     ),
   };
@@ -289,8 +289,8 @@ fn marker(ctx: &Ctx, id: &str, glyph: Icon, key: &str) -> Element {
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .child(icon(glyph, IconSize::Xs, PaletteColor::TextMuted))
+    .background(PaletteColor::Card)
+    .child(icon(glyph, IconSize::Xs, PaletteColor::MutedForeground))
     .child(Text::new(&ctx.t(key)).variant(TypographyStyle::Caption).nowrap())
     .into()
 }
@@ -331,10 +331,10 @@ fn note_row(ctx: &Ctx, note: &FileNote, cut: &CutNote, width: Dimension) -> Elem
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(text)
     .with_children(action)
     .into()

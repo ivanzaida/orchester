@@ -31,7 +31,7 @@ pub(super) fn approved_in_chat(ctx: &Ctx, id: &str, action: &ChatAction) -> Opti
   let approval = action.approved_in.as_ref()?;
   Some(tinted_note(
     format!("{id}-in-chat"),
-    (Icon::MessageSquare, PaletteColor::TextMuted),
+    (Icon::MessageSquare, PaletteColor::MutedForeground),
     &ctx.t_args(
       "orchestrator.change.approvedInChat",
       [("words", approval.words.as_str())],

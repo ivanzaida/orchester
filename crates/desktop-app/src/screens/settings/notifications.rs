@@ -191,7 +191,7 @@ impl NotificationsSection {
       .child(
         Text::new(&ctx.t("settings.notifications.quiet.to"))
           .variant(lurq::app::theme::TypographyStyle::Description)
-          .color(lurq::app::theme::PaletteColor::TextMuted),
+          .color(lurq::app::theme::PaletteColor::MutedForeground),
       )
       .child(select(
         "settings-notify-quiet-end",
@@ -235,7 +235,9 @@ fn switch_row(
       prefs.set(next);
       save.run(next);
     });
-  let row = SettingRow::new(id, title).info(description).control(toggle);
+  let row = SettingRow::new(format!("{id}-row"), title)
+    .info(description)
+    .control(toggle);
   let row = if hinted {
     row.hint(ctx.t(&format!("settings.notifications.{key}.hint")))
   } else {

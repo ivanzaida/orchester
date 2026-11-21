@@ -49,14 +49,14 @@ pub(super) enum Tone {
 }
 
 impl Tone {
-  const fn colors(self) -> (PaletteColor, PaletteColor) {
+  fn colors(self) -> (PaletteColor, PaletteColor) {
     match self {
-      Self::Success => (PaletteColor::Success, PaletteColor::TextPrimary),
-      Self::Warning => (PaletteColor::Warning, PaletteColor::TextPrimary),
-      Self::Danger => (PaletteColor::Danger, PaletteColor::Danger),
-      Self::Muted => (PaletteColor::TextMuted, PaletteColor::TextMuted),
-      Self::Plain => (PaletteColor::TextSecondary, PaletteColor::TextPrimary),
-      Self::Quiet => (PaletteColor::TextMuted, PaletteColor::TextPrimary),
+      Self::Success => (PaletteColor::Success, PaletteColor::Foreground),
+      Self::Warning => (PaletteColor::Warning, PaletteColor::Foreground),
+      Self::Danger => (PaletteColor::Destructive, PaletteColor::Destructive),
+      Self::Muted => (PaletteColor::MutedForeground, PaletteColor::MutedForeground),
+      Self::Plain => (ExtraColor::TextSecondary.role(), PaletteColor::Foreground),
+      Self::Quiet => (PaletteColor::MutedForeground, PaletteColor::Foreground),
     }
   }
 }
@@ -347,7 +347,7 @@ fn row(ctx: &mut Ctx, line: &Line) -> Row {
       Text::new(note)
         .id(format!("{id}-note"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex(1.0)
@@ -391,8 +391,8 @@ pub(super) fn chip_element(ctx: &mut Ctx, id: &str, chip: &Chip) -> Element {
   let (fill, color) = match chip.tone {
     ChipTone::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
     ChipTone::Success => (PaletteColor::SuccessMuted, PaletteColor::Success),
-    ChipTone::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger),
-    ChipTone::Neutral | ChipTone::Working => (PaletteColor::AccentMuted, PaletteColor::TextSecondary),
+    ChipTone::Danger => (PaletteColor::DestructiveMuted, PaletteColor::Destructive),
+    ChipTone::Neutral | ChipTone::Working => (PaletteColor::Highlight, ExtraColor::TextSecondary.role()),
   };
   let pill = Row::new()
     .id(id.to_owned())
@@ -403,7 +403,8 @@ pub(super) fn chip_element(ctx: &mut Ctx, id: &str, chip: &Chip) -> Element {
     .background(fill)
     .rounded(ExtraRadius::Full.role())
     .with_children(
-      (chip.tone == ChipTone::Working).then(|| icon(Icon::LoaderCircle, IconSize::Xs, PaletteColor::TextSecondary)),
+      (chip.tone == ChipTone::Working)
+        .then(|| icon(Icon::LoaderCircle, IconSize::Xs, ExtraColor::TextSecondary.role())),
     )
     .child(
       Text::new(&chip.words)
@@ -430,7 +431,7 @@ pub(super) fn link_element(id: &str, link: LineLink) -> Element {
     .child(
       Text::new(&link.label)
         .variant(TypographyStyle::Button)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .into()
@@ -463,7 +464,7 @@ pub(super) fn quote(id: &str, words: &str) -> Element {
     Column::new().width(Dimension::Pct(100.0)).child(
       Text::new(words)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Pct(100.0)),
     ),
   )
@@ -488,7 +489,7 @@ pub(super) fn nested(id: &str, content: Column) -> Element {
             .top(ExtraSpacing::Tight.role())
             .bottom(ExtraSpacing::Tight.role()),
         )
-        .border_left(Border::inside(BorderSize::Md, PaletteColor::BorderStrong)),
+        .border_left(Border::inside(BorderSize::Md, PaletteColor::Input)),
     )
     .into()
 }

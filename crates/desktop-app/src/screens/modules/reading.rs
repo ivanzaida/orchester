@@ -70,11 +70,11 @@ pub(super) fn page(
       PageTab::to(format!("module-tab-{}", shown.name()), label, shown == tab, open)
     })
     .collect();
-  let tabs = page_tabs(ctx, "module-tabs", tabs).into();
+  let tabs = page_tabs(ctx, "module-tabs", tabs);
   let status = header::status_line(
     "module-status-row",
     vec![
-      bone(CHIP.0, CHIP.1).rounded(ExtraRadius::Full.role()).into(),
+      bone(CHIP.0, CHIP.1).radius(ExtraRadius::Full.role()).into(),
       skeleton::line(ctx, TypographyStyle::Description, FACTS).into(),
     ],
   );
@@ -111,7 +111,7 @@ fn back(ctx: &mut Ctx, project: ProjectId) -> Element {
   let arrow = opening(navigation.to(list))
     .id("module-back")
     .describe("a11y_name", ctx.t("modules.page.back"))
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted));
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground));
   Row::new()
     .id("module-back-row")
     .spacing(ExtraSpacing::Snug.role())

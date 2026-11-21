@@ -7,7 +7,7 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::time::Timestamp;
 use orchester_workspace::{display, tasks::review_list::ReviewState};
 
-use crate::{screens::tasks::age, ui::icon::Icon};
+use crate::{screens::tasks::age, theme::ExtraColor, ui::icon::Icon};
 
 /// A row's state line.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,18 +34,18 @@ impl Phrase {
       ReviewState::Ready => (("review.state.ready", "review.state.ready"), PaletteColor::Info, eye()),
       ReviewState::Conflicts { .. } => (
         ("review.state.conflicts.named", "review.state.conflicts.unnamed"),
-        PaletteColor::Danger,
-        (Icon::GitCompareArrows, PaletteColor::Danger),
+        PaletteColor::Destructive,
+        (Icon::GitCompareArrows, PaletteColor::Destructive),
       ),
       ReviewState::ImplementOn { .. } => (
         ("review.state.implementOn.one", "review.state.implementOn.other"),
-        PaletteColor::TextSecondary,
-        (Icon::LoaderCircle, PaletteColor::TextMuted),
+        ExtraColor::TextSecondary.role(),
+        (Icon::LoaderCircle, PaletteColor::MutedForeground),
       ),
       ReviewState::ResolvingConflicts { .. } => (
         ("review.state.resolving.named", "review.state.resolving.unnamed"),
-        PaletteColor::TextSecondary,
-        (Icon::LoaderCircle, PaletteColor::TextMuted),
+        ExtraColor::TextSecondary.role(),
+        (Icon::LoaderCircle, PaletteColor::MutedForeground),
       ),
       ReviewState::Merged { .. } => (
         ("review.state.merged.named", "review.state.merged.unnamed"),
@@ -54,8 +54,8 @@ impl Phrase {
       ),
       ReviewState::Merging { .. } => (
         ("review.state.merging.named", "review.state.merging.unnamed"),
-        PaletteColor::TextSecondary,
-        (Icon::GitMerge, PaletteColor::TextSecondary),
+        ExtraColor::TextSecondary.role(),
+        (Icon::GitMerge, ExtraColor::TextSecondary.role()),
       ),
     };
     Self {

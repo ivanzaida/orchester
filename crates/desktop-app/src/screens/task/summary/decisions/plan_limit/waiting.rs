@@ -4,10 +4,7 @@
 //! connection, and later steps wait for their own accounts the same way. Starting elsewhere is a person's decision.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize},
-  },
+  app::{ctx::Ctx, theme::SpacingSize},
   components::{Column, Row, SelectOption, Text},
   core::Signal,
   layout::Alignment,
@@ -30,7 +27,7 @@ use super::{
 use crate::{
   mcp::input_gate::{Guarded, InputGate, may_press},
   services::accounts::Accounts,
-  theme::{DecisionText, ExtraTypography, IconSize},
+  theme::{DecisionText, ExtraColor, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -88,12 +85,12 @@ impl WaitingCard<'_> {
       ],
     );
     let head = card("plan-limit-waiting", CardSurface::Attention)
-      .spacing(SpacingSize::Xs)
+      .gap(SpacingSize::Xs)
       .child(
         Row::new()
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center)
-          .child(icon(Icon::Clock, IconSize::Nav, PaletteColor::TextSecondary))
+          .child(icon(Icon::Clock, IconSize::Nav, ExtraColor::TextSecondary.role()))
           .child(
             Text::new(&title)
               .id("plan-limit-waiting-title")
@@ -187,7 +184,7 @@ impl WaitingCard<'_> {
       .child(
         Text::new(&label)
           .variant(ExtraTypography::Note.role())
-          .color(PaletteColor::TextSecondary),
+          .color(ExtraColor::TextSecondary.role()),
       )
       .child(
         Row::new()

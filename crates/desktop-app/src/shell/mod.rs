@@ -38,7 +38,7 @@ pub fn layout(ctx: &mut Ctx) -> Element {
     .ref_element(navigation.jump_anchor())
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .rounded(RadiusSize::Lg)
     .border_inside(BorderSize::Sm, ExtraColor::PanelBorder.role())
     .clip()
@@ -72,7 +72,7 @@ pub fn layout(ctx: &mut Ctx) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceBase)
+    .background(PaletteColor::Background)
     .child(body)
     .child(ctx.mount_keyed::<StatusBar>("status-bar", ()))
     // A modal over the window: it takes no room in the shell.

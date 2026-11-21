@@ -181,7 +181,10 @@ impl Component for Panel {
     let looking = view.targets.shape.borrowed();
     let keys_at = |place| cursor.shown(place, &looking);
     let empty = match (view.bad_name, view.searched) {
-      (true, _) => (ctx.t("ui.runsOnPicker.badModelName"), Some(PaletteColor::TextMuted)),
+      (true, _) => (
+        ctx.t("ui.runsOnPicker.badModelName"),
+        Some(PaletteColor::MutedForeground),
+      ),
       (false, true) => (ctx.t("ui.runsOnPicker.noMatch"), None),
       (false, false) => (ctx.t("ui.runsOnPicker.noModels"), None),
     };
@@ -200,8 +203,8 @@ impl Component for Panel {
     Column::new()
       .id(id.to_owned())
       .width(Dimension::Px(WIDTH))
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .rounded(RadiusSize::Lg)
       .box_shadow(ShadowStyle::Lg)
       .on_key_down(actions.keys(view.targets.clone()))

@@ -94,7 +94,7 @@ fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
     Text::new(&message_text(ctx, &failure))
       .id("conversation-group-failure")
       .variant(ExtraTypography::Note.role())
-      .color(PaletteColor::Danger)
+      .color(PaletteColor::Destructive)
       .nowrap()
   });
   let chevron = if chip.open { Icon::ChevronUp } else { Icon::ChevronDown };
@@ -106,22 +106,22 @@ fn closed(ctx: &Ctx, timeline: &Timeline, chip: &Chip) -> Element {
     .height(Dimension::Px(CHIP_HEIGHT))
     .padding_horizontal(SpacingSize::Sm)
     .spacing(ExtraSpacing::Snug.role())
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&summary_text(ctx, &chip.group, unfinished))
         .id("conversation-group-summary")
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .min_width(Dimension::Px(0.0))
         .flex_shrink(1.0),
     )
     .with_children(failure)
-    .child(icon(chevron, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(chevron, IconSize::Sm, PaletteColor::MutedForeground));
   searched(ctx, timeline, chip, pressed)
 }
 

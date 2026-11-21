@@ -14,7 +14,7 @@ use lurq::{
     component::Component,
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextInput, TextOverflow},
   core::Signal,
@@ -30,7 +30,9 @@ use super::{
   state::Showing,
 };
 use crate::{
-  theme::{BrowserSpacing, BrowserText, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{
+    BrowserSpacing, BrowserText, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TextRole,
+  },
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -56,7 +58,7 @@ pub fn panel(ctx: &mut Ctx, showing: &Showing, failed: bool, page: Element) -> E
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
       .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Danger))
+      .child(icon(Icon::CircleAlert, IconSize::Md, PaletteColor::Destructive))
       .child(Text::new(&ctx.t("browser.failed")).variant(TypographyStyle::Description))
   });
   Column::new()
@@ -69,7 +71,7 @@ pub fn panel(ctx: &mut Ctx, showing: &Showing, failed: bool, page: Element) -> E
         .right(SpacingSize::Sm)
         .bottom(SpacingSize::Sm),
     )
-    .background(PaletteColor::SurfaceBase)
+    .background(PaletteColor::Background)
     .child(
       Column::new()
         .id("browser-panel")
@@ -77,7 +79,7 @@ pub fn panel(ctx: &mut Ctx, showing: &Showing, failed: bool, page: Element) -> E
         .flex(1.0)
         .min_height(Dimension::Px(0.0))
         .clip()
-        .background(PaletteColor::SurfacePanel)
+        .background(PaletteColor::Canvas)
         .border(Border::inside(BorderSize::Sm, ExtraColor::PanelBorder.role()))
         .rounded(RadiusSize::Lg)
         .child(toolbar)
@@ -203,7 +205,7 @@ impl Component for Address {
     let input = self.input(ctx, &showing, shown.as_ref().map(|tab| tab.id.clone()));
     let owner = shown.as_ref().map(|tab| owner(ctx, &tab.owner));
     let stroke = if self.focused.get() {
-      PaletteColor::BorderFocus
+      PaletteColor::Ring
     } else {
       PaletteColor::Border
     };
@@ -215,10 +217,10 @@ impl Component for Address {
       .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Md)
-      .child(icon(Icon::Globe, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Globe, IconSize::Base, PaletteColor::MutedForeground))
       .child(input)
       .with_children(owner)
   }
@@ -255,7 +257,7 @@ impl Address {
   /// The address in mono; the words that stand in for it in sans (`URL` in `06` `eCCuU`, `07` `YEv2c`).
   fn input(&self, ctx: &Ctx, showing: &Showing, tab: Option<BrowserTabId>) -> TextInput {
     let theme = ctx.theme();
-    let resolve = |typography, color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
+    let resolve = |typography, color| TextRole { typography, color }.resolve(&theme.typography(), &theme.palette());
     let placeholder = if showing.unavailable() {
       ctx.t("browser.toolbar.noBrowser")
     } else {
@@ -266,11 +268,11 @@ impl Address {
     let (hooks, address) = (showing.person.clone(), showing.address.clone());
     let input = TextInput::styled(
       self.value.clone(),
-      resolve(BrowserText::Address.role(), PaletteColor::TextPrimary),
+      resolve(BrowserText::Address.role(), PaletteColor::Foreground),
     )
-    .placeholder_style(resolve(ExtraTypography::Property.role(), PaletteColor::TextMuted))
+    .placeholder_style(resolve(ExtraTypography::Property.role(), PaletteColor::MutedForeground))
     .placeholder(&placeholder)
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .id("browser-address")
     .key(self.input_key.lock().to_string())
     .ref_element(showing.address.clone())
@@ -334,7 +336,7 @@ fn owner(ctx: &Ctx, owner: &Owner) -> Element {
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&text)
         .variant(ExtraTypography::Note.role())

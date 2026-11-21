@@ -113,7 +113,7 @@ impl Component for Archived {
         Text::new(&words::refusal(ctx, &entry.name, refused))
           .id("team-hub-restore-error")
           .variant(HubText::PanelHint.role())
-          .color(PaletteColor::Danger)
+          .color(PaletteColor::Destructive)
       }));
     let bar = team.may_change.then(|| self.bar(ctx, entry));
     frame(entry, body, bar)

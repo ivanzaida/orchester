@@ -92,12 +92,7 @@ fn run(ctx: &Ctx) -> Column {
     .align_items(Alignment::Center);
   for (at, name) in STEPS.iter().enumerate() {
     if at > 0 {
-      steps = steps.child(
-        Row::new()
-          .flex(1.0)
-          .height(Dimension::Px(1.0))
-          .background(PaletteColor::Border),
-      );
+      steps = steps.child(bone(0.0, 1.0).flex(1.0));
     }
     steps = steps.child(
       Row::new()
@@ -183,7 +178,7 @@ fn output(ctx: &Ctx) -> Column {
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
         .rounded(RadiusSize::Md)
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .child(bone(14.0, 14.0))
         .child(skeleton::line(ctx, TypographyStyle::Description, *title))
         .child(skeleton::line(ctx, TypographyStyle::Description, *line))

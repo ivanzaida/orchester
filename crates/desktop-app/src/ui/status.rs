@@ -18,24 +18,17 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, TypographyStyle},
-  },
-  components::{Row, Text},
-  layout::Alignment,
-  node::{Element, dimension::Dimension},
+  app::{ctx::Ctx, theme::PaletteColor},
+  node::Element,
+  ui::{StatusLabel, StatusLabelPart, Styled},
 };
 use orchester_core::{
   run::TaskPhase,
   task::organization::{Priority, WorkflowStatus},
 };
 
-use super::{
-  icon::{Icon, icon},
-  tooltip::Truncated,
-};
-use crate::theme::{ExtraSpacing, ExtraTypography, IconSize};
+use super::icon::Icon;
+use crate::theme::{ExtraColor, kit::status_label as kit};
 
 /// What a run or one of its steps is doing, and the Blocked flag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,13 +84,13 @@ enum Tone {
 }
 
 impl Tone {
-  const fn color(self) -> PaletteColor {
+  fn color(self) -> PaletteColor {
     match self {
-      Self::Muted => PaletteColor::TextMuted,
-      Self::Secondary => PaletteColor::TextSecondary,
+      Self::Muted => PaletteColor::MutedForeground,
+      Self::Secondary => ExtraColor::TextSecondary.role(),
       Self::Warning => PaletteColor::Warning,
       Self::Success => PaletteColor::Success,
-      Self::Danger => PaletteColor::Danger,
+      Self::Danger => PaletteColor::Destructive,
     }
   }
 }
@@ -170,7 +163,7 @@ impl Status {
     }
   }
 
-  pub const fn icon(self) -> Icon {
+  pub fn icon(self) -> Icon {
     match self {
       Self::Draft | Self::NotStarted => Icon::CircleDashed,
       Self::Queued | Self::Waiting | Self::WaitingForPlanReset => Icon::Clock,
@@ -192,7 +185,7 @@ impl Status {
     }
   }
 
-  const fn tone(self) -> Tone {
+  fn tone(self) -> Tone {
     match self {
       Self::Draft | Self::Queued | Self::Canceled | Self::Waiting | Self::Skipped | Self::NotStarted => Tone::Muted,
       Self::Running | Self::Merged | Self::Working | Self::Blocked => Tone::Secondary,
@@ -212,12 +205,12 @@ impl Status {
   }
 
   /// The color of the icon and the word.
-  pub const fn color(self) -> PaletteColor {
+  pub fn color(self) -> PaletteColor {
     self.tone().color()
   }
 
   /// The i18n key of the word.
-  pub const fn key(self) -> &'static str {
+  pub fn key(self) -> &'static str {
     match self {
       Self::Draft => "ui.status.draft",
       Self::Queued => "ui.status.queued",
@@ -305,77 +298,72 @@ impl StatusChip {
       (None, Some(detail)) => ctx.t_args("ui.status.withDetail", [("status", word), ("detail", detail.clone())]),
       (None, None) => word,
     };
-    let (icon_size, typography) = match self.size {
-      StatusSize::Regular => (IconSize::Base, TypographyStyle::Label),
-      StatusSize::Compact => (IconSize::Sm, ExtraTypography::NoteStrong.role()),
+    let size = match self.size {
+      StatusSize::Regular => kit::STATUS,
+      StatusSize::Compact => kit::STATUS_COMPACT,
     };
+    let glyph = self.status.icon();
     let color = self.status.color();
-    Row::new()
-      .id(self.id.to_string())
-      .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Pair.role())
-      .align_items(Alignment::Center)
+    StatusLabel::new(&text)
+      .icon(glyph.name())
+      .spin(glyph == Icon::LoaderCircle)
+      .size(size)
+      .tooltip_when_cut(true)
+      .style(StatusLabelPart::Root, |style| style.foreground(color))
       .describe("status", self.status.key())
-      .child(icon(self.status.icon(), icon_size, color.clone()).id(format!("{}-icon", self.id)))
-      .child(
-        Truncated::new(format!("{}-label", self.id), text, typography)
-          .color(color)
-          .render(ctx),
-      )
+      .id(self.id)
       .into()
   }
 }
 
 /// A task's priority: its icon and word in `text_secondary`; Urgent in `warning`, No priority in
-/// `text_muted`.
-pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> Row {
+/// `text_muted`. lurq's `ui::StatusLabel` in the theme's recipe (`theme::kit::status_label`).
+pub fn priority_chip(ctx: &Ctx, id: &str, priority: Priority) -> StatusLabel {
   let (glyph, key, color) = priority_look(priority);
-  labelled(
-    id,
-    (glyph, IconSize::Base),
-    &ctx.t(key),
-    TypographyStyle::Description,
-    color,
-  )
+  StatusLabel::new(&ctx.t(key))
+    .icon(glyph.name())
+    .style(StatusLabelPart::Root, |style| style.foreground(color))
+    .id(id.to_owned())
 }
 
 /// A priority's icon, the i18n key of its word and its color.
-pub const fn priority_look(priority: Priority) -> (Icon, &'static str, PaletteColor) {
+pub fn priority_look(priority: Priority) -> (Icon, &'static str, PaletteColor) {
   match priority {
     Priority::Urgent => (Icon::CircleAlert, "ui.priority.urgent", PaletteColor::Warning),
-    Priority::High => (Icon::SignalHigh, "ui.priority.high", PaletteColor::TextSecondary),
-    Priority::Medium => (Icon::SignalMedium, "ui.priority.medium", PaletteColor::TextSecondary),
-    Priority::Low => (Icon::SignalLow, "ui.priority.low", PaletteColor::TextSecondary),
-    Priority::None => (Icon::Minus, "ui.priority.none", PaletteColor::TextMuted),
+    Priority::High => (Icon::SignalHigh, "ui.priority.high", ExtraColor::TextSecondary.role()),
+    Priority::Medium => (
+      Icon::SignalMedium,
+      "ui.priority.medium",
+      ExtraColor::TextSecondary.role(),
+    ),
+    Priority::Low => (Icon::SignalLow, "ui.priority.low", ExtraColor::TextSecondary.role()),
+    Priority::None => (Icon::Minus, "ui.priority.none", PaletteColor::MutedForeground),
   }
 }
 
 /// A workflow status's icon and its color.
-pub const fn workflow_look(status: WorkflowStatus) -> (Icon, PaletteColor) {
+pub fn workflow_look(status: WorkflowStatus) -> (Icon, PaletteColor) {
   match status {
-    WorkflowStatus::Backlog => (Icon::CircleDashed, PaletteColor::TextMuted),
-    WorkflowStatus::Todo => (Icon::Circle, PaletteColor::TextSecondary),
-    WorkflowStatus::InProgress => (Icon::CircleDotDashed, PaletteColor::TextSecondary),
-    WorkflowStatus::InReview => (Icon::Eye, PaletteColor::TextSecondary),
+    WorkflowStatus::Backlog => (Icon::CircleDashed, PaletteColor::MutedForeground),
+    WorkflowStatus::Todo => (Icon::Circle, ExtraColor::TextSecondary.role()),
+    WorkflowStatus::InProgress => (Icon::CircleDotDashed, ExtraColor::TextSecondary.role()),
+    WorkflowStatus::InReview => (Icon::Eye, ExtraColor::TextSecondary.role()),
     WorkflowStatus::Done => (Icon::CircleCheck, PaletteColor::Success),
-    WorkflowStatus::Canceled => (Icon::CircleSlash, PaletteColor::TextMuted),
+    WorkflowStatus::Canceled => (Icon::CircleSlash, PaletteColor::MutedForeground),
   }
 }
 
-/// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`.
-pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> Row {
+/// A task's workflow status: its icon and word in `text_secondary`; Done's icon in `success`. lurq's
+/// `ui::StatusLabel` in the theme's recipe (`theme::kit::status_label`).
+pub fn workflow_chip(ctx: &Ctx, id: &str, status: WorkflowStatus) -> StatusLabel {
   let (glyph, tone) = workflow_look(status);
-  Row::new()
+  StatusLabel::new(&ctx.t(workflow_key(status)))
+    .icon(glyph.name())
+    .style(StatusLabelPart::Root, |style| {
+      style.foreground(ExtraColor::TextSecondary.role())
+    })
+    .style(StatusLabelPart::Icon, |style| style.foreground(tone))
     .id(id.to_owned())
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, tone).id(format!("{id}-icon")))
-    .child(
-      Text::new(&ctx.t(workflow_key(status)))
-        .id(format!("{id}-label"))
-        .variant(TypographyStyle::Description)
-        .nowrap(),
-    )
 }
 
 /// The i18n key of a workflow status's word.
@@ -388,25 +376,4 @@ pub const fn workflow_key(status: WorkflowStatus) -> &'static str {
     WorkflowStatus::Done => "ui.workflow.done",
     WorkflowStatus::Canceled => "ui.workflow.canceled",
   }
-}
-
-fn labelled(
-  id: &str,
-  (glyph, size): (Icon, IconSize),
-  text: &str,
-  typography: TypographyStyle,
-  color: PaletteColor,
-) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .child(icon(glyph, size, color.clone()).id(format!("{id}-icon")))
-    .child(
-      Text::new(text)
-        .id(format!("{id}-label"))
-        .variant(typography)
-        .color(color)
-        .nowrap(),
-    )
 }

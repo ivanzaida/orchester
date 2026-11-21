@@ -1,6 +1,7 @@
-//! The tab list (`qWCBQ`, `a1i6Ws`): every open tab in order with its page and project, the current one
-//! marked, the hidden ones marked; the pointer and the keyboard switch and close tabs; with more than
-//! eight tabs a search field leads it.
+//! The tab list (`qWCBQ`, `a1i6Ws`): lurq's list of every open tab under the button of the hidden tabs, every open
+//! tab in order, the current one and the hidden ones marked; the pointer and the keyboard switch and close tabs; with
+//! more than eight tabs a search field leads it. Ids by lurq's rule: the list `tab-strip-panel`, its search
+//! `tab-strip-search`, a row `tab-<id>-item` with `-current`, `-hidden` and `-close` after it.
 
 use lurq::app::events::MouseButton;
 use orchester_app::navigation::{Navigation, tabs::TabId};
@@ -11,22 +12,19 @@ use super::{
   support::Window,
 };
 
+const MORE: &str = "tab-strip-more";
+const PANEL: &str = "tab-strip-panel";
+const SEARCH: &str = "tab-strip-search";
+
 /// Opens the tab list with the pointer.
 fn open_list(window: &mut Window) {
-  press(window, "tab-list-button", MouseButton::Left);
+  press(window, MORE, MouseButton::Left);
   settle(window);
-  assert!(shown(window, "tab-list-menu"), "the list opened");
+  assert!(shown(window, PANEL), "the list opened");
 }
 
 fn row(tab: TabId) -> String {
-  format!("tab-list-{tab}")
-}
-
-fn has_class(window: &mut Window, id: &str, class: &str) -> bool {
-  window
-    .tree
-    .get_element_by_id(id)
-    .is_some_and(|element| element.has_class(class))
+  format!("tab-{tab}-item")
 }
 
 fn focused(window: &Window) -> Option<String> {
@@ -34,6 +32,11 @@ fn focused(window: &Window) -> Option<String> {
     .tree
     .focused_element()
     .and_then(|element| element.id().map(str::to_owned))
+}
+
+/// Whether the focus is in the search field.
+fn in_search(window: &Window) -> bool {
+  focused(window).is_some_and(|id| id.starts_with(SEARCH))
 }
 
 fn tabs(navigation: &Navigation) -> Vec<TabId> {
@@ -48,11 +51,10 @@ fn a_hidden_tab(window: &mut Window, navigation: &Navigation) -> TabId {
     .expect("a tab is hidden")
 }
 
-/// The tab whose row the keyboard ringed.
-fn ringed(window: &mut Window, navigation: &Navigation) -> Option<TabId> {
-  tabs(navigation)
-    .into_iter()
-    .find(|tab| has_class(window, &row(*tab), "ringed"))
+/// The tab whose row has the focus.
+fn ringed(window: &Window, navigation: &Navigation) -> Option<TabId> {
+  let at = focused(window)?;
+  tabs(navigation).into_iter().find(|tab| at == row(*tab))
 }
 
 fn key(window: &mut Window, key: &str) {
@@ -79,6 +81,13 @@ fn chord(window: &mut Window, key: &str, (command, shift): (bool, bool)) {
   settle(window);
 }
 
+/// Types `text` into the focused search field.
+fn search(window: &mut Window, text: &str) {
+  assert!(in_search(window), "the search field has the focus");
+  window.tree.text_input_replace(0..0, text);
+  settle(window);
+}
+
 #[test]
 fn the_list_holds_every_tab_in_order_marking_the_current_and_hidden_ones() {
   let (mut window, navigation) = crowded_window();
@@ -90,9 +99,16 @@ fn the_list_holds_every_tab_in_order_marking_the_current_and_hidden_ones() {
     .filter(|tab| shown(&mut window, &row(*tab)))
     .collect();
   assert_eq!(listed, tabs(&navigation), "a row for every tab, in order");
+  assert!(shown(&mut window, SEARCH), "a long list leads with its search");
+  for pair in listed.windows(2) {
+    let (above, below) = (bounds(&mut window, &row(pair[0])), bounds(&mut window, &row(pair[1])));
+    assert!(
+      (below.y - (above.y + above.height) - 2.0).abs() < 0.5,
+      "one under the other, 2 apart under the search: {above:?} {below:?}"
+    );
+  }
   for tab in listed {
     let id = row(tab);
-    assert_eq!(has_class(&mut window, &id, "current"), tab == active, "{id}");
     assert_eq!(
       shown(&mut window, &format!("{id}-current")),
       tab == active,
@@ -101,24 +117,24 @@ fn the_list_holds_every_tab_in_order_marking_the_current_and_hidden_ones() {
     let hidden = !strip.contains(&format!("tab-{tab}"));
     assert_eq!(shown(&mut window, &format!("{id}-hidden")), hidden, "{id}: eye-off");
   }
-  let first = row(tabs(&navigation)[0]);
-  assert_eq!(window.text(&first), "All projects", "All projects names no project");
   let kontur = row(tabs(&navigation)[1]);
   window.until("Kontur's name", |window| window.text(&kontur).contains("Kontur"));
-  assert_eq!(window.text(&kontur), "Overview Kontur", "the page, then the project");
+  assert_eq!(
+    window.texts(&kontur),
+    Some(vec!["Overview".to_owned(), "Kontur".to_owned()]),
+    "the tab's page, then its project"
+  );
 }
 
 #[test]
-fn the_list_opens_under_the_button_with_its_rows_in_view() {
-  // 1440 wide: the list fits under the button's start.
+fn the_list_opens_under_the_title_bar_with_the_current_row_in_view() {
+  // 1440 wide: the list fits under the button's start, unless that would cross 8 inside the right edge.
   let (mut window, navigation) = window_with(1440, 20);
   open_list(&mut window);
-  let (button, menu) = (
-    bounds(&mut window, "tab-list-button"),
-    bounds(&mut window, "tab-list-menu"),
-  );
+  let (button, menu) = (bounds(&mut window, MORE), bounds(&mut window, PANEL));
+  let start = button.x.min(1440.0 - 8.0 - 320.0);
   assert!(
-    (menu.x - button.x).abs() < 0.5,
+    (menu.x - start).abs() < 0.5,
     "its start under the button's: {menu:?} {button:?}"
   );
   assert!((menu.y - 40.0).abs() < 0.5, "4 under the title bar: {menu:?}");
@@ -131,33 +147,57 @@ fn the_list_opens_under_the_button_with_its_rows_in_view() {
 }
 
 #[test]
+fn the_list_stays_8_inside_the_window_near_its_right_edge() {
+  let (mut window, _navigation) = window_with(600, 5);
+  open_list(&mut window);
+  let (button, menu) = (bounds(&mut window, MORE), bounds(&mut window, PANEL));
+  assert!(button.x + 320.0 > 592.0, "the button is close to the edge: {button:?}");
+  assert!(
+    (menu.x + menu.width - 592.0).abs() < 0.5,
+    "the list ends 8 inside the window: {menu:?}"
+  );
+}
+
+#[test]
 fn a_long_list_leads_with_a_focused_search_that_filters_its_rows() {
   let (mut window, navigation) = crowded_window();
   open_list(&mut window);
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-search"));
-  assert_eq!(
-    ringed(&mut window, &navigation),
-    None,
-    "no ring before a key or a search"
+  assert!(
+    in_search(&window),
+    "the search field has the focus: {:?}",
+    focused(&window)
   );
-  window.set("tab-list-search", "secr");
-  settle(&mut window);
+  search(&mut window, "envir");
   let matched: Vec<TabId> = tabs(&navigation)
     .into_iter()
     .filter(|tab| shown(&mut window, &row(*tab)))
     .collect();
-  assert_eq!(matched.len(), 3, "the three Secrets tabs match");
+  assert_eq!(matched.len(), 3, "the three Secrets tabs, Environment, match");
+  key(&mut window, "ArrowDown");
   assert_eq!(
-    ringed(&mut window, &navigation),
+    ringed(&window, &navigation),
     Some(matched[0]),
-    "the first match is ringed"
+    "Down goes to the first match"
   );
   key(&mut window, "ArrowDown");
-  assert_eq!(ringed(&mut window, &navigation), Some(matched[1]));
+  assert_eq!(ringed(&window, &navigation), Some(matched[1]));
   key(&mut window, "Enter");
   assert_eq!(navigation.tabs_now().active().id(), matched[1], "Enter switches to it");
-  assert!(!shown(&mut window, "tab-list-menu"), "and closes the list");
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
+  assert!(!shown(&mut window, PANEL), "and closes the list");
+}
+
+#[test]
+fn enter_in_the_search_chooses_the_first_match() {
+  let (mut window, navigation) = crowded_window();
+  open_list(&mut window);
+  search(&mut window, "envir");
+  let first = tabs(&navigation)
+    .into_iter()
+    .find(|tab| shown(&mut window, &row(*tab)))
+    .expect("a match");
+  key(&mut window, "Enter");
+  assert_eq!(navigation.tabs_now().active().id(), first);
+  assert!(!shown(&mut window, PANEL));
 }
 
 #[test]
@@ -165,43 +205,38 @@ fn a_search_that_matches_nothing_says_so_and_esc_clears_it_then_closes() {
   let (mut window, navigation) = crowded_window();
   let active = active_id(&navigation);
   open_list(&mut window);
-  window.set("tab-list-search", "deploy");
-  settle(&mut window);
-  assert_eq!(
-    window.text("tab-list-empty"),
-    "No open tab matches \u{201c}deploy\u{201d}"
+  search(&mut window, "deploy");
+  assert!(
+    window
+      .text(PANEL)
+      .contains("No open tab matches \u{201c}deploy\u{201d}"),
+    "{}",
+    window.text(PANEL)
   );
   key(&mut window, "Escape");
-  assert!(shown(&mut window, "tab-list-menu"), "the first Esc clears the search");
-  assert!(!shown(&mut window, "tab-list-empty"));
+  assert!(shown(&mut window, PANEL), "the first Esc clears the search");
+  assert!(!window.text(PANEL).contains("No open tab matches"));
   key(&mut window, "Escape");
-  assert!(!shown(&mut window, "tab-list-menu"), "the second closes the list");
+  assert!(!shown(&mut window, PANEL), "the second closes the list");
   assert_eq!(active_id(&navigation), active, "without switching");
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
 }
 
 #[test]
-fn a_short_list_has_no_search_and_opens_with_the_current_row_ringed() {
+fn a_short_list_has_no_search_and_opens_on_the_current_row() {
   let (mut window, navigation) = window_with(600, 5);
-  assert!(shown(&mut window, "tab-list-button"), "six tabs overflow at 600");
+  assert!(shown(&mut window, MORE), "six tabs overflow at 600");
   open_list(&mut window);
-  assert!(!shown(&mut window, "tab-list-search"), "eight tabs or fewer: no search");
+  assert!(!shown(&mut window, SEARCH), "eight tabs or fewer: no search");
   let current = navigation.tabs_now().active().id();
-  assert_eq!(ringed(&mut window, &navigation), Some(current));
+  assert_eq!(ringed(&window, &navigation), Some(current));
   key(&mut window, "Home");
   assert_eq!(
-    ringed(&mut window, &navigation),
+    ringed(&window, &navigation),
     Some(tabs(&navigation)[0]),
-    "Home rings the first"
-  );
-  key(&mut window, "ArrowUp");
-  assert_eq!(
-    ringed(&mut window, &navigation),
-    Some(tabs(&navigation)[0]),
-    "and stops there"
+    "Home goes to the first"
   );
   key(&mut window, "End");
-  assert_eq!(ringed(&mut window, &navigation), tabs(&navigation).last().copied());
+  assert_eq!(ringed(&window, &navigation), tabs(&navigation).last().copied());
 }
 
 #[test]
@@ -214,20 +249,12 @@ fn choosing_a_hidden_tab_in_the_list_brings_it_into_the_strip() {
   press(&mut window, &row(hidden), MouseButton::Left);
   settle(&mut window);
   assert_eq!(navigation.tabs_now().active().id(), hidden, "the chosen tab is active");
-  assert!(!shown(&mut window, "tab-list-menu"), "the list closed");
+  assert!(!shown(&mut window, PANEL), "the list closed");
   assert!(whole(&mut window, &format!("tab-{hidden}")), "it shows in the strip");
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
-}
-
-/// Moves the pointer over the middle of `id`.
-fn hover(window: &mut Window, id: &str) {
-  let at = bounds(window, id);
-  window.tree.mouse_move(at.x + at.width / 2.0, at.y + at.height / 2.0);
-  settle(window);
 }
 
 #[test]
-fn a_row_shows_its_close_button_under_the_pointer_and_closing_keeps_the_list_open() {
+fn a_rows_close_button_and_the_middle_button_close_its_tab_and_keep_the_list_open() {
   let (mut window, navigation) = crowded_window();
   navigation.cycle(1);
   settle(&mut window);
@@ -235,14 +262,12 @@ fn a_row_shows_its_close_button_under_the_pointer_and_closing_keeps_the_list_ope
   let hidden = a_hidden_tab(&mut window, &navigation);
   open_list(&mut window);
   let close = format!("{}-close", row(hidden));
-  assert!(!shown(&mut window, &close), "no close button at rest");
-  hover(&mut window, &row(hidden));
-  assert!(shown(&mut window, &close), "the hovered row shows its close button");
+  window.hover(&row(hidden));
   press(&mut window, &close, MouseButton::Left);
   settle(&mut window);
   assert_eq!(tabs(&navigation).len(), count - 1, "the tab closed");
   assert_eq!(navigation.tabs_now().active().id(), active, "the active tab stays");
-  assert!(shown(&mut window, "tab-list-menu"), "the list stays open");
+  assert!(shown(&mut window, PANEL), "the list stays open");
   assert!(!shown(&mut window, &row(hidden)), "its row left the list");
   press(&mut window, &row(tabs(&navigation)[2]), MouseButton::Middle);
   settle(&mut window);
@@ -250,48 +275,29 @@ fn a_row_shows_its_close_button_under_the_pointer_and_closing_keeps_the_list_ope
 }
 
 #[test]
-fn the_shortcut_opens_the_list_and_ctrl_w_closes_ringed_tabs_only() {
+fn the_shortcut_opens_the_list_and_ctrl_w_closes_the_focused_rows_tab_only() {
   let (mut window, navigation) = crowded_window();
   let (count, active) = (tabs(&navigation).len(), navigation.tabs_now().active().id());
   chord(&mut window, "a", (true, true));
-  assert!(shown(&mut window, "tab-list-menu"), "Ctrl+Shift+A opened the list");
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-search"));
-  chord(&mut window, "w", (true, false));
-  assert_eq!(tabs(&navigation).len(), count, "with no ring, Ctrl+W closes nothing");
+  assert!(shown(&mut window, PANEL), "Ctrl+Shift+A opened the list");
+  assert!(in_search(&window));
   key(&mut window, "ArrowDown");
-  assert_eq!(
-    ringed(&mut window, &navigation),
-    Some(active),
-    "the first arrow rings the current row"
-  );
-  key(&mut window, "ArrowUp");
-  key(&mut window, "ArrowUp");
-  let first = ringed(&mut window, &navigation).expect("a row is ringed");
-  let next = tabs(&navigation)[count - 2];
+  key(&mut window, "ArrowDown");
+  let second = tabs(&navigation)[1];
+  assert_eq!(ringed(&window, &navigation), Some(second));
+  let next = tabs(&navigation)[2];
   chord(&mut window, "w", (true, false));
   assert_eq!(tabs(&navigation).len(), count - 1, "Ctrl+W closed a tab");
-  assert!(!tabs(&navigation).contains(&first), "the ringed one");
-  assert_eq!(
-    ringed(&mut window, &navigation),
-    Some(next),
-    "the ring moves to the row after it"
-  );
-  chord(&mut window, "w", (true, false));
-  assert_eq!(tabs(&navigation).len(), count - 2, "a second Ctrl+W closes that one");
-  assert!(!tabs(&navigation).contains(&next));
+  assert!(!tabs(&navigation).contains(&second), "the focused row's");
   assert_eq!(navigation.tabs_now().active().id(), active, "never the active one");
+  assert_eq!(
+    ringed(&window, &navigation),
+    Some(next),
+    "the focus moves to the row after it"
+  );
   chord(&mut window, "a", (true, true));
-  assert!(!shown(&mut window, "tab-list-menu"), "the shortcut closes it again");
-  assert_eq!(focused(&window).as_deref(), Some("tab-list-button"));
-  assert_eq!(tab_ids(&navigation).len(), count - 2);
-}
-
-/// A window 600 wide, `height` high, with five labelled tabs after All projects; the last active.
-fn narrow_window(height: u32) -> (Window, Navigation) {
-  let (mut window, navigation) = window_with(600, 5);
-  window.tree.resize(600, height);
-  settle(&mut window);
-  (window, navigation)
+  assert!(!shown(&mut window, PANEL), "the shortcut closes it again");
+  assert_eq!(tab_ids(&navigation).len(), count - 1);
 }
 
 #[test]
@@ -314,10 +320,7 @@ fn keys_the_list_takes_do_not_reach_the_page_under_it() {
   settle(&mut window);
   assert!(shown(&mut window, "remove-project-question"), "and stays open");
   open_list(&mut window);
-  assert!(
-    !shown(&mut window, "tab-list-search"),
-    "a short list: the keys go to its rows"
-  );
+  assert!(!shown(&mut window, SEARCH), "a short list: the keys go to its rows");
   key(&mut window, "ArrowDown");
   key(&mut window, "Enter");
   assert_eq!(
@@ -337,27 +340,12 @@ fn keys_the_list_takes_do_not_reach_the_page_under_it() {
 }
 
 #[test]
-fn the_list_stays_8_inside_the_window_near_its_right_edge() {
-  let (mut window, _navigation) = narrow_window(640);
-  open_list(&mut window);
-  let (button, menu) = (
-    bounds(&mut window, "tab-list-button"),
-    bounds(&mut window, "tab-list-menu"),
-  );
-  assert!(button.x + 320.0 > 592.0, "the button is close to the edge: {button:?}");
-  assert!(
-    (menu.x + menu.width - 592.0).abs() < 0.5,
-    "the list ends 8 inside the window: {menu:?}"
-  );
-}
-
-#[test]
 fn a_list_taller_than_the_window_less_48_scrolls_and_keeps_its_place() {
   let (mut window, navigation) = crowded_window();
   window.tree.resize(960, 400);
   settle(&mut window);
   open_list(&mut window);
-  let menu = bounds(&mut window, "tab-list-menu");
+  let menu = bounds(&mut window, PANEL);
   assert!(
     menu.height <= 400.0 - 48.0 + 0.5,
     "the list is at most the window less 48: {menu:?}"
@@ -365,7 +353,7 @@ fn a_list_taller_than_the_window_less_48_scrolls_and_keeps_its_place() {
   let all = tabs(&navigation);
   let (first, current) = (row(all[0]), row(*all.last().expect("tabs")));
   let inside = |window: &mut Window, id: &str| {
-    let (row, menu) = (bounds(window, id), bounds(window, "tab-list-menu"));
+    let (row, menu) = (bounds(window, id), bounds(window, PANEL));
     row.y >= menu.y - 0.5 && row.y + row.height <= menu.y + menu.height + 0.5
   };
   assert!(
@@ -379,7 +367,7 @@ fn a_list_taller_than_the_window_less_48_scrolls_and_keeps_its_place() {
     .scroll(at.x, at.y, 0.0, 5000.0, lurq::app::events::ScrollPhase::Scroll);
   settle(&mut window);
   assert!(inside(&mut window, &first), "the wheel scrolled to the top");
-  let button = bounds(&mut window, "tab-list-button");
+  let button = bounds(&mut window, MORE);
   window
     .tree
     .mouse_move(button.x + button.width / 2.0, button.y + button.height / 2.0);
@@ -390,26 +378,13 @@ fn a_list_taller_than_the_window_less_48_scrolls_and_keeps_its_place() {
   );
 }
 
+/// The Tab that comes with Alt+Tab back into the window must not land on the list's button, where Space would open
+/// the list.
 #[test]
-fn new_tab_does_not_take_the_focus_when_the_list_goes_away() {
-  let (mut window, navigation) = narrow_window(640);
-  open_list(&mut window);
-  while shown(&mut window, "tab-list-button") {
-    let hidden = a_hidden_tab(&mut window, &navigation);
-    press(&mut window, &row(hidden), MouseButton::Middle);
-    settle(&mut window);
-  }
-  assert_ne!(focused(&window).as_deref(), Some("new-tab"));
-}
-
-/// The Tab that comes with Alt+Tab back into the window must not land on *New tab*, where Space would open a tab.
-#[test]
-fn new_tab_is_never_a_tab_stop() {
+fn the_list_button_is_never_a_tab_stop() {
   let (mut window, _navigation) = crowded_window();
   for _ in 0..40 {
     key(&mut window, "Tab");
-    assert_ne!(focused(&window).as_deref(), Some("new-tab"));
+    assert_ne!(focused(&window).as_deref(), Some(MORE));
   }
-  press(&mut window, "new-tab", MouseButton::Left);
-  assert_ne!(focused(&window).as_deref(), Some("new-tab"), "nor after a press");
 }

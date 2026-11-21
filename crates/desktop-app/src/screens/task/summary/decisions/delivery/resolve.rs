@@ -32,7 +32,7 @@ use super::{
 use crate::{
   mcp::input_gate::{InputGate, persons_press},
   services::Services,
-  theme::{DeliverySpacing, DeliveryText, ExtraSpacing, ExtraTypography, IconSize, TaskText},
+  theme::{DeliverySpacing, DeliveryText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card as outline},
@@ -128,9 +128,9 @@ fn check_rows(ctx: &Ctx, (base, files): (&str, &[String]), checking: &Checking) 
     ],
   };
   let first = match checking {
-    Checking::NotYet => Look::PENDING,
-    Checking::Running(_) => Look::WORKING,
-    Checking::MarkersLeft(..) => Look::FAILED,
+    Checking::NotYet => Look::pending(),
+    Checking::Running(_) => Look::working(),
+    Checking::MarkersLeft(..) => Look::failed(),
   };
   titles
     .iter()
@@ -138,7 +138,7 @@ fn check_rows(ctx: &Ctx, (base, files): (&str, &[String]), checking: &Checking) 
     .zip(CHECK_IDS)
     .enumerate()
     .map(|(index, ((title, detail), id))| {
-      let look = if index == 0 { first.clone() } else { Look::PENDING };
+      let look = if index == 0 { first.clone() } else { Look::pending() };
       check_row(id, look, (title, &detail), None)
     })
     .collect()
@@ -177,12 +177,12 @@ fn checks(ctx: &mut Ctx, view: &View<'_>, files: &[String]) -> Element {
       Text::new(&clock(at))
         .id("task-delivery-resolve-checks-at")
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     );
   outline("task-delivery-resolve-checks", CardSurface::Outline)
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
+    .gap(ExtraSpacing::Loose.role())
     .child(head)
     .child(Column::new().width(Dimension::Pct(100.0)).with_children(rows))
     .child(note)
@@ -217,11 +217,11 @@ fn working(ctx: &Ctx, at: Timestamp) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t_args("delivery.task.resolve.checking", [("time", clock(at))]))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
     .into()
 }
@@ -230,7 +230,7 @@ fn actions_note(text: &str) -> Element {
   Text::new(text)
     .id("task-delivery-resolve-note")
     .variant(ExtraTypography::Note.role())
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Pct(100.0))
     .into()
 }
@@ -256,7 +256,7 @@ fn card(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>) ->
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Warning))
     .rounded(RadiusSize::Lg)
     .child(
@@ -278,7 +278,7 @@ fn card(ctx: &mut Ctx, view: &View<'_>, worktree: &Path, back: &Signal<bool>) ->
             .child(
               Text::new(&body)
                 .variant(ExtraTypography::Prose.role())
-                .color(PaletteColor::TextSecondary)
+                .color(ExtraColor::TextSecondary.role())
                 .width(Dimension::Pct(100.0)),
             ),
         ),
@@ -316,10 +316,10 @@ fn path_box(ctx: &mut Ctx, worktree: &Path) -> Element {
     )
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::FolderGit2, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(Icon::FolderGit2, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       // A long path is cut at its end, so *Copy path* stays in the box.
       Text::new(&path)

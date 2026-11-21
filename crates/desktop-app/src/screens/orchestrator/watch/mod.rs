@@ -153,7 +153,7 @@ fn line_row(id: &str, outcome: &'static str, said: Said, end: Option<Element>) -
       Text::new(&said.words)
         .id(format!("{id}-words"))
         .variant(OrchestratorText::Line.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)

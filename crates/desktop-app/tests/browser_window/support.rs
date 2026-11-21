@@ -22,7 +22,7 @@ use lurq::{
 use orchester_app::{
   browser::{BrowserLink, BrowserRoot},
   test_support::Window,
-  ui::{clipboard::Clipboard, loader},
+  ui::clipboard::Clipboard,
 };
 use orchester_core::id::RunId;
 use orchester_ipc::browser::{BrowserEvent, BrowserMode, BrowserState, BrowserTab, BrowserTabId, TabOwner};
@@ -112,7 +112,6 @@ impl Browser {
     };
     browser.tree.set_scale_factor(scale);
     browser.tree.resize((1280.0 * scale) as u32, (800.0 * scale) as u32);
-    loader::install(&mut browser.tree);
     (browser, link)
   }
 

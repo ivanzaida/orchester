@@ -15,6 +15,7 @@ use lurq::{
   components::{Column, Row, Spacer},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::Length,
 };
 
 use super::{
@@ -189,7 +190,7 @@ pub(super) fn delivery(ctx: &mut Ctx) -> Element {
         .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
         .spacing(ExtraSpacing::Snug.role())
         .child(head)
-        .child(bone(1.0, METER_HEIGHT).width(Dimension::Pct(100.0)))
+        .child(bone(1.0, METER_HEIGHT).width(Length::Fill))
         .child(line(ctx, ExtraTypography::Note.role(), *forecast))
     })
     .collect();

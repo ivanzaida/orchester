@@ -1,6 +1,5 @@
 //! With reduced motion asked for, the typing dots stay as the design draws them (`Typing` `D231t`: 1, 0.6 and 0.3) and
-//! the window asks for no frames (ORC-963). Its own process: whether the operating system asks for reduced motion is
-//! kept once per process (`skeleton::hold_still`).
+//! the window asks for no frames (ORC-963): the theme's spin motion stands still where motion is reduced.
 
 use lurq::{
   app::{App, Tree, component::Component, ctx::Ctx},
@@ -10,12 +9,12 @@ use lurq::{
 };
 use orchester_app::{
   i18n,
-  theme::{self, Mode, REVIEW_TYPING_OPACITY},
-  ui::{
-    skeleton,
-    typing::{self, dots},
-  },
+  theme::{self, Mode},
+  ui::typing::dots,
 };
+
+/// The dots' opacities as the design draws them, from the first.
+const DRAWN: [f32; 3] = [1.0, 0.6, 0.3];
 
 struct Shown;
 
@@ -33,13 +32,12 @@ impl Component for Shown {
 
 #[test]
 fn typing_still_dots_keep_the_designs_opacities_and_ask_for_no_frames_with_reduced_motion() {
-  skeleton::hold_still(true);
   let mut app = App::new();
   theme::install(&mut app, Mode::Dark);
+  app.theme().set_reduced_motion(Some(true));
   i18n::install(&app).expect("bundled locales load");
   let mut tree = Tree::new();
   tree.resize(800, 600);
-  typing::install(&mut tree);
   tree.mount_root::<Shown>(&mut app, ());
   tree.pass_headless(&mut app);
   assert!(!tree.has_active_timeline(), "still dots ask for no frames");
@@ -51,8 +49,5 @@ fn typing_still_dots_keep_the_designs_opacities_and_ask_for_no_frames_with_reduc
     .map(|quad| (quad.x, quad.opacity))
     .collect();
   dots.sort_by(|a, b| a.0.total_cmp(&b.0));
-  assert_eq!(
-    dots.into_iter().map(|(_, opacity)| opacity).collect::<Vec<_>>(),
-    REVIEW_TYPING_OPACITY
-  );
+  assert_eq!(dots.into_iter().map(|(_, opacity)| opacity).collect::<Vec<_>>(), DRAWN);
 }

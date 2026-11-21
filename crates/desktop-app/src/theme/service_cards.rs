@@ -8,7 +8,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ServiceCardsText {
@@ -45,11 +48,11 @@ impl ServiceCardsText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Body => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
-      Self::Command => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::Detail => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::HolderKey => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
-      Self::Open => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
+      Self::Body => style(12.5, FontWeight::Normal, 1.5, 0.0, text_secondary(palette)),
+      Self::Command => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::Detail => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::HolderKey => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
+      Self::Open => style(12.0, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
     }
   }
 }

@@ -9,7 +9,7 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, SpacingSize},
+    theme::SpacingSize,
   },
   components::Row,
   layout::Alignment,
@@ -33,7 +33,7 @@ use crate::{
   queries::{self, Session, project},
   routes::{ConnectionsView, ProjectPage, Route},
   services::Services,
-  theme::{ExtraSpacing, IconSize, ProjectSettingsText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     github_mark::github_mark,
@@ -84,7 +84,7 @@ pub fn rows(ctx: &mut Ctx, props: &TabProps, save: &Save) -> Vec<Element> {
         let bone = Row::new()
           .spacing(ExtraSpacing::Pair.role())
           .align_items(Alignment::Center)
-          .child(github_mark(ctx, IconSize::Base, PaletteColor::TextSecondary))
+          .child(github_mark(ctx, IconSize::Base, ExtraColor::TextSecondary.role()))
           .child(skeleton::line(
             ctx,
             ProjectSettingsText::MonoValue.role(),
@@ -175,7 +175,7 @@ fn repository_row(
   let shown = Row::new()
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(github_mark(ctx, IconSize::Base, PaletteColor::TextSecondary))
+    .child(github_mark(ctx, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(mono_value("settings-github-repository", &repository))
     .child(again);
   SettingRow::new("settings-github-repo", ctx.t("project_settings.githubRepo"))

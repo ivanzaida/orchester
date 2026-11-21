@@ -1,39 +1,22 @@
 //! Controls that are on or off, beside an optional 12 `text_primary` label 8 from them; a press flips
-//! them. They are form controls: Tab reaches them and Enter or Space flips them.
-//! - Checkbox (`Checkbox/off` `q3JN1`, `Checkbox/on` `Una0j`): a 16 box, radius 4, `surface_input` in a `border_strong`
-//!   stroke; on, `accent` with a 12 `on_accent` check.
-//! - Radio (`Radio/off` `RchTU`, `Radio/on` `vsbEb`): a round 16 dot, `surface_input` in a `border_strong` stroke; on,
-//!   `accent` with a round 6 `on_accent` center.
-//! - Switch (`Switch/off` `H6LlDD`, `Switch/on` `XC5zU`): a round 28 × 16 track, 2 inside it, a round 12 knob; off,
-//!   `border_strong` with a `text_secondary` knob at the start; on, `accent` with an `on_accent` knob at the end.
+//! them. They are form controls: Tab reaches them and Enter or Space flips them. They are lurq's `ui::Checkbox`,
+//! `ui::Radio` and `ui::Switch` pressed as a whole, in the theme's recipes (`theme::kit::toggle`, which says how they
+//! look): `<id>` is the whole, `<id>-label` its label, and its mark `<id>-box` (a checkbox's, its check
+//! `<id>-indicator`), `<id>-mark` (a radio's, its dot `<id>-dot`) or `<id>-track` (a switch's, its thumb `<id>-thumb`).
 //!
-//! A control whose value is fixed is faded to half and cannot be flipped; the caller says why. One settled by an
-//! earlier step, which a review only lists, keeps its full strength.
+//! A control whose value is fixed is faded and cannot be flipped; the caller says why. One settled by an earlier
+//! step, which a review only lists, keeps its full strength.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  components::{Button, Row, Text},
+  app::theme::TypographyStyle,
   core::ElementRef,
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, border::Border, dimension::Dimension},
+  node::Element,
+  ui::{Checkbox, Radio, Recipe, Styled, Switch},
 };
 
-use super::{
-  icon::{Icon, icon},
-  pressable::{Focus, inert, pressable},
-};
-use crate::theme::{DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, IconSize};
-
-/// A checkbox's box and a radio's dot (`ZZTTi`, `d4Pkdw`).
-const MARK_SIZE: f32 = 16.0;
-/// A radio's center (`usaPb`).
-const RADIO_CENTER: f32 = 6.0;
-/// A switch's track and knob (`H6LlDD`, `dY0v7`).
-const TRACK_WIDTH: f32 = 28.0;
-const TRACK_HEIGHT: f32 = 16.0;
-const KNOB_SIZE: f32 = 12.0;
+use crate::theme::kit::toggle::{PLAIN_LABEL, RING_ROOM, SETTLED};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToggleKind {
@@ -135,132 +118,97 @@ impl Toggle {
     self.ring_room = true;
     self
   }
-
-  fn mark(&self) -> Row {
-    let round = ExtraRadius::Full.role();
-    let square = |size: f32| {
-      Row::new()
-        .width(Dimension::Px(size))
-        .height(Dimension::Px(size))
-        .align_items(Alignment::Center)
-        .justify(Justify::Center)
-    };
-    let off = |shape: Row| {
-      shape
-        .background(PaletteColor::SurfaceInput)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-    };
-    match (self.kind, self.on) {
-      (ToggleKind::Checkbox, on) => check_mark(on),
-      (ToggleKind::Radio, false) => off(square(MARK_SIZE)).rounded(round),
-      (ToggleKind::Radio, true) => square(MARK_SIZE).rounded(round).background(PaletteColor::Accent).child(
-        square(RADIO_CENTER)
-          .rounded(round)
-          .background(ExtraColor::OnAccent.role()),
-      ),
-      (ToggleKind::Switch, on) => {
-        let (track, knob, side) = if on {
-          (PaletteColor::Accent, ExtraColor::OnAccent.role(), Justify::End)
-        } else {
-          (PaletteColor::BorderStrong, PaletteColor::TextSecondary, Justify::Start)
-        };
-        Row::new()
-          .width(Dimension::Px(TRACK_WIDTH))
-          .height(Dimension::Px(TRACK_HEIGHT))
-          .padding(ExtraSpacing::Tight.role())
-          .align_items(Alignment::Center)
-          .justify(side)
-          .rounded(round)
-          .background(track)
-          .child(
-            square(KNOB_SIZE)
-              .rounded(round)
-              .background(knob)
-              .id(format!("{}-knob", self.id)),
-          )
-      }
-    }
-  }
 }
 
 /// A checkbox's mark alone (`Checkbox/off` `q3JN1`, `Checkbox/on` `Una0j`), for a row that is pressed as a
-/// whole, e.g. a filter's option.
-pub fn check_mark(on: bool) -> Row {
-  let mark = Row::new()
-    .width(Dimension::Px(MARK_SIZE))
-    .height(Dimension::Px(MARK_SIZE))
-    .flex_shrink(0.0)
-    .align_items(Alignment::Center)
-    .justify(Justify::Center)
-    .rounded(RadiusSize::Sm);
-  if on {
-    mark
-      .background(PaletteColor::Accent)
-      .child(icon(Icon::Check, IconSize::Sm, ExtraColor::OnAccent.role()))
-  } else {
-    mark
-      .background(PaletteColor::SurfaceInput)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-  }
+/// whole, e.g. a filter's option: no press, no focus and hidden from tools, the row saying it is checked.
+pub fn check_mark(on: bool) -> Element {
+  Checkbox::new("").checked(on).mark_only(true).into()
 }
 
 /// A radio's mark alone (`Radio/off` `RchTU`, `Radio/on` `vsbEb`), for a row that is pressed as a whole, e.g. a
 /// choice among grouped rows (`Y5K4K` in `Wq6tZ`).
-pub fn radio_mark(on: bool) -> Row {
-  Toggle::new("radio", ToggleKind::Radio, on, "").mark().flex_shrink(0.0)
+pub fn radio_mark(on: bool) -> Element {
+  Radio::new("").selected(on).mark_only(true).into()
+}
+
+/// What every control says of itself to tools, and the states the recipe draws it in.
+fn styled<T: Styled>(control: T, toggle: &Toggle) -> T {
+  let fixed = toggle.change.is_none();
+  control
+    .state(SETTLED, toggle.settled)
+    .state(PLAIN_LABEL, toggle.label_style.is_none())
+    .state(RING_ROOM, toggle.ring_room)
+    .rules(&label_rules(toggle.label_style))
+    .describe("kind", toggle.kind.name())
+    .describe("checked", if toggle.on { "true" } else { "false" })
+    .describe("state", if fixed { "fixed" } else { "enabled" })
+}
+
+/// The caller's style of the label, in its own color.
+fn label_rules(style: Option<TypographyStyle>) -> Recipe {
+  match style {
+    Some(style) => Recipe::new().base("label", |part| part.typography(style)),
+    None => Recipe::new(),
+  }
 }
 
 impl From<Toggle> for Element {
-  fn from(toggle: Toggle) -> Self {
-    let mark = toggle.mark().id(format!("{}-mark", toggle.id));
-    let label = toggle.label_shown.then(|| {
-      let label = Text::new(&toggle.label).id(format!("{}-label", toggle.id));
-      let label = match toggle.label_style {
-        Some(style) => label.variant(style),
-        None => label
-          .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary),
-      };
-      if toggle.wrap_label {
-        label.flex(1.0).min_width(Dimension::Px(0.0))
-      } else {
-        label.nowrap()
+  fn from(mut toggle: Toggle) -> Self {
+    let change = toggle.change.take();
+    let disabled = change.is_none();
+    let wanted = move |value: bool| {
+      if let Some(change) = &change {
+        change(value);
       }
-    });
-    let wraps = toggle.wrap_label;
-    let wanted = toggle.kind == ToggleKind::Radio || !toggle.on;
-    let button = match toggle.change {
-      Some(change) => Focus::Keyboard
-        .apply(pressable(move || change(wanted)))
-        .describe("state", "enabled"),
-      None if toggle.settled => inert(Button::empty()).describe("state", "fixed"),
-      None => inert(Button::empty())
-        .opacity(DISABLED_OPACITY)
-        .describe("state", "fixed"),
     };
-    let button = match toggle.element {
-      Some(element) => button.ref_element(element),
-      None => button,
-    };
-    let button = if toggle.ring_room {
-      button.padding_right(ExtraSpacing::Snug.role())
-    } else {
-      button
-    };
-    let button = if wraps {
-      button.width(Dimension::Pct(100.0)).align_items(Alignment::Start)
-    } else {
-      button.align_items(Alignment::Center)
-    };
-    button
-      .id(toggle.id)
-      .spacing(SpacingSize::Sm)
-      .rounded(RadiusSize::Sm)
-      .describe("kind", toggle.kind.name())
-      .describe("a11y_name", toggle.label.clone())
-      .describe("checked", if toggle.on { "true" } else { "false" })
-      .child(mark)
-      .with_children(label)
-      .into()
+    let element = toggle.element.take();
+    let label = toggle.label.clone();
+    let id = toggle.id.clone();
+    let hidden = !toggle.label_shown;
+    match toggle.kind {
+      ToggleKind::Checkbox => {
+        let mut control = Checkbox::new(&label)
+          .checked(toggle.on)
+          .label_wraps(toggle.wrap_label)
+          .whole(true)
+          .label_hidden(hidden)
+          .disabled(disabled)
+          .on_change(wanted)
+          .id(id);
+        if let Some(element) = element {
+          control = control.element_ref(element);
+        }
+        styled(control, &toggle).into()
+      }
+      ToggleKind::Radio => {
+        let mut control = Radio::new(&label)
+          .selected(toggle.on)
+          .label_wraps(toggle.wrap_label)
+          .whole(true)
+          .label_hidden(hidden)
+          .disabled(disabled)
+          .on_change(wanted)
+          .id(id);
+        if let Some(element) = element {
+          control = control.element_ref(element);
+        }
+        styled(control, &toggle).into()
+      }
+      ToggleKind::Switch => {
+        let mut control = Switch::new(&label)
+          .on(toggle.on)
+          .label_wraps(toggle.wrap_label)
+          .whole(true)
+          .label_hidden(hidden)
+          .disabled(disabled)
+          .on_change(wanted)
+          .id(id);
+        if let Some(element) = element {
+          control = control.element_ref(element);
+        }
+        styled(control, &toggle).into()
+      }
+    }
   }
 }

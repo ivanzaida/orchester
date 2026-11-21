@@ -249,7 +249,7 @@ impl Component for ConsentRow {
     } else {
       switch.into()
     };
-    let row = SettingRow::new(id, title)
+    let row = SettingRow::new(format!("{id}-row"), title)
       .info(ctx.t(words.description))
       .control(control)
       .below_all(below);

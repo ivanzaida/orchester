@@ -12,7 +12,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
     events::KeyboardEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, TextInput},
   core::{ElementRef, Signal},
@@ -30,7 +30,7 @@ use super::actions::BoardState;
 use crate::{
   project::ShownProject,
   services::Services,
-  theme::{DISABLED_OPACITY, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TextRole},
   ui::{
     field::field_error,
     icon::{Icon, icon},
@@ -138,8 +138,8 @@ impl QuickAdd {
       .map(|error| message_text(ctx, &error))
       .or_else(|| self.invalid.get());
     let theme = ctx.theme();
-    let [typed, placeholder] = [PaletteColor::TextPrimary, PaletteColor::TextMuted].map(|color| {
-      FormTextRole {
+    let [typed, placeholder] = [PaletteColor::Foreground, PaletteColor::MutedForeground].map(|color| {
+      TextRole {
         typography: ExtraTypography::Strong.role(),
         color,
       }
@@ -152,7 +152,7 @@ impl QuickAdd {
       .describe("a11y_name", ctx.t("tasks.board.quickAdd.label"))
       .width(Dimension::Pct(100.0))
       .height(Dimension::Px(FIELD_HEIGHT))
-      .caret_color(PaletteColor::TextPrimary)
+      .caret_color(PaletteColor::Foreground)
       .ref_element(self.input.clone())
       .single_line();
     let keys = Row::new()
@@ -179,8 +179,8 @@ impl QuickAdd {
       .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
       .spacing(SpacingSize::Sm)
       .rounded(RadiusSize::Md)
-      .background(PaletteColor::SurfaceInput)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+      .background(ExtraColor::InputSurface.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Ring))
       .on_key_down(move |event: KeyboardEvent| match event.key.as_str() {
         "Enter" if event.text_input_focused => {
           event.prevent_default();
@@ -232,11 +232,11 @@ fn foot(ctx: &Ctx, open: Result<Arc<dyn Fn() + Send + Sync>, Arc<str>>) -> Eleme
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .rounded(RadiusSize::Md)
-      .child(icon(Icon::Plus, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Plus, IconSize::Base, PaletteColor::MutedForeground))
       .child(
         Text::new(&ctx.t("tasks.newTask"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
   };

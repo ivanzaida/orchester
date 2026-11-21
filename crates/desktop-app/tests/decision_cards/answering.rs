@@ -59,7 +59,7 @@ fn card_approval_waiting_shows_the_request_whole_and_every_answer() {
     text(&mut window, &format!("{card}-hold-cause")),
     "Auto mode didn’t review this: the step’s network is off, and this command may reach it or install."
   );
-  let agent = text(&mut window, &format!("{card}-agent"));
+  let agent = text(&mut window, &format!("{card}-agent-value"));
   assert!(agent.starts_with("Builder · 03 Implement · Run "), "{agent}");
   assert!(text(&mut window, &format!("{card}-note")).contains("The step needs it to go on."));
   // The static seed has no agent connection, so the words are Orchester's, not Codex's own.

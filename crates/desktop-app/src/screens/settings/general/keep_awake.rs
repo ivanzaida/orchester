@@ -90,7 +90,7 @@ impl Component for KeepAwakeRow {
       }
     };
     let problem = problem(ctx, (&read.error, &state.error));
-    SettingRow::new(ID, ctx.t("settings.general.work.keepAwake.label"))
+    SettingRow::new(format!("{ID}-row"), ctx.t("settings.general.work.keepAwake.label"))
       .hint(ctx.t("settings.general.work.keepAwake.hint"))
       .control(control)
       .below_all(problem)

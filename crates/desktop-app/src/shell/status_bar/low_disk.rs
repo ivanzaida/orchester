@@ -69,7 +69,7 @@ pub fn item(ctx: &mut Ctx, project: ProjectId, disk: &storage::Disk, dispatch: &
     "status-low-disk",
     go(dispatch, Route::Project(project, ProjectPage::Storage)),
   )
-  .background(PaletteColor::SurfaceRaised)
+  .background(PaletteColor::Card)
   .flex_shrink(1.0)
   .shrink_order(give_way::ACTIVITY)
   .shrink_limit(ShrinkLimit::Content)

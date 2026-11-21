@@ -11,12 +11,12 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_app::{
-  theme::ExtraTypography,
+  theme::{ExtraColor, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
     chip::TagChip,
-    code_box::{CodeBox, Copier},
+    code_box::CodeBox,
     detail_row::{DetailValue, detail_row},
     icon::Icon,
     markdown::MarkdownView,
@@ -96,22 +96,13 @@ pub fn section(ctx: &mut Ctx, state: &State) -> Element {
       wide_cell(
         "Command · MOPAN",
         HALF,
-        CodeBox::new("g-command", "Command", "cargo add backoff@0.4 --features tokio")
-          // The gallery leaves the person's clipboard alone: it says what Copy would put there.
-          .copy_with(Copier::other({
-            let pressed = state.pressed.clone();
-            move |text: &str| {
-              pressed.set(format!("copy {text}"));
-              true
-            }
-          }))
-          .render(ctx),
+        CodeBox::new("g-command", "Command", "cargo add backoff@0.4 --features tokio").render(ctx),
       ),
       wide_cell(
         "Markdown · plan text (Q5J0r)",
         HALF,
         MarkdownView::new("g-markdown", PLAN, state.link.clone())
-          .style(ExtraTypography::Lead.role(), PaletteColor::TextSecondary)
+          .style(ExtraTypography::Lead.role(), ExtraColor::TextSecondary.role())
           .render(ctx),
       ),
     ])
@@ -153,10 +144,10 @@ fn notices(state: &State) -> Column {
 
 fn cards() -> Row {
   let sample = |id: &str, surface: CardSurface, title: &str| {
-    card(id, surface).width(Dimension::Px(200.0)).child(
+    card(id, surface).width(200.0).child(
       Text::new(title)
         .variant(ExtraTypography::Strong.role())
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
   };
   Row::new()

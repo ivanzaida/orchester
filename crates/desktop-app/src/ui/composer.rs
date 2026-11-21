@@ -20,7 +20,7 @@ use super::{
   icon::{Icon, icon},
   tooltip::Tooltip,
 };
-use crate::theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize};
+use crate::theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize};
 
 /// The recipient pill (`Recipient` `AOjdU`): who gets the message and what it does with it, 24 high, `surface_raised`
 /// in a `border` stroke, radius 6, a 12 glyph and the words in 11.5 `text_secondary`, 5 apart, 8 in from its sides;
@@ -35,21 +35,21 @@ pub fn recipient_pill(ctx: &mut Ctx, (words, glyph): (&str, Icon), fixed: Option
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Sm, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(words)
         .id("composer-recipient-text")
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .with_children(
       fixed
         .is_some()
-        .then(|| icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted)),
+        .then(|| icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground)),
     );
   match fixed {
     Some(reason) => Tooltip::new("composer-recipient", reason.clone()).wrap(ctx, pill.describe("reason", reason)),

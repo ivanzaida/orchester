@@ -67,14 +67,14 @@ pub(crate) fn agent_row(row: AgentRow<'_>) -> Element {
       Text::new(&version)
         .id(format!("{id}-version"))
         .variant(HubText::RowLine.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex_shrink(0.0)
         .nowrap()
     }));
   if row.chosen {
     button
       .background(ExtraColor::Hover.role())
-      .border_left(Border::inside(BorderSize::Md, PaletteColor::Accent))
+      .border_left(Border::inside(BorderSize::Md, PaletteColor::Primary))
       .into()
   } else {
     button
@@ -119,7 +119,7 @@ pub(crate) fn tag_chip(id: &str, words: &str) -> Row {
 
 /// A tag added in an edit that is not saved yet: the `accent` outline until Save (A26 `WSw0W`).
 pub(crate) fn added_tag_chip(id: &str, words: &str) -> Row {
-  tag_in(id, words, PaletteColor::Accent).describe("added", "true")
+  tag_in(id, words, PaletteColor::Primary).describe("added", "true")
 }
 
 fn tag_in(id: &str, words: &str, outline: PaletteColor) -> Row {
@@ -128,7 +128,7 @@ fn tag_in(id: &str, words: &str, outline: PaletteColor) -> Row {
     .height(Dimension::Px(TAG_HEIGHT))
     .padding(Padding::horizontal(ExtraSpacing::Snug.role()))
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, outline))
     .rounded(RadiusSize::Sm)
     .child(

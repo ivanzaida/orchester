@@ -244,7 +244,7 @@ fn note(ctx: &Ctx) -> Row {
     .padding(Padding::all(ExtraSpacing::Tight.role()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("project_settings.memoryNote"))
         .id("settings-memory-note-text")

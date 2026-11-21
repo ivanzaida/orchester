@@ -7,7 +7,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::TextInputEvent,
-    theme::{FormTextRole, PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, TextInput},
   core::{ElementRef, Signal},
@@ -16,7 +16,7 @@ use lurq::{
 
 use super::state::View;
 use crate::{
-  theme::{ExtraSpacing, TaskFormText},
+  theme::{ExtraColor, ExtraSpacing, TaskFormText, TextRole},
   ui::{field::field_error, message::message_text},
 };
 
@@ -38,8 +38,8 @@ pub(in crate::screens) fn text_styles(
   color: PaletteColor,
 ) -> [lurq::layout::text_style::TextStyle; 2] {
   let theme = ctx.theme();
-  [color, PaletteColor::TextMuted]
-    .map(|color| FormTextRole { typography, color }.resolve(&theme.typography(), &theme.palette()))
+  [color, PaletteColor::MutedForeground]
+    .map(|color| TextRole { typography, color }.resolve(&theme.typography(), &theme.palette()))
 }
 
 /// `input` that takes no input while the form is `locked`.
@@ -54,7 +54,7 @@ fn locking(input: TextInput, locked: bool) -> TextInput {
 }
 
 pub fn title(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
-  let [text, placeholder] = text_styles(ctx, TaskFormText::Title.role(), PaletteColor::TextPrimary);
+  let [text, placeholder] = text_styles(ctx, TaskFormText::Title.role(), PaletteColor::Foreground);
   let name = ctx.t("task_form.fields.title.label");
   let input = TextInput::styled(fields.title.clone(), text)
     .placeholder_style(placeholder)
@@ -62,7 +62,7 @@ pub fn title(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
     .id("task-form-title-input")
     .describe("a11y_name", name)
     .width(Dimension::Pct(100.0))
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .ref_element(fields.title_input.clone());
   // An empty title is said in the action bar; a title the workspace refuses, here.
   let error = view
@@ -81,7 +81,7 @@ pub fn title(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
 }
 
 pub fn outcome(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element {
-  let [text, placeholder] = text_styles(ctx, TaskFormText::Outcome.role(), PaletteColor::TextSecondary);
+  let [text, placeholder] = text_styles(ctx, TaskFormText::Outcome.role(), ExtraColor::TextSecondary.role());
   let name = ctx.t("task_form.fields.brief.label");
   let input = TextInput::styled(fields.brief.clone(), text)
     .placeholder_style(placeholder)
@@ -91,7 +91,7 @@ pub fn outcome(ctx: &mut Ctx, view: &View, fields: &BriefFields<'_>) -> Element 
     .textarea()
     .rows(1, OUTCOME_MAX_LINES)
     .width(Dimension::Pct(100.0))
-    .caret_color(PaletteColor::TextPrimary);
+    .caret_color(PaletteColor::Foreground);
   Column::new()
     .id("task-form-brief-field")
     .width(Dimension::Pct(100.0))

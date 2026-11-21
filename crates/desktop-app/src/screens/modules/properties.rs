@@ -140,7 +140,7 @@ impl Component for ModuleProperties {
         Text::new(&created)
           .id("module-property-created-value")
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .into(),
         None,
       ))
@@ -163,17 +163,17 @@ impl ModuleProperties {
           .rounded(ExtraRadius::Full.role())
           .background(match state {
             ModuleState::Open => PaletteColor::Success,
-            ModuleState::Closed => PaletteColor::TextMuted,
+            ModuleState::Closed => PaletteColor::MutedForeground,
           }),
       )
       .child(
         Text::new(&words::state(ctx, state))
           .id("module-property-state-value")
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary),
+          .color(PaletteColor::Foreground),
       );
     let panel = self.state.open.get().then(|| {
-      let rows: Vec<Element> = [ModuleState::Open, ModuleState::Closed]
+      let rows: Vec<_> = [ModuleState::Open, ModuleState::Closed]
         .into_iter()
         .map(|choice| {
           let (save, invalid, props) = (self.save.clone(), self.invalid.clone(), props.clone());
@@ -186,14 +186,14 @@ impl ModuleProperties {
             run(&save, &invalid, args);
           })
           .chosen(choice == state)
-          .render(ctx, &self.state.open)
+          .render(ctx)
         })
         .collect();
       menu(
         self.state.anchor.clone(),
         self.state.open.clone(),
         menu_panel("module-property-state-menu")
-          .width(Dimension::Px(MENU_WIDTH))
+          .width(MENU_WIDTH)
           .with_children(rows),
       )
     });
@@ -290,7 +290,7 @@ fn own_rows(ctx: &Ctx, props: &PropertiesProps) -> Vec<Element> {
     } else {
       TypographyStyle::Description
     };
-    text.variant(style).color(PaletteColor::TextPrimary).into()
+    text.variant(style).color(PaletteColor::Foreground).into()
   };
   let acceptance = props
     .acceptance
@@ -373,8 +373,8 @@ fn run(
 
 pub(super) fn date_value(ctx: &Ctx, id: &str, day_set: Option<NaiveDate>) -> Element {
   let (words, color) = match day_set {
-    Some(date) => (day(ctx, date), PaletteColor::TextPrimary),
-    None => (ctx.t("modules.properties.notSet"), PaletteColor::TextMuted),
+    Some(date) => (day(ctx, date), PaletteColor::Foreground),
+    None => (ctx.t("modules.properties.notSet"), PaletteColor::MutedForeground),
   };
   Text::new(&words)
     .id(format!("{id}-value"))
@@ -397,7 +397,7 @@ fn opener((id, key): (&str, &str), value: Element, control: &Control) -> Element
   } else {
     row
   };
-  let chevron = open.then(|| icon(Icon::ChevronUp, IconSize::Sm, PaletteColor::TextMuted));
+  let chevron = open.then(|| icon(Icon::ChevronUp, IconSize::Sm, PaletteColor::MutedForeground));
   property((id, key), value, Some((row, chevron)))
 }
 
@@ -431,7 +431,7 @@ pub(super) fn property(
   let key = Text::new(key)
     .id(format!("{id}-key"))
     .variant(TypographyStyle::Description)
-    .color(PaletteColor::TextMuted)
+    .color(PaletteColor::MutedForeground)
     .width(Dimension::Px(KEY_WIDTH))
     .flex_shrink(0.0);
   let value = Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(value);

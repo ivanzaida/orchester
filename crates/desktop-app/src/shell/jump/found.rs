@@ -21,6 +21,7 @@ use crate::{
   },
   screens::{hub::HubTab, tasks::phrases},
   shell::sidebar::place::Place,
+  theme::ExtraColor,
   ui::icon::{Icon, screen_icon},
 };
 
@@ -175,7 +176,7 @@ fn matching(group: Group, entries: Vec<Entry>, query: &str, shown: usize) -> imp
       group,
       id: entry.id,
       icon: entry.icon,
-      tone: PaletteColor::TextSecondary,
+      tone: ExtraColor::TextSecondary.role(),
       label: entry.label,
       hint: None,
       keys: entry.keys,

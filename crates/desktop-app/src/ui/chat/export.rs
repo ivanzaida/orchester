@@ -366,9 +366,9 @@ fn file(ctx: &mut Ctx, id: &str, (source, include): (&Source, Include)) -> Colum
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::FileText, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::FileText, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&source.file_name)
         .id(format!("{id}-file-name"))

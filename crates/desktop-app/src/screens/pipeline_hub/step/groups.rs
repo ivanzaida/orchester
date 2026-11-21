@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
+  app::ctx::Ctx,
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
@@ -27,7 +27,7 @@ use crate::{
     },
     team_hub::rows::{self, Sub},
   },
-  theme::{ExtraSpacing, HubText},
+  theme::{ExtraColor, ExtraSpacing, HubText},
 };
 
 /// *Step*: *Agent* and *Instructions*; a tool that cannot run here says why in place of *Instructions*.
@@ -274,7 +274,7 @@ fn stopped_row(ctx: &Ctx) -> lurq::components::Row {
       Text::new(&ctx.t("pipeline_hub.settings.failureValue"))
         .id("pipeline-hub-step-stopped")
         .variant(HubText::Value.role())
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     );
   rows::row(
     "pipeline-hub-step-stopped-row",

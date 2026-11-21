@@ -40,7 +40,7 @@ impl Tone {
     match self {
       Self::Success => PaletteColor::Success,
       Self::Warning => PaletteColor::Warning,
-      Self::Muted => PaletteColor::TextMuted,
+      Self::Muted => PaletteColor::MutedForeground,
     }
   }
 }
@@ -99,7 +99,7 @@ pub(crate) fn boxed(id: &str, rows: impl IntoIterator<Item = Element>) -> Column
 
 /// A tile with `glyph`, 28 beside a list row's label or 36 in a page head.
 pub(crate) fn tile(glyph: Icon, page: bool) -> Row {
-  tile_in(glyph, page, PaletteColor::TextSecondary)
+  tile_in(glyph, page, ExtraColor::TextSecondary.role())
 }
 
 /// [`tile`] with its glyph in `color`, e.g. an import result's check in `success` (`zEejx` in 03c).
@@ -111,7 +111,7 @@ fn tile_in(glyph: Icon, page: bool, color: PaletteColor) -> Row {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .rounded(RadiusSize::Md)
     .child(icon(glyph, if page { IconSize::Xl } else { IconSize::Md }, color))
@@ -133,8 +133,8 @@ pub(crate) fn sub_head(id: &str, label: &str, count: Option<&str>, step: bool) -
     )
     .spacing(lurq::app::theme::SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
-    .with_children(step.then(|| icon(Icon::CornerDownRight, IconSize::Sm, PaletteColor::TextMuted)))
+    .background(PaletteColor::Card)
+    .with_children(step.then(|| icon(Icon::CornerDownRight, IconSize::Sm, PaletteColor::MutedForeground)))
     .child(
       Text::new(label)
         .id(format!("{id}-label"))
@@ -292,7 +292,7 @@ impl From<Entry> for Element {
       .with_children(entry.tile.map(|glyph| tile(glyph, false)))
       .child(text)
       .with_children(entry.end)
-      .with_children(opens.map(|glyph| icon(glyph, IconSize::Md, PaletteColor::TextMuted)));
+      .with_children(opens.map(|glyph| icon(glyph, IconSize::Md, PaletteColor::MutedForeground)));
     let row = if entry.chosen {
       row.background(ExtraColor::Hover.role())
     } else {
@@ -369,7 +369,7 @@ pub(crate) fn note(id: &str, glyph: Icon, text: &str) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(lurq::app::theme::SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(text)
         .id(format!("{id}-text"))

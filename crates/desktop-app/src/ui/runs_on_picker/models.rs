@@ -12,7 +12,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::{TextInputEvent, mouse_event::MouseEvent},
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Button, Column, Row, ScrollVertical, Text, TextInput, TextOverflow},
   core::{ElementRef, Signal},
@@ -22,7 +22,7 @@ use lurq::{
 
 use super::model::{LIST_ROWS, Model};
 use crate::{
-  theme::{ControlHeight, ExtraColor, ExtraShadow, ExtraSpacing, IconSize, runs_on_picker_scrollbar},
+  theme::{ControlHeight, ExtraColor, ExtraShadow, ExtraSpacing, IconSize, TextRole, runs_on_picker_scrollbar},
   ui::{
     icon::{Icon, icon},
     pressable::pressable,
@@ -72,13 +72,16 @@ pub(super) struct SearchBox {
 pub(crate) fn input_styles(ctx: &Ctx) -> (TextStyle, TextStyle) {
   let theme = ctx.theme();
   let resolve = |color| {
-    FormTextRole {
+    TextRole {
       typography: TypographyStyle::Description,
       color,
     }
     .resolve(&theme.typography(), &theme.palette())
   };
-  (resolve(PaletteColor::TextPrimary), resolve(PaletteColor::TextMuted))
+  (
+    resolve(PaletteColor::Foreground),
+    resolve(PaletteColor::MutedForeground),
+  )
 }
 
 /// Search, named `id`; with `own_model` it says a model of the person's own can be typed too.
@@ -92,7 +95,7 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox, own_model: boo
   let typed = search.typed.clone();
   let input = TextInput::styled(search.query.clone(), typed_style)
     .placeholder_style(placeholder_style)
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .id(format!("{id}-search"))
     .describe("a11y_name", words.clone())
     .placeholder(&words)
@@ -115,7 +118,7 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox, own_model: boo
         query.set(String::new());
         typed();
       })
-      .child(icon(Icon::X, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::X, IconSize::Base, PaletteColor::MutedForeground))
   });
   let line = || Border::inside(BorderSize::Sm, PaletteColor::Border);
   Row::new()
@@ -127,7 +130,7 @@ pub(super) fn search(ctx: &mut Ctx, id: &str, search: &SearchBox, own_model: boo
     .align_items(Alignment::Center)
     .border_top(line())
     .border_bottom(line())
-    .child(icon(Icon::Search, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Search, IconSize::Base, PaletteColor::MutedForeground))
     .child(input)
     .with_children(clear)
     .into()
@@ -211,13 +214,13 @@ fn row(
     .child(
       Text::new(words)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     )
-    .with_children(chosen.then(|| icon(Icon::Check, IconSize::Base, PaletteColor::TextPrimary)));
+    .with_children(chosen.then(|| icon(Icon::Check, IconSize::Base, PaletteColor::Foreground)));
   match (current, ringed) {
     (true, true) => row
       .background(ExtraColor::Hover.role())

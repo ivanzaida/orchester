@@ -157,7 +157,7 @@ impl OptionCard {
 
   fn dot(&self) -> Element {
     if matches!(self.choice, Choice::Unavailable(_)) {
-      return icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).into();
+      return icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground).into();
     }
     let dot = Row::new()
       .width(Dimension::Px(DOT_SIZE))
@@ -167,7 +167,7 @@ impl OptionCard {
       .justify(Justify::Center);
     if self.chosen {
       return dot
-        .background(PaletteColor::Accent)
+        .background(PaletteColor::Primary)
         .child(
           Row::new()
             .width(Dimension::Px(DOT_CENTER))
@@ -178,8 +178,8 @@ impl OptionCard {
         .into();
     }
     dot
-      .background(PaletteColor::SurfaceInput)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(ExtraColor::InputSurface.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .into()
   }
 }
@@ -188,25 +188,25 @@ impl OptionCard {
   /// The card as drawn, and how it can be chosen.
   fn frame(mut self) -> (Button, Choice) {
     let glyph = if self.chosen {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     };
     let reason = match &self.choice {
       Choice::Unavailable(reason) => Some(
         Text::new(reason)
           .id(format!("{}-reason", self.id))
           .variant(ExtraTypography::Prose.role())
-          .color(PaletteColor::TextMuted),
+          .color(PaletteColor::MutedForeground),
       ),
       Choice::Choose(_) | Choice::Waiting => None,
     };
     let mark = self.mark.take();
     let text = self.text(glyph, mark).with_children(reason);
     let (fill, stroke) = if self.chosen {
-      (PaletteColor::SurfaceRaised, PaletteColor::Accent)
+      (PaletteColor::Card, PaletteColor::Primary)
     } else {
-      (PaletteColor::SurfaceInput, PaletteColor::Border)
+      (ExtraColor::InputSurface.role(), PaletteColor::Border)
     };
     let frame = Button::empty()
       .id(self.id.clone())
@@ -234,7 +234,7 @@ impl OptionCard {
     let lead = self
       .mark
       .take()
-      .unwrap_or_else(|| icon(self.icon, IconSize::Md, PaletteColor::TextPrimary).into());
+      .unwrap_or_else(|| icon(self.icon, IconSize::Md, PaletteColor::Foreground).into());
     let locked = matches!(self.choice, Choice::Unavailable(_));
     let head = Row::new()
       .width(Dimension::Pct(100.0))
@@ -249,7 +249,7 @@ impl OptionCard {
           .min_width(Dimension::Px(0.0))
           .nowrap(),
       )
-      .with_children(locked.then(|| icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted)));
+      .with_children(locked.then(|| icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground)));
     // The short line stays on one line, as drawn (`u8crY` in 10c); a little wider than the room it reaches into the
     // card's padding.
     let text = Column::new()
@@ -264,7 +264,7 @@ impl OptionCard {
           .nowrap(),
       );
     let stroke = if self.chosen {
-      PaletteColor::Accent
+      PaletteColor::Primary
     } else {
       PaletteColor::Border
     };
@@ -280,7 +280,7 @@ impl OptionCard {
       .describe("a11y_name", self.title.clone())
       .child(text);
     let frame = if self.chosen {
-      frame.background(PaletteColor::SurfaceRaised)
+      frame.background(PaletteColor::Card)
     } else {
       frame
     };

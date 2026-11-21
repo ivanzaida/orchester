@@ -96,7 +96,7 @@ pub fn count(ctx: &mut Ctx, task: &TaskContext) -> Option<(usize, Option<Palette
   }
   let states = || services.iter().map(|service| service.state);
   let dot = if states().any(|state| matches!(state, RunServiceState::Crashed { .. })) {
-    Some(PaletteColor::Danger)
+    Some(PaletteColor::Destructive)
   } else if states().any(|state| state == RunServiceState::Starting) {
     Some(PaletteColor::Info)
   } else if states().all(|state| state == RunServiceState::Ready) {

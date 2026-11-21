@@ -83,7 +83,7 @@ fn invite_landing_signed_in_without_a_code_asks_to_sign_in_again() {
   );
   assert_eq!(window.text(&format!("{AGAIN}-title")), "Sign in again to accept");
   assert_eq!(
-    window.text(&format!("{AGAIN}-body")),
+    window.text(&format!("{AGAIN}-description")),
     "This computer signed in before you turned on two-factor. Accepting needs a sign-in with your code."
   );
   assert_eq!(

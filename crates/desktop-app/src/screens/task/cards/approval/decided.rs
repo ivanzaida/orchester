@@ -21,7 +21,7 @@ use orchester_core::{
 use orchester_workspace::display;
 
 use crate::{
-  theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{CardsText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -56,7 +56,7 @@ pub(super) fn row(ctx: &Ctx, id: &str, request: &PendingToolApproval, decided: &
     ))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(icon(glyph, IconSize::Md, color))
@@ -98,7 +98,7 @@ fn note(ctx: &Ctx, id: &str, decided: &Decided) -> Option<Element> {
     Text::new(&ctx.t_args(key, [("message", &**note)]))
       .id(format!("{id}-note"))
       .variant(TypographyStyle::Caption)
-      .color(PaletteColor::TextPrimary)
+      .color(PaletteColor::Foreground)
       .selectable(true)
       .width(Dimension::Pct(100.0))
       .into(),
@@ -122,14 +122,14 @@ fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, P
     Decided::AnsweredAlready => {
       return (
         Icon::CircleCheck,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
         ctx.t("cards.approval.decided.answered"),
       );
     }
     Decided::Lost => {
       return (
         Icon::CirclePause,
-        PaletteColor::TextMuted,
+        PaletteColor::MutedForeground,
         ctx.t_args("cards.approval.decided.lost", [("agent", request.agent.as_str())]),
       );
     }
@@ -142,7 +142,7 @@ fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, P
   match decision {
     None => (
       Icon::ClockAlert,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       words("cards.approval.decided.ended"),
     ),
     Some(ToolApprovalDecision::Denied) => {
@@ -152,7 +152,7 @@ fn said(ctx: &Ctx, request: &PendingToolApproval, decided: &Decided) -> (Icon, P
         // Decided before who answered was recorded.
         None => "cards.approval.decided.deniedAt",
       };
-      (Icon::Ban, PaletteColor::TextSecondary, words(key))
+      (Icon::Ban, ExtraColor::TextSecondary.role(), words(key))
     }
     Some(ToolApprovalDecision::Approved) => {
       let key = match by {
@@ -179,12 +179,12 @@ fn untimed(
   match decision {
     None => (
       Icon::ClockAlert,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t_args("cards.approval.decided.endedNow", [("agent", request.agent.as_str())]),
     ),
     Some(ToolApprovalDecision::Denied) => (
       Icon::Ban,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       ctx.t("cards.approval.decided.deniedUntimed"),
     ),
     Some(ToolApprovalDecision::Approved) => (

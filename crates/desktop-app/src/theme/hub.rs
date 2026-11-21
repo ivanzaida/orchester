@@ -10,7 +10,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubText {
@@ -171,38 +174,38 @@ impl HubText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::PageTitle => style(17.0, FontWeight::SemiBold, 1.25, 0.0, palette.text_primary),
-      Self::Crumb => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::GroupTitle => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
-      Self::BarStatus => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::Area => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_primary)),
-      Self::Prose => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_primary),
-      Self::Hint => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
-      Self::Status => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Kind => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
-      Self::Statement => style(13.5, FontWeight::Medium, 1.45, 0.0, palette.text_primary),
-      Self::Code => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
-      Self::TeamLine => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::Foot => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
-      Self::RowName => style(13.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
-      Self::RowLine => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
-      Self::RowTag => mono(style(11.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary)),
-      Self::ListNote => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
-      Self::PanelSub => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::PanelMono => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
-      Self::PanelLink => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
-      Self::PanelWhere => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
-      Self::PanelHint => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_muted),
-      Self::PanelLabel => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_muted),
-      Self::PanelTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::NoticeTitle => style(12.5, FontWeight::SemiBold, 1.4, 0.0, palette.text_primary),
-      Self::EmptyTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::EmptyDetail => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
-      Self::Reason => mono(style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted)),
-      Self::CompareField => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::CompareBase => mono(style(11.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted)),
-      Self::CompareCell => mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_primary)),
+      Self::PageTitle => style(17.0, FontWeight::SemiBold, 1.25, 0.0, palette.foreground),
+      Self::Crumb => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::GroupTitle => style(12.0, FontWeight::SemiBold, 1.3, 0.0, text_secondary(palette)),
+      Self::BarStatus => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::Value => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::Area => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.foreground)),
+      Self::Prose => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.foreground),
+      Self::Hint => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
+      Self::Status => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Kind => style(12.0, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
+      Self::Statement => style(13.5, FontWeight::Medium, 1.45, 0.0, palette.foreground),
+      Self::Code => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.foreground)),
+      Self::TeamLine => style(12.5, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
+      Self::Foot => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground),
+      Self::RowName => style(13.0, FontWeight::Medium, 1.2, 0.0, palette.foreground),
+      Self::RowLine => style(12.0, FontWeight::Normal, 1.2, 0.0, text_secondary(palette)),
+      Self::RowTag => mono(style(11.0, FontWeight::Normal, 1.2, 0.0, text_secondary(palette))),
+      Self::ListNote => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.muted_foreground),
+      Self::PanelSub => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::PanelMono => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
+      Self::PanelLink => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.foreground),
+      Self::PanelWhere => style(12.0, FontWeight::Normal, 1.2, 0.0, text_secondary(palette)),
+      Self::PanelHint => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground),
+      Self::PanelLabel => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.muted_foreground),
+      Self::PanelTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::NoticeTitle => style(12.5, FontWeight::SemiBold, 1.4, 0.0, palette.foreground),
+      Self::EmptyTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::EmptyDetail => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.muted_foreground),
+      Self::Reason => mono(style(12.0, FontWeight::Normal, 1.4, 0.0, palette.muted_foreground)),
+      Self::CompareField => style(12.0, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
+      Self::CompareBase => mono(style(11.5, FontWeight::Normal, 1.35, 0.0, palette.muted_foreground)),
+      Self::CompareCell => mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.foreground)),
     }
   }
 }

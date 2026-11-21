@@ -112,7 +112,7 @@ fn form_kept_edits_go_away_once_saved_or_discarded() {
   form.set("task-form-title-input", "Saved title");
   form.until_kept(Some(task), "the edits are kept", |kept| kept.is_some());
   let tab = form.window.navigation().tabs_now().active().id();
-  let dot = format!("tab-{tab}-unsaved");
+  let dot = format!("tab-{tab}-dot");
   assert!(form.exists(&dot), "the tab marks the unsaved edits");
   form.click("task-form-save");
   form.until_kept(Some(task), "a save removes them", |kept| kept.is_none());

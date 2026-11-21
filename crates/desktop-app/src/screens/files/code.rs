@@ -44,7 +44,7 @@ use crate::{
   theme::{CodeText, ExtraColor, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
-    code_box::Copier,
+    clipboard::Clipboard,
     icon::Icon,
     kbd::key_cap,
     skeleton::{self, Skeleton, bone, fading},
@@ -160,7 +160,7 @@ fn head_row(file: &FilePath) -> Row {
 
 fn text_pane(ctx: &mut Ctx, page: &Page<'_>, file: &FilePath, text: &Arc<FileText>) -> Element {
   let tokens = reads::tokens(ctx, (file, text), &page.view.highlighting);
-  let clipboard = Copier::of(ctx);
+  let clipboard = Clipboard::of(ctx);
   let select = selector(ctx, page);
   let gate = ctx.use_context::<InputGate>();
   ctx.mount_keyed::<CodePane>(
@@ -209,7 +209,7 @@ struct CodeProps {
   find: FindState,
   select: Select,
   refusal: Signal<Option<Refusal>>,
-  clipboard: Copier,
+  clipboard: Clipboard,
   /// Refuses what only a person does to the automation that pressed it.
   gate: Option<InputGate>,
 }

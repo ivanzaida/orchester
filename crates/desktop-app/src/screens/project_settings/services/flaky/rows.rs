@@ -246,7 +246,7 @@ fn standing(ctx: &mut Ctx, id: &str, test: &FlakyTest) -> Element {
       Text::new(&stands)
         .id(format!("{id}-stands"))
         .variant(TypographyStyle::Caption)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

@@ -119,8 +119,8 @@ fn orchestrator_link_roles_follow_the_link_states() {
     "a Markdown link takes no keyboard focus, so it draws no ring"
   );
   assert_eq!(
-    (links.link_tooltip_box.background, links.link_tooltip_box.radius),
-    (Some(Color::from_hex("#EDEDF0")), Some(4.0)),
+    (links.link_tooltip_box.background.clone(), links.link_tooltip_box.radius),
+    (Some(Color::from_hex("#EDEDF0").into()), Some(4.0)),
     "a link's tooltip as the kit's, on `text_primary`"
   );
 }
@@ -146,16 +146,16 @@ fn orchestrator_chat_link_looks_follow_the_link_states() {
   );
   assert_eq!(
     (
-      looks.hovered.color,
-      looks.hovered.underline_color,
-      looks.hovered.background,
-      looks.hovered.trailing_color
+      looks.hovered.color.clone(),
+      looks.hovered.underline_color.clone(),
+      looks.hovered.background.clone(),
+      looks.hovered.trailing_color.clone()
     ),
     (
-      Some(Color::from_hex("#FFFFFF")),
-      Some(Color::from_hex("#FFFFFF")),
-      Some(Color::from_hex("#FFFFFF0F")),
-      Some(Color::from_hex("#B3B3BA"))
+      Some(Color::from_hex("#FFFFFF").into()),
+      Some(Color::from_hex("#FFFFFF").into()),
+      Some(Color::from_hex("#FFFFFF0F").into()),
+      Some(Color::from_hex("#B3B3BA").into())
     ),
     "under the pointer `accent_hover` on `hover`, the host `text_secondary`"
   );
@@ -217,7 +217,7 @@ fn context_meter_roles_follow_the_design() {
   }
   assert_eq!(
     theme.typography_style(ContextText::Full.role()).color,
-    theme.palette_color(PaletteColor::Danger),
+    theme.palette_color(PaletteColor::Destructive),
     "kqwKb"
   );
 }
@@ -235,56 +235,56 @@ fn slash_menu_roles_follow_the_design() {
       SlashText::Section,
       11.0,
       FontWeight::Medium,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "Geist",
     ),
     (
       SlashText::Note,
       11.0,
       FontWeight::Normal,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "Geist",
     ),
     (
       SlashText::Label,
       12.0,
       FontWeight::Normal,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       "Geist",
     ),
     (
       SlashText::Match,
       12.0,
       FontWeight::SemiBold,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       "Geist",
     ),
     (
       SlashText::Detail,
       12.0,
       FontWeight::Normal,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "Geist",
     ),
     (
       SlashText::SkillLabel,
       12.0,
       FontWeight::Normal,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       "Geist Mono",
     ),
     (
       SlashText::SkillMatch,
       12.0,
       FontWeight::SemiBold,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       "Geist Mono",
     ),
     (
       SlashText::Chip,
       11.0,
       FontWeight::Normal,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "Geist Mono",
     ),
     // A command picker's own search (`slpmj` in `P1` `QXPDY`).
@@ -292,7 +292,7 @@ fn slash_menu_roles_follow_the_design() {
       SlashText::Search,
       12.5,
       FontWeight::Normal,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       "Geist",
     ),
   ] {

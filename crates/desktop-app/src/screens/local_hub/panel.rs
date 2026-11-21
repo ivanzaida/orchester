@@ -15,6 +15,7 @@ use lurq::{
   components::{Column, Row, ScrollVertical, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::Length,
 };
 use orchester_core::id::ResourceId;
 use orchester_workspace::{
@@ -202,10 +203,7 @@ pub(super) fn bones_with(
     .map(|(index, row)| bone_row(ctx, &format!("{prefix}-bone-{index}"), row))
     .collect();
   let section = rows::section(&format!("{prefix}-bones"), &ctx.t(title), Vec::new(), rows);
-  let body = body()
-    .child(known.head)
-    .child(known.chips)
-    .child(skeleton::pulsing(section));
+  let body = body().child(known.head).child(known.chips).child(section);
   frame(what, body, Some(known.bar))
 }
 
@@ -215,7 +213,7 @@ fn bone_row(ctx: &Ctx, id: &str, row: &BoneRow) -> Row {
     Bone::Field => skeleton::field(ctx, BONE_WORDS, BONE_VALUE)
       .width(Dimension::Pct(100.0))
       .into(),
-    Bone::Area(height) => skeleton::bone(BONE_WORDS, height).width(Dimension::Pct(100.0)).into(),
+    Bone::Area(height) => skeleton::bone(BONE_WORDS, height).width(Length::Fill).into(),
   };
   let row_of = rows::row(id, &ctx.t(row.label), row.sub.map(|sub| Sub::quiet(ctx.t(sub))), value);
   match row.bone {
@@ -285,7 +283,7 @@ pub(super) fn used_by(ctx: &Ctx, prefix: &str, entry: &Entry) -> Row {
     Text::new(&ctx.t("local_hub.given.none"))
       .id(format!("{id}-value"))
       .variant(HubText::Value.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .into()
   } else {
     rows::tags(&format!("{id}-value"), entry.used_by.iter().cloned()).into()

@@ -5,6 +5,8 @@ use lurq::{
   app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
   layout::text_style::{FontWeight, TextStyle},
 };
+
+use super::palette::text_secondary;
 /// TmfIL/ng3rc, f30K2 and XNgaG/l2Qrl0: compact mono section captions.
 pub fn import_caption() -> TypographyStyle {
   TypographyStyle::extra("skills_import_caption")
@@ -65,7 +67,7 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
       FontWeight::Normal,
       1.3,
       true,
-      palette.text_muted,
+      palette.muted_foreground,
     ),
     (
       "skills_import_path",
@@ -73,7 +75,7 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
       FontWeight::Normal,
       1.3,
       true,
-      palette.text_primary,
+      palette.foreground,
     ),
     (
       "skills_library_lead",
@@ -81,7 +83,7 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
       FontWeight::Normal,
       1.45,
       false,
-      palette.text_secondary,
+      text_secondary(palette),
     ),
     (
       "skills_source",
@@ -89,16 +91,16 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
       FontWeight::Normal,
       21.0 / 12.5,
       true,
-      palette.text_primary,
+      palette.foreground,
     ),
-    ("skills_name", 13.0, FontWeight::Medium, 1.3, true, palette.text_primary),
+    ("skills_name", 13.0, FontWeight::Medium, 1.3, true, palette.foreground),
     (
       "skills_heading",
       11.0,
       FontWeight::Medium,
       1.3,
       false,
-      palette.text_muted,
+      palette.muted_foreground,
     ),
   ]
   .into_iter()
@@ -119,10 +121,22 @@ fn found(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> 
       12.5,
       FontWeight::SemiBold,
       1.3,
-      palette.text_primary,
+      palette.foreground,
     ),
-    ("skills_found_count", 12.0, FontWeight::Normal, 1.3, palette.text_muted),
-    ("skills_found_note", 11.5, FontWeight::Normal, 1.45, palette.text_muted),
+    (
+      "skills_found_count",
+      12.0,
+      FontWeight::Normal,
+      1.3,
+      palette.muted_foreground,
+    ),
+    (
+      "skills_found_note",
+      11.5,
+      FontWeight::Normal,
+      1.45,
+      palette.muted_foreground,
+    ),
   ]
   .into_iter()
   .map(|(name, size, weight, line, color)| {

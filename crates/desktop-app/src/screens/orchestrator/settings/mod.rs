@@ -315,15 +315,15 @@ fn summary(ctx: &Ctx, readiness: Option<&Readiness>) -> Element {
     _ => ctx.t("orchestrator.settings.summary.noConnection"),
   };
   let items = [
-    (Icon::Waypoints, PaletteColor::TextMuted, runs_on),
+    (Icon::Waypoints, PaletteColor::MutedForeground, runs_on),
     (
       Icon::FilePlus,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("orchestrator.settings.summary.actions"),
     ),
     (
       Icon::Eye,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       ctx.t("orchestrator.settings.summary.reads"),
     ),
     (
@@ -350,7 +350,7 @@ fn summary(ctx: &Ctx, readiness: Option<&Readiness>) -> Element {
       row = row.child(
         Text::new(&ctx.t("orchestrator.dot"))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted),
+          .color(PaletteColor::MutedForeground),
       );
     }
   }
@@ -383,5 +383,5 @@ fn tabs(ctx: &mut Ctx) -> Element {
       reason,
     ),
   ];
-  page_tabs(ctx, "orchestrator-settings-tabs", tabs).into()
+  page_tabs(ctx, "orchestrator-settings-tabs", tabs)
 }

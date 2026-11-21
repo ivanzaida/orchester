@@ -15,13 +15,14 @@ use lurq::{
   components::{Row, Text},
   layout::Alignment,
   node::{Element, dimension::Dimension},
+  ui::Card,
 };
 use orchester_core::usage::{Change, Summary};
 use orchester_workspace::usage::{Dashboard, DashboardState};
 
 use super::words::{self, ChangeUnit};
 use crate::{
-  theme::{ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraTypography, IconSize},
   ui::{
     card::{CardSurface, card},
     icon::{Icon, icon},
@@ -189,13 +190,13 @@ fn unmatched(ctx: &Ctx) -> Figures {
 const FIGURE_HEIGHT: f32 = 118.0;
 
 /// A figure's card around what it shows.
-fn frame(id: &str) -> lurq::components::Column {
+fn frame(id: &str) -> Card {
   card(id, CardSurface::Raised)
-    .width(Dimension::Px(0.0))
-    .height(Dimension::Px(FIGURE_HEIGHT))
+    .width(0.0)
+    .height(FIGURE_HEIGHT)
     .flex(1.0)
     .padding(SpacingSize::Lg)
-    .spacing(SpacingSize::Xs)
+    .gap(SpacingSize::Xs)
 }
 
 fn figure(ctx: &Ctx, (id, label): (&str, &str), value: &str, change: ChangeLine, detail: Option<Arc<str>>) -> Element {
@@ -205,11 +206,11 @@ fn figure(ctx: &Ctx, (id, label): (&str, &str), value: &str, change: ChangeLine,
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::Center)
-      .with_children(glyph.map(|glyph| icon(glyph, IconSize::Sm, PaletteColor::TextMuted)))
+      .with_children(glyph.map(|glyph| icon(glyph, IconSize::Sm, PaletteColor::MutedForeground)))
       .child(
         Text::new(&text)
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap()
           .flex_shrink(1.0),
       )
@@ -228,7 +229,7 @@ fn figure(ctx: &Ctx, (id, label): (&str, &str), value: &str, change: ChangeLine,
         .variant(ExtraTypography::Display.role())
         .nowrap(),
     )
-    .with_children(change)
-    .with_children(detail)
+    .children(change)
+    .children(detail)
     .into()
 }

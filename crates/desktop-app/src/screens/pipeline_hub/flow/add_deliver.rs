@@ -64,7 +64,7 @@ fn card(ctx: &Ctx, opens: &Opens<'_>, edit: &Edit, locked: bool) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Plus, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::Plus, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t("pipeline_hub.deliver.add"))
         .id(format!("{ID}-name"))
@@ -84,7 +84,7 @@ fn card(ctx: &Ctx, opens: &Opens<'_>, edit: &Edit, locked: bool) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
     .align_items(Alignment::Start)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(

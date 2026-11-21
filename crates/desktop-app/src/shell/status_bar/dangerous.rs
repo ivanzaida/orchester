@@ -40,9 +40,9 @@ pub fn item(ctx: &Ctx, (project, on): (ProjectId, bool), dispatch: &Dispatch) ->
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::DangerMuted)
+    .background(PaletteColor::DestructiveMuted)
     .rounded(ExtraRadius::Full.role())
-    .child(icon(Icon::TriangleAlert, IconSize::Xs, PaletteColor::Danger))
+    .child(icon(Icon::TriangleAlert, IconSize::Xs, PaletteColor::Destructive))
     .child(
       Text::new(&ctx.t("shell.status.dangerous"))
         .id("status-dangerous-label")

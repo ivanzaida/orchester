@@ -13,7 +13,7 @@ use lurq::{
 };
 
 use crate::{
-  theme::{ExtraRadius, FlowText, IconSize},
+  theme::{ExtraColor, ExtraRadius, FlowText, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -77,7 +77,7 @@ pub(super) fn row(ctx: &Ctx, id: &str, node: &Node, (cell, room): (Element, Spac
     Row::new()
       .id(id)
       .width(Dimension::Px(width))
-      .background(PaletteColor::BorderStrong)
+      .background(PaletteColor::Input)
   };
   let mut rail = Column::new()
     .id(format!("{id}-rail"))
@@ -120,20 +120,20 @@ fn mark(id: &str, node: &Node) -> Option<Row> {
   };
   let outlined = |color: PaletteColor| {
     round()
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border_inside(BorderSize::Sm, color)
   };
   Some(match node {
     Node::Start => {
-      outlined(PaletteColor::BorderStrong).child(icon(Icon::Play, IconSize::Xs, PaletteColor::TextSecondary))
+      outlined(PaletteColor::Input).child(icon(Icon::Play, IconSize::Xs, ExtraColor::TextSecondary.role()))
     }
-    Node::Step(number) => outlined(PaletteColor::BorderStrong).child(number_text(id, *number)),
+    Node::Step(number) => outlined(PaletteColor::Input).child(number_text(id, *number)),
     Node::NotReady(number) => outlined(PaletteColor::Warning).child(number_text(id, *number)),
     Node::Deliver => {
-      outlined(PaletteColor::BorderStrong).child(icon(Icon::GitMerge, IconSize::Xs, PaletteColor::TextSecondary))
+      outlined(PaletteColor::Input).child(icon(Icon::GitMerge, IconSize::Xs, ExtraColor::TextSecondary.role()))
     }
     Node::AddDeliver => {
-      outlined(PaletteColor::BorderStrong).child(icon(Icon::Plus, IconSize::Sm, PaletteColor::TextSecondary))
+      outlined(PaletteColor::Input).child(icon(Icon::Plus, IconSize::Sm, ExtraColor::TextSecondary.role()))
     }
     Node::Gate => {
       round()
@@ -141,15 +141,15 @@ fn mark(id: &str, node: &Node) -> Option<Row> {
         .child(icon(Icon::Hand, IconSize::Xs, PaletteColor::Warning))
     }
     Node::Parallel => {
-      outlined(PaletteColor::BorderStrong).child(icon(Icon::Split, IconSize::Xs, PaletteColor::TextSecondary))
+      outlined(PaletteColor::Input).child(icon(Icon::Split, IconSize::Xs, ExtraColor::TextSecondary.role()))
     }
-    Node::Landing => {
-      round()
-        .background(PaletteColor::Accent)
-        .child(icon(Icon::ArrowRight, IconSize::Xs, PaletteColor::TextInverse))
-    }
+    Node::Landing => round().background(PaletteColor::Primary).child(icon(
+      Icon::ArrowRight,
+      IconSize::Xs,
+      PaletteColor::PrimaryForeground,
+    )),
     Node::Line => return None,
-    Node::End => outlined(PaletteColor::BorderStrong).child(
+    Node::End => outlined(PaletteColor::Input).child(
       Row::new()
         .width(Dimension::Px(DOT))
         .height(Dimension::Px(DOT))

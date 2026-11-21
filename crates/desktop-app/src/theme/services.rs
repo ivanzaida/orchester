@@ -10,7 +10,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ServicesText {
@@ -64,12 +67,12 @@ impl ServicesText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::ChainNumber => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::ChainName | Self::OrderName => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::OrderNumber => mono(style(10.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::DriverName => mono(style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_secondary)),
-      Self::SideLine => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::StepNumber => mono(style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
+      Self::ChainNumber => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground)),
+      Self::ChainName | Self::OrderName => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::OrderNumber => mono(style(10.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::DriverName => mono(style(12.5, FontWeight::Medium, 1.3, 0.0, text_secondary(palette))),
+      Self::SideLine => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::StepNumber => mono(style(10.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
     }
   }
 }

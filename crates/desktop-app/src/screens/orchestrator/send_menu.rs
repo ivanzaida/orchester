@@ -11,17 +11,17 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize},
   },
-  components::{Button, Placement, Popup, Row},
+  components::{Button, Placement, Row},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, dimension::Dimension},
 };
 
 use crate::{
-  theme::{ComposerColor, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
+  theme::{ComposerColor, ControlHeight, DISABLED_OPACITY, ExtraColor, IconSize},
   ui::{
     icon::{Icon, icon},
-    menu::{MenuItem, menu_panel},
+    menu::{self, MenuItem, menu_panel},
     pressable::{inert, pressable},
   },
 };
@@ -63,7 +63,7 @@ pub(super) fn split(
       let after = ways.after_answer.clone();
       pressable(move || after())
         .describe("state", "enabled")
-        .hovered_style(Style::new().background(PaletteColor::AccentHover))
+        .hovered_style(Style::new().background(PaletteColor::PrimaryHover))
     }
     None => inert(Button::empty()).describe("state", "disabled"),
   }
@@ -88,7 +88,7 @@ pub(super) fn split(
     Some(_) => {
       let toggle = open.clone();
       pressable(move || toggle.update(|open| *open = !*open))
-        .hovered_style(Style::new().background(PaletteColor::AccentHover))
+        .hovered_style(Style::new().background(PaletteColor::PrimaryHover))
     }
     None => inert(Button::empty()),
   }
@@ -102,7 +102,7 @@ pub(super) fn split(
     .describe("action", "after-answer")
     .height(side)
     .align_items(Alignment::Center)
-    .background(PaletteColor::Accent)
+    .background(PaletteColor::Primary)
     .rounded(RadiusSize::Md)
     .clip()
     .opacity(if ways.is_some() { 1.0 } else { DISABLED_OPACITY })
@@ -142,14 +142,11 @@ fn menu(ctx: &mut Ctx, ways: &Ways, (open, anchor): (&Signal<bool>, &ElementRef)
     &ways.stop_and_send,
   );
   let panel = menu_panel("orchestrator-send-menu")
-    .width(Dimension::Px(MENU_WIDTH))
-    .child(after.render(ctx, open))
-    .child(now.render(ctx, open))
-    .child(stop.render(ctx, open));
-  Popup::new(anchor.clone(), panel)
-    .open(open.clone())
+    .width(MENU_WIDTH)
+    .child(after.render(ctx))
+    .child(now.render(ctx))
+    .child(stop.render(ctx));
+  menu::menu(anchor.clone(), open.clone(), panel)
     .placement(Placement::TopEnd)
-    // Away from the button: lurq moves an overlay above its anchor up by a positive offset.
-    .offset(0.0, ExtraSpacing::Snug.value())
     .into()
 }

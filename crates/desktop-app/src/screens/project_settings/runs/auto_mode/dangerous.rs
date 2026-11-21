@@ -148,11 +148,11 @@ fn body(ctx: &Ctx, project: &str) -> Column {
       ))
       .spacing(ExtraSpacing::Loose.role())
       .align_items(Alignment::Center)
-      .child(icon(*glyph, IconSize::Base, PaletteColor::Danger))
+      .child(icon(*glyph, IconSize::Base, PaletteColor::Destructive))
       .child(
         Text::new(&ctx.t(key))
           .variant(ExtraTypography::OptionTitle.role())
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0)),
       );
@@ -166,7 +166,7 @@ fn body(ctx: &Ctx, project: &str) -> Column {
     .id("settings-dangerous-dialog-risks")
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().top(SpacingSize::Xs).bottom(SpacingSize::Xs))
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .with_children(risks);
@@ -174,7 +174,7 @@ fn body(ctx: &Ctx, project: &str) -> Column {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Loose.role())
     .child(words(
-      "settings-dangerous-dialog-text",
+      "settings-dangerous-dialog-words",
       ctx.t_args("project_settings.dangerousDialog.text", [("project", project)]),
     ))
     .child(list)
@@ -197,12 +197,12 @@ pub(super) fn unused_note(ctx: &Ctx) -> Element {
     )
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("project_settings.dangerousFoot"))
         .id("settings-auto-dangerous-note-text")
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

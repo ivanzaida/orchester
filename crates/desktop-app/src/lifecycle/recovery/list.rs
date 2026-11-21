@@ -18,7 +18,7 @@ use super::{NOTICE_ID, RecoveryNotice, body_key, continue_all, notices::unread_l
 use crate::{
   project::ShownProject,
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -94,7 +94,7 @@ fn hide(ctx: &Ctx, close: impl Fn() + Send + Sync + 'static) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::ChevronUp, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(Icon::ChevronUp, IconSize::Sm, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t("lifecycle.recovery.hide"))
         .variant(ExtraTypography::Prose.role())

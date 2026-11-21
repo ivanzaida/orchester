@@ -73,8 +73,11 @@ pub fn app_items(ctx: &mut Ctx, (status, bar): (&McpStatus, &ElementRef), dispat
         .flex_shrink(1.0)
         .shrink_order(give_way::WINDOW_CONTROL)
         .shrink_limit(ShrinkLimit::Content)
-        .child(glyph(Icon::MousePointerClick, PaletteColor::TextMuted))
-        .child(dropping(&ctx.t("shell.status.windowControl"), PaletteColor::TextMuted))
+        .child(glyph(Icon::MousePointerClick, PaletteColor::MutedForeground))
+        .child(dropping(
+          &ctx.t("shell.status.windowControl"),
+          PaletteColor::MutedForeground,
+        ))
         .into(),
     );
   }
@@ -151,29 +154,30 @@ pub(super) fn words(ctx: &Ctx, status: &McpStatus) -> (String, PaletteColor) {
           [("port", port.get().to_string())],
         )
         .to_string(),
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
     ),
-    (_, ServerState::Off) => (ctx.t("shell.status.mcpOff").to_string(), PaletteColor::TextMuted),
-    (_, ServerState::TokenUnreadable { .. } | ServerState::Unavailable) => {
-      (ctx.t("shell.status.mcpUnavailable").to_string(), PaletteColor::Danger)
-    }
+    (_, ServerState::Off) => (ctx.t("shell.status.mcpOff").to_string(), PaletteColor::MutedForeground),
+    (_, ServerState::TokenUnreadable { .. } | ServerState::Unavailable) => (
+      ctx.t("shell.status.mcpUnavailable").to_string(),
+      PaletteColor::Destructive,
+    ),
     (McpKind::Installation, ServerState::Listening { port }) => (
       ctx
         .t_args("shell.status.mcpListening", [("address", address(*port).to_string())])
         .to_string(),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (McpKind::Qa { .. }, ServerState::Listening { port }) => (
       ctx
         .t_args("shell.status.mcpQa", [("port", port.to_string())])
         .to_string(),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (McpKind::Development { .. }, ServerState::Listening { port }) => (
       ctx
         .t_args("shell.status.mcpDevelopment", [("port", port.to_string())])
         .to_string(),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
   }
 }
@@ -242,10 +246,10 @@ fn state_line(ctx: &Ctx, status: &McpStatus) -> (PaletteColor, Text) {
       PaletteColor::Success,
       Text::new(&ctx.t_args("shell.mcp.listening", [("address", address(*port).to_string())]))
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextSecondary),
+        .color(ExtraColor::TextSecondary.role()),
     ),
     ServerState::PortTaken { port, how } => (
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       Text::new(&ctx.t_args(
         how.pick("shell.mcp.portTaken", "shell.mcp.portRefused"),
         [("port", port.get().to_string())],
@@ -253,11 +257,11 @@ fn state_line(ctx: &Ctx, status: &McpStatus) -> (PaletteColor, Text) {
       .variant(ExtraTypography::Prose.role()),
     ),
     ServerState::Off => (
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       Text::new(&ctx.t("shell.mcp.off")).variant(ExtraTypography::Prose.role()),
     ),
     ServerState::TokenUnreadable { .. } | ServerState::Unavailable => (
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
       Text::new(&ctx.t("shell.mcp.unavailable")).variant(ExtraTypography::Prose.role()),
     ),
   }
@@ -334,7 +338,7 @@ fn clients(ctx: &Ctx, status: &McpStatus) -> Option<Row> {
       .id("status-mcp-clients")
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .child(glyph(Icon::Plug, PaletteColor::TextMuted))
+      .child(glyph(Icon::Plug, PaletteColor::MutedForeground))
       .child(Text::new(&text).variant(ExtraTypography::Prose.role())),
   )
 }
@@ -358,7 +362,7 @@ fn window_control(ctx: &Ctx, status: &McpStatus) -> Column {
         .width(Dimension::Pct(100.0))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(glyph(Icon::MousePointerClick, PaletteColor::TextMuted))
+        .child(glyph(Icon::MousePointerClick, PaletteColor::MutedForeground))
         .child(Text::new(&ctx.t("shell.mcp.windowControl.title")).variant(ExtraTypography::Prose.role()))
         .child(Spacer::new().flex(1.0))
         .child(

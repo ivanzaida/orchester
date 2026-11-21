@@ -10,7 +10,10 @@ use super::{
   chips::{ChipState, Look, PropertyChip},
   state::View,
 };
-use crate::ui::{filter::filter_menu_panel, icon::Icon, menu::MenuItem};
+use crate::ui::{
+  icon::Icon,
+  menu::{MenuItem, filter_menu_panel, inline_menu},
+};
 
 /// The menu's width.
 const MENU_WIDTH: f32 = 240.0;
@@ -52,19 +55,19 @@ fn menu(ctx: &mut Ctx, state: &ChipState, modules: &[Module], chosen: &Signal<Mo
       .iter()
       .map(|module| (Some(module.id()), module.name().as_str().into())),
   );
-  let rows: Vec<Element> = choices
+  let rows: Vec<_> = choices
     .enumerate()
     .map(|(index, (id, label))| {
       let chosen = chosen.clone();
       MenuItem::new(format!("task-form-module-{index}"), label, move || {
         chosen.set(ModuleChoice(id));
       })
-      .in_form()
       .chosen(id == current)
-      .render(ctx, &state.open)
+      .render(ctx)
     })
     .collect();
-  filter_menu_panel("task-form-module-menu", MENU_WIDTH)
-    .with_children(rows)
-    .into()
+  inline_menu(
+    state.open.clone(),
+    filter_menu_panel("task-form-module-menu", MENU_WIDTH).with_children(rows),
+  )
 }

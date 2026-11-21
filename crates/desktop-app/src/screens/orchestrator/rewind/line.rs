@@ -19,7 +19,7 @@ use orchester_workspace::display;
 
 use crate::{
   screens::orchestrator::{action, line::list},
-  theme::{ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing},
   ui::{
     callout::{Callout, CalloutTone},
     icon::{Icon, icon},
@@ -60,7 +60,7 @@ pub(in crate::screens::orchestrator) fn line(
     Row::new()
       .flex(1.0)
       .height(Dimension::Px(RULE_HEIGHT))
-      .background(PaletteColor::BorderStrong)
+      .background(PaletteColor::Input)
   };
   let rewound = Row::new()
     .id(format!("{id}-line"))
@@ -68,12 +68,12 @@ pub(in crate::screens::orchestrator) fn line(
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .child(rule())
-    .child(icon(Icon::History, IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(Icon::History, IconSize::Base, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&words)
         .id(format!("{id}-words"))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
     )
     .child(rule());

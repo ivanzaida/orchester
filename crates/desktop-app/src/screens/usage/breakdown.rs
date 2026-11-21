@@ -109,7 +109,7 @@ pub fn card(ctx: &mut Ctx, dashboard: &Arc<Dashboard>, views: &Signal<Views>, re
     let head = Row::new().width(Dimension::Pct(100.0)).padding(padding).child(
       Text::new(&ctx.t(shown.title_key()))
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     );
     let body: Vec<Element> = if table_shown {
@@ -186,11 +186,11 @@ fn name(ctx: &Ctx, dashboard: &Dashboard, key: &BreakdownKey, id: String) -> Ele
   let text = if mono {
     text
       .variant(ExtraTypography::MonoNote.role())
-      .color(PaletteColor::TextPrimary)
+      .color(PaletteColor::Foreground)
   } else {
     text
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextPrimary)
+      .color(PaletteColor::Foreground)
   };
   let Some(_) = matches!(key, BreakdownKey::Reviewer(_)).then_some(()) else {
     return Row::new()

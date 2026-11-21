@@ -62,7 +62,7 @@ fn note_line(id: &str, (glyph, text): (Icon, &str)) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(text)
         .id(format!("{id}-text"))

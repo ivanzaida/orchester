@@ -29,7 +29,7 @@ use orchester_workspace::{
 
 use super::super::super::section_head;
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     card::{CardSurface, card},
     chat::links,
@@ -61,7 +61,7 @@ fn report(ctx: &mut Ctx, run: &RunView, result: &RunResult) -> Option<Element> {
         report.text.to_string()
       };
       let text = MarkdownView::new("task-report-text", text, links(ctx))
-        .style(ExtraTypography::Lead.role(), PaletteColor::TextSecondary)
+        .style(ExtraTypography::Lead.role(), ExtraColor::TextSecondary.role())
         .render(ctx);
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -103,7 +103,7 @@ fn outside(ctx: &Ctx, changes: &[OutsideChange]) -> Element {
   } else {
     card("task-outside-list", CardSurface::Outline)
       .padding(Padding::symmetric(ExtraSpacing::Snug.role(), ExtraSpacing::Hair.role()))
-      .with_children(
+      .children(
         changes
           .iter()
           .enumerate()
@@ -138,7 +138,7 @@ fn row(ctx: &Ctx, index: usize, change: &OutsideChange) -> Element {
     .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(Icon::Plug, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Plug, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Column::new()
         .flex(1.0)

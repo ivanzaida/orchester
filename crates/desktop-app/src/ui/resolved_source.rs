@@ -5,14 +5,13 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{FormTextRole, PaletteColor},
   },
   components::{InputToken, InputTokens, TextInput},
   core::Signal,
   node::{Element, dimension::Dimension},
 };
 
-use crate::theme::instructions;
+use crate::theme::{ExtraColor, TextRole, instructions};
 #[derive(Clone, PartialEq)]
 pub struct ResolvedSource {
   pub id: Arc<str>,
@@ -48,9 +47,9 @@ impl Component for Source {
       .collect();
     let tokens = InputTokens::new(&props.text, values).expect("workspace returned disjoint UTF-8 ranges");
     let theme = ctx.theme();
-    let style = FormTextRole {
+    let style = TextRole {
       typography: instructions::prompt_text(),
-      color: PaletteColor::TextSecondary,
+      color: ExtraColor::TextSecondary.role(),
     }
     .resolve(&theme.typography(), &theme.palette());
     TextInput::styled(self.text.clone(), style)

@@ -4,7 +4,7 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::resource::{Tool, ToolAction};
 use orchester_workspace::{agents::data::VersionState, tools::data::ToolEntry};
 
-use crate::ui::icon::Icon;
+use crate::{theme::ExtraColor, ui::icon::Icon};
 
 pub(super) fn kind(tool: &Tool) -> (&'static str, Icon) {
   match tool.action() {
@@ -53,16 +53,20 @@ pub(super) fn editor_state(
   busy: bool,
 ) -> (Arc<str>, Icon, PaletteColor) {
   if busy {
-    return (ctx.t("tools.saving"), Icon::LoaderCircle, PaletteColor::TextSecondary);
+    return (
+      ctx.t("tools.saving"),
+      Icon::LoaderCircle,
+      ExtraColor::TextSecondary.role(),
+    );
   }
   let Some(entry) = entry else {
-    return (ctx.t("tools.notSaved"), Icon::Pencil, PaletteColor::TextMuted);
+    return (ctx.t("tools.notSaved"), Icon::Pencil, PaletteColor::MutedForeground);
   };
   if !unchanged {
     let text = entry.state.published().map_or(ctx.t("tools.unsaved"), |v| {
       ctx.t_args("tools.unsavedPublished", [("version", v.get().to_string())])
     });
-    return (text, Icon::Pencil, PaletteColor::TextSecondary);
+    return (text, Icon::Pencil, ExtraColor::TextSecondary.role());
   }
   match entry.state {
     VersionState::Published(_) => (version(ctx, entry), Icon::CircleCheck, PaletteColor::Success),
@@ -70,9 +74,9 @@ pub(super) fn editor_state(
     VersionState::Draft { published: Some(v) } => (
       ctx.t_args("tools.draftSavedPublished", [("version", v.get().to_string())]),
       Icon::Check,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
-    VersionState::Draft { published: None } => (version(ctx, entry), Icon::Pencil, PaletteColor::TextMuted),
+    VersionState::Draft { published: None } => (version(ctx, entry), Icon::Pencil, PaletteColor::MutedForeground),
   }
 }
 pub(super) fn inspector_version(ctx: &Ctx, entry: &ToolEntry) -> Arc<str> {

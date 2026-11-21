@@ -65,7 +65,7 @@ impl Component for Ring {
     let theme = ctx.theme();
     let drawn = Drawn {
       share: props.share,
-      track: theme.palette_color(PaletteColor::BorderStrong),
+      track: theme.palette_color(PaletteColor::Input),
       used: theme.palette_color(props.color),
     };
     if let Some(canvas) = self.reference.as_canvas().filter(CanvasHandle::is_attached) {

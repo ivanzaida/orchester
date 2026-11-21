@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// Text of Settings › Accounts. The rest reuses the kit's roles: a row's name `OptionTitle`, its folder `MonoNote`,
 /// a count `Caption`, a note `Note`, a paragraph `Prose`, a plan window's name `Description`.
@@ -46,11 +49,17 @@ impl AccountsText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::GroupName => style(11.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary),
-      Self::State => style(11.5, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
-      Self::Identity => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::Title => style(15.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Folder => mono(style(11.0, FontWeight::Normal, 14.0 / 11.0, 0.0, palette.text_muted)),
+      Self::GroupName => style(11.0, FontWeight::SemiBold, 1.3, 0.0, text_secondary(palette)),
+      Self::State => style(11.5, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
+      Self::Identity => style(11.5, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
+      Self::Title => style(15.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Folder => mono(style(
+        11.0,
+        FontWeight::Normal,
+        14.0 / 11.0,
+        0.0,
+        palette.muted_foreground,
+      )),
     }
   }
 }

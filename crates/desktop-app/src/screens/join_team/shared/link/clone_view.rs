@@ -45,7 +45,7 @@ pub(super) fn panel(ctx: &Ctx, project: &SharedProject, parts: Vec<Element>) -> 
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Lg)
     .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Lg)
     .child(titles(
@@ -123,7 +123,7 @@ fn target(ctx: &Ctx, destination: &Destination, typed: &str) -> Element {
       let parent = parent.display().to_string();
       line(
         "join-team-link-clone-target",
-        (Icon::FolderPlus, PaletteColor::TextMuted),
+        (Icon::FolderPlus, PaletteColor::MutedForeground),
         &ctx.t_args(
           "startup.shared.link.clone.creates",
           [("name", name.as_str()), ("parent", parent.as_str())],
@@ -132,7 +132,7 @@ fn target(ctx: &Ctx, destination: &Destination, typed: &str) -> Element {
     }
     Destination::EmptyFolder => line(
       "join-team-link-clone-target",
-      (Icon::Folder, PaletteColor::TextMuted),
+      (Icon::Folder, PaletteColor::MutedForeground),
       &ctx.t("startup.shared.link.clone.emptyFolder"),
     ),
     Destination::Occupied => error(&ctx.t("startup.shared.link.clone.occupied")),
@@ -267,7 +267,7 @@ pub(super) fn refused(ctx: &Ctx, refusal: &CloneRefusal) -> Option<Element> {
 fn left(ctx: &Ctx, folder: &Path) -> Element {
   line(
     "join-team-link-clone-left",
-    (Icon::Folder, PaletteColor::TextMuted),
+    (Icon::Folder, PaletteColor::MutedForeground),
     &ctx.t_args(
       "startup.shared.link.clone.left",
       [("path", folder.display().to_string().as_str())],

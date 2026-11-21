@@ -111,24 +111,20 @@ impl Component for CustomRange {
     let fields = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .child(
-        field(
-          "usage-custom-from-field",
-          Some(&ctx.t("usage.custom.from")),
-          from.render(ctx),
-          None,
-        )
-        .flex(1.0),
-      )
-      .child(
-        field(
-          "usage-custom-to-field",
-          Some(&ctx.t("usage.custom.to")),
-          to.render(ctx),
-          None,
-        )
-        .flex(1.0),
-      );
+      // A field takes no flex of its own: a column shares the row with the other.
+      .child(Column::new().flex(1.0).child(field(
+        "usage-custom-from-field",
+        Some(&ctx.t("usage.custom.from")),
+        from.render(ctx),
+        None,
+      )))
+      // A field takes no flex of its own: a column shares the row with the other.
+      .child(Column::new().flex(1.0).child(field(
+        "usage-custom-to-field",
+        Some(&ctx.t("usage.custom.to")),
+        to.render(ctx),
+        None,
+      )));
     let note: Element = match range {
       Ok(_) => Text::new(&ctx.t("usage.custom.hint"))
         .id("usage-custom-hint")

@@ -83,8 +83,8 @@ pub(super) fn panel(
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Lg)
     .spacing(ExtraSpacing::Inset.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(ExtraRadius::Tile.role())
     .child(head)
     .child(
@@ -119,7 +119,7 @@ fn current(ctx: &Ctx, found: &GitHubDetection, (expected, project): (Option<&Git
         || ctx.t("setup.github.value.notSignedIn"),
         |login| login.as_str().into(),
       ),
-      look: Value::Text(PaletteColor::TextPrimary),
+      look: Value::Text(PaletteColor::Foreground),
     },
     Property {
       label: ctx.t("setup.github.access.scopes"),
@@ -131,7 +131,7 @@ fn current(ctx: &Ctx, found: &GitHubDetection, (expected, project): (Option<&Git
     current.push(Property {
       label: ctx.t_args("setup.github.access.projectExpects", [("project", project)]),
       value: expected.as_str().into(),
-      look: Value::Text(PaletteColor::TextPrimary),
+      look: Value::Text(PaletteColor::Foreground),
     });
   }
   current

@@ -18,7 +18,7 @@ use super::{
   kbd::key_cap,
   pressable::pressable,
 };
-use crate::theme::{ControlHeight, ExtraSpacing, IconSize};
+use crate::theme::{ControlHeight, ExtraColor, ExtraSpacing, IconSize};
 
 pub struct CommandTrigger {
   id: Arc<str>,
@@ -68,22 +68,22 @@ impl From<CommandTrigger> for Element {
       .padding(Padding::new().left(ExtraSpacing::Inline.role()).right(SpacingSize::Xs))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceInput)
+      .background(ExtraColor::InputSurface.role())
       .border(Border::inside(
         BorderSize::Sm,
         if trigger.open {
-          PaletteColor::BorderFocus
+          PaletteColor::Ring
         } else {
           PaletteColor::Border
         },
       ))
       .rounded(RadiusSize::Md)
       .describe("a11y_name", trigger.label.clone())
-      .child(icon(Icon::Search, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Search, IconSize::Base, PaletteColor::MutedForeground))
       .child(
         Text::new(&trigger.label)
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap()
           .flex(1.0),
       )

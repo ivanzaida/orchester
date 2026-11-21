@@ -31,6 +31,7 @@ fn plain(text: &mut String, inlines: &[MarkdownInline]) {
       | MarkdownInline::Code(value)
       | MarkdownInline::Math(value)
       | MarkdownInline::Html(value)
+      | MarkdownInline::Kbd(value)
       | MarkdownInline::FootnoteReference(value) => text.push_str(value),
       MarkdownInline::Emphasis(children)
       | MarkdownInline::Strong(children)

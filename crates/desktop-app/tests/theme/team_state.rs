@@ -13,21 +13,21 @@ fn team_state_roles_follow_the_design() {
       15.0,
       1.35,
       FontWeight::SemiBold,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       TeamStateText::Detail,
       12.0,
       1.5,
       FontWeight::Normal,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     (
       TeamStateText::Reason,
       12.0,
       1.5,
       FontWeight::Normal,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
   ] {
     let style = theme.typography_style(role.role());

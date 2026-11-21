@@ -35,12 +35,10 @@ impl ExtraShadow {
 
   fn shadows(self) -> Arc<[BoxShadow]> {
     match self {
-      Self::FocusRing => Arc::from([BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::BorderFocus)
+      Self::FocusRing => Arc::from([BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::Ring)
         .spread(FOCUS_RING_WIDTH)
         .inset()]),
-      Self::LinkFocusRing => {
-        Arc::from([BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::BorderFocus).spread(LINK_RING_WIDTH)])
-      }
+      Self::LinkFocusRing => Arc::from([BoxShadow::new(0.0, 0.0, 0.0, PaletteColor::Ring).spread(LINK_RING_WIDTH)]),
     }
   }
 }

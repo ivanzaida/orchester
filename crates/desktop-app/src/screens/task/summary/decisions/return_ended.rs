@@ -101,7 +101,7 @@ impl Component for ReturnEnded {
     let props = ctx.props::<TaskContext>().clone();
     let action = decision_action::<Returning>(ctx, props.project.open.clone());
     let Some(run) = props.detail.run.as_ref() else {
-      return lurq::components::Column::new();
+      return lurq::components::Column::new().into();
     };
     // Read before anything only some renders build: lurq keeps futures by their order.
     let worktree = in_worktree(ctx, &props, (run.id(), 0));
@@ -128,7 +128,7 @@ impl Component for ReturnEnded {
       pending,
     };
     let card = card("task-return-ended", CardSurface::Decision)
-      .spacing(ExtraSpacing::Loose.role())
+      .gap(ExtraSpacing::Loose.role())
       .child(
         Text::new(&ctx.t("decisions.returnEnded.title"))
           .id("task-return-ended-title")
@@ -140,15 +140,15 @@ impl Component for ReturnEnded {
           .variant(ExtraTypography::Note.role())
           .width(Dimension::Pct(100.0)),
       )
-      .with_children(self.fields(ctx, &parts))
+      .children(self.fields(ctx, &parts))
       .child(self.button(ctx, &parts, &action))
-      .with_children(
+      .children(
         parts
           .unavailable
           .as_ref()
           .map(|reason| reason_line("task-return-ended-reason", reason)),
       )
-      .with_children(refused.map(|refused| field_error("task-return-ended-refused", &message_text(ctx, &refused))));
+      .children(refused.map(|refused| field_error("task-return-ended-refused", &message_text(ctx, &refused))));
     self.pointing.ring(card)
   }
 }

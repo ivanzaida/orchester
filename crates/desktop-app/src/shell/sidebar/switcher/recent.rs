@@ -130,9 +130,9 @@ impl Component for RecentRow {
     let tile = glyph_tile(
       Text::new(&initial(&name))
         .variant(ShellText::SwitcherInitial.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .into(),
-      PaletteColor::SurfaceRaised,
+      PaletteColor::Card,
     );
     let text = Column::new()
       .flex(1.0)
@@ -146,7 +146,7 @@ impl Component for RecentRow {
       Some(new_tab(ctx, &id, (navigation.clone(), route.clone()), open.clone()))
     } else {
       current.then(|| {
-        icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)
+        icon(Icon::Check, IconSize::Md, PaletteColor::Foreground)
           .id(format!("{id}-current"))
           .into()
       })
@@ -189,8 +189,8 @@ fn new_tab(ctx: &mut Ctx, row: &str, (navigation, route): (Navigation, Route), o
   .height(Dimension::Px(NEW_TAB_SIZE))
   .justify(Justify::Center)
   .rounded(RadiusSize::Sm)
-  .background(PaletteColor::SurfaceRaised)
-  .child(icon(Icon::SquarePlus, IconSize::Md, PaletteColor::TextMuted));
+  .background(PaletteColor::Card)
+  .child(icon(Icon::SquarePlus, IconSize::Md, PaletteColor::MutedForeground));
   Tooltip::new(id, label).wrap(ctx, button)
 }
 

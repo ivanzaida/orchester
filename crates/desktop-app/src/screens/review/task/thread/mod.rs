@@ -101,7 +101,7 @@ fn card(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Element {
     .describe("state", view.state.name())
     .describe("kind", view.thread.kind().as_str())
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(RadiusSize::Md)
     .child(head(ctx, env, view))
@@ -135,7 +135,7 @@ fn head(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Element {
     .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .child(icon(glyph, IconSize::Md, color.clone()))
     .child(
       Text::new(&ctx.t(word))
@@ -148,7 +148,7 @@ fn head(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Element {
       Text::new(&lines(ctx, view.thread.anchor().span()))
         .id(format!("{id}-lines"))
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .child(Row::new().flex(1.0))
@@ -301,19 +301,19 @@ fn fold_line(env: &Env, (id, key, open): (String, Arc<str>, bool), (glyph, words
     ))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(icon(
       if open { Icon::ChevronDown } else { Icon::ChevronRight },
       IconSize::Md,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Md, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),

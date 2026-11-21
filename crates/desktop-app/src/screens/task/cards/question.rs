@@ -25,7 +25,7 @@ use super::{
   frame::{Stands, frame, head, note},
 };
 use crate::{
-  theme::{CardsText, ExtraSpacing, IconSize},
+  theme::{CardsText, ExtraColor, ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -84,12 +84,12 @@ impl Component for QuestionCard {
       )
     } else if lost {
       (
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
         Stands::interrupted(ctx.t("cards.state.interrupted")),
       )
     } else {
       (
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
         Stands {
           glyph: Icon::CircleCheck,
           words: ctx.t("cards.state.answered"),

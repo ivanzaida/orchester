@@ -54,7 +54,7 @@ pub(in crate::screens::orchestrator) fn parts(ctx: &mut Ctx, view: &View, root: 
     over.push(
       tinted_note(
         "orchestrator-plan-only-error",
-        (Icon::CircleAlert, PaletteColor::Danger),
+        (Icon::CircleAlert, PaletteColor::Destructive),
         &message_text(ctx, &why),
       )
       .into(),
@@ -106,7 +106,7 @@ fn mode_line(ctx: &Ctx) -> Element {
     .align_items(Alignment::Center)
     .background(ExtraColor::Hover.role())
     .rounded(RadiusSize::Md)
-    .child(icon(Icon::ListChecks, IconSize::Base, PaletteColor::TextPrimary).flex_shrink(0.0))
+    .child(icon(Icon::ListChecks, IconSize::Base, PaletteColor::Foreground).flex_shrink(0.0))
     .child(
       Text::new(&ctx.t("orchestrator.plan.mode"))
         .id("orchestrator-plan-mode-name")
@@ -117,7 +117,7 @@ fn mode_line(ctx: &Ctx) -> Element {
       Text::new(&ctx.t("orchestrator.plan.modeNote"))
         .id("orchestrator-plan-mode-note")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

@@ -20,7 +20,7 @@ use crate::{
     self,
     parts::{boxed, field, group, head, note, stacked_field},
   },
-  theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
+  theme::{ExtraColor, ExtraSpacing, HubSpacing, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
     skeleton::{self, Skeleton, bone, fading},
@@ -40,7 +40,7 @@ pub(super) fn profile(ctx: &mut Ctx, nav: &AgentsNav) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(bone(MARK, MARK).rounded(RadiusSize::Lg))
+    .child(bone(MARK, MARK).radius(RadiusSize::Lg))
     .child(
       Column::new()
         .spacing(ExtraSpacing::Snug.role())
@@ -78,7 +78,7 @@ fn role(ctx: &Ctx) -> Column {
     .spacing(SpacingSize::Sm)
     .rounded(RadiusSize::Md)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .child(skeleton::line(ctx, TypographyStyle::Description, 98.0))
     .child(skeleton::line(ctx, TypographyStyle::Description, 456.0))
     .child(skeleton::line(ctx, TypographyStyle::Description, 284.0));
@@ -118,7 +118,7 @@ fn connection(ctx: &Ctx) -> Column {
   let select = |value: f32| {
     skeleton::field(ctx, FIELD, value)
       .child(lurq::components::Spacer::new().flex(1.0))
-      .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted))
+      .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::MutedForeground))
   };
   let connection = Row::new()
     .width(Dimension::Pct(100.0))

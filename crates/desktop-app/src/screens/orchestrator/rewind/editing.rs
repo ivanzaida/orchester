@@ -26,7 +26,7 @@ use orchester_workspace::workspace::OpenProject;
 use super::{Failed, toolbar::RewindEnv};
 use crate::{
   screens::task_form::brief::text_styles,
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -71,7 +71,7 @@ pub(in crate::screens::orchestrator) fn drop_line(ctx: &Ctx, count: u32) -> Elem
     Row::new()
       .flex(1.0)
       .height(Dimension::Px(RULE_HEIGHT))
-      .background(PaletteColor::BorderStrong)
+      .background(PaletteColor::Input)
   };
   Row::new()
     .id("orchestrator-edit-drop-line")
@@ -79,7 +79,7 @@ pub(in crate::screens::orchestrator) fn drop_line(ctx: &Ctx, count: u32) -> Elem
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .child(rule())
-    .child(icon(Icon::ArrowDown, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowDown, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .id("orchestrator-edit-drop-line-label")
@@ -138,8 +138,8 @@ impl Component for EditField {
         ExtraSpacing::Loose.role(),
       ))
       .spacing(ExtraSpacing::Loose.role())
-      .background(PaletteColor::SurfaceInput)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
+      .background(ExtraColor::InputSurface.role())
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Ring))
       .rounded(RadiusSize::Lg)
       .child(self.input(ctx, &props))
       .child(foot(ctx, &props));
@@ -178,12 +178,12 @@ fn why_not(ctx: &mut Ctx, props: &FieldProps) -> Option<Element> {
 impl EditField {
   /// The words being edited, in 13 `text_primary`: Ctrl Enter sends them, Esc cancels the edit.
   fn input(&self, ctx: &mut Ctx, props: &FieldProps) -> TextInput {
-    let [text, placeholder] = text_styles(ctx, TypographyStyle::Body, PaletteColor::TextPrimary);
+    let [text, placeholder] = text_styles(ctx, TypographyStyle::Body, PaletteColor::Foreground);
     let state = props.env.state.clone();
     let (project, mode) = (props.project.clone(), props.env.mode);
     TextInput::styled(state.words.clone(), text)
       .placeholder_style(placeholder)
-      .caret_color(PaletteColor::TextPrimary)
+      .caret_color(PaletteColor::Foreground)
       .id(format!("{}-input", props.id))
       .describe("a11y_name", ctx.t("orchestrator.edit.field"))
       .textarea()
@@ -217,7 +217,7 @@ fn foot(ctx: &mut Ctx, props: &FieldProps) -> Row {
     Text::new(&words)
       .id(format!("{}-drops", props.id))
       .variant(ExtraTypography::Note.role())
-      .color(PaletteColor::TextSecondary)
+      .color(ExtraColor::TextSecondary.role())
   });
   let cancel_state = state.clone();
   let cancel = ActionButton::new(

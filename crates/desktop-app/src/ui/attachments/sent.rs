@@ -126,7 +126,7 @@ impl Component for SentAttachments {
         .id(format!("{}-attachments-failed", props.id))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::TextMuted))
+        .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::MutedForeground))
         .child(Text::new(&ctx.t_args(key, [("name", name.to_string())])).variant(ExtraTypography::Note.role()))
     });
     Column::new()

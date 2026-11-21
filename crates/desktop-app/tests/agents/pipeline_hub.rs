@@ -368,14 +368,14 @@ fn pipeline_hub_a_read_that_fails_says_so_with_its_reason_keeps_the_head_and_tri
       agents.exists(&format!("pipeline-hub-filter-{tab}")),
       "the {tab} tab keeps its name"
     );
-    // A count that is not read is a bone holding only the digit's clipped 0; the project has three pipelines.
+    // A count that is not read is a bone (lurq's count skeleton) holding no digit; the project has three pipelines.
     assert_eq!(
       agents
         .window
         .texts(&format!("pipeline-hub-filter-{tab}-count"))
         .map(|words| words.concat())
         .as_deref(),
-      Some("0"),
+      Some(""),
       "the {tab} tab shows a bone, not a count"
     );
   }

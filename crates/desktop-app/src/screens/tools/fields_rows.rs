@@ -13,7 +13,7 @@ use orchester_workspace::messages::Message;
 
 use crate::{
   screens::hub::parts::{boxed, field, group, head},
-  theme::HubText,
+  theme::{ExtraColor, HubText},
   ui::{field::FieldInput, message::message_text},
 };
 
@@ -54,7 +54,7 @@ pub(super) fn read_row(id: &str, label: &str, hint: Option<&str>, value: &str) -
     Text::new(value)
       .id(format!("tool-{id}"))
       .variant(HubText::Value.role())
-      .color(PaletteColor::TextSecondary)
+      .color(ExtraColor::TextSecondary.role())
       .nowrap(),
   )
   .into()
@@ -88,7 +88,7 @@ pub(super) fn setting(ctx: &mut Ctx, setting: &Setting<'_>, value: lurq::core::S
       Text::new(&message_text(ctx, error))
         .id(format!("{id}-note"))
         .variant(TypographyStyle::Caption)
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
     }));
   field(&id, setting.label, setting.hint, control).into()
 }

@@ -75,7 +75,7 @@ pub(super) fn identities(ctx: &mut Ctx, source: &str, view: &IntegrationView) ->
     .width(Dimension::Pct(100.0))
     .padding(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Md)
     .child(route_room)
     .child(rest(CELLS[1], path).padding_right(SpacingSize::Lg))

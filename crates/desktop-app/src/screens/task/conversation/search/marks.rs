@@ -184,7 +184,7 @@ fn piece(text: &str, (style, color): (TypographyStyle, &PaletteColor), found: Op
         (
           "conversation-search-current",
           PaletteColor::Warning,
-          PaletteColor::TextInverse,
+          PaletteColor::PrimaryForeground,
         )
       } else {
         ("conversation-search-match", PaletteColor::WarningMuted, color.clone())

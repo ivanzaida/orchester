@@ -116,7 +116,7 @@ fn browser_found_shows_its_name_its_program_and_the_profiles_folder() {
   let mut page = Page::open(&[CHROME]);
   let program = page.folder("installed").join(CHROME);
 
-  assert_eq!(page.window.text("settings-tab-browser"), "Browser");
+  assert_eq!(page.window.text("settings-tab-browser-label"), "Browser");
   assert_eq!(page.found(), "Google Chrome");
   assert!(
     page.window.texts("settings-browser-found-version").is_none(),
@@ -125,10 +125,10 @@ fn browser_found_shows_its_name_its_program_and_the_profiles_folder() {
   assert!(
     page
       .window
-      .text("settings-browser-found-hint")
+      .text("settings-browser-found-description")
       .starts_with("Found on this computer."),
     "{}",
-    page.window.text("settings-browser-found-hint")
+    page.window.text("settings-browser-found-description")
   );
   assert_eq!(
     page.window.text("settings-browser-program-path"),
@@ -167,14 +167,14 @@ fn browser_not_found_says_what_was_looked_for_and_looks_again() {
 
   assert_eq!(page.found(), "None found");
   assert_eq!(
-    page.window.text("settings-browser-found-hint"),
+    page.window.text("settings-browser-found-description"),
     "Agents' browser tools answer that the browser is unavailable."
   );
   assert_eq!(
     page.window.text("settings-browser-not-found-title"),
     "No Chromium-based browser found"
   );
-  let looked = page.window.text("settings-browser-not-found-body");
+  let looked = page.window.text("settings-browser-not-found-description");
   assert!(looked.starts_with("Orchester looked for"), "{looked}");
   assert!(looked.contains("look again, or choose"), "how to fix it: {looked}");
   assert_eq!(page.window.text("settings-browser-choose"), "Choose a program…");
@@ -203,10 +203,10 @@ fn browser_another_chromium_based_program_is_taken_and_kept() {
   assert!(
     page
       .window
-      .text("settings-browser-found-hint")
+      .text("settings-browser-found-description")
       .starts_with("Chosen by you."),
     "{}",
-    page.window.text("settings-browser-found-hint")
+    page.window.text("settings-browser-found-description")
   );
   assert_eq!(
     page.window.text("settings-browser-program-path"),

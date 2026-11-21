@@ -23,7 +23,7 @@ use super::{
   sections::{DriverChoice, Sections},
 };
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ServicesText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ServicesText},
   ui::{
     icon::{Icon, icon},
     pressable::{Focus, pressable},
@@ -92,9 +92,9 @@ fn card(ctx: &Ctx, sections: &Sections, (driver, name, glyph, key): Driver, chos
   let (driver_signal, commit) = (sections.driver.clone(), commit.clone());
   let id = format!("settings-service-driver-{name}");
   let tone = if chosen {
-    PaletteColor::TextPrimary
+    PaletteColor::Foreground
   } else {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   };
   let head = Row::new()
     .width(Dimension::Pct(100.0))
@@ -108,10 +108,10 @@ fn card(ctx: &Ctx, sections: &Sections, (driver, name, glyph, key): Driver, chos
         .color(tone),
     )
     .child(Spacer::new().flex(1.0))
-    .with_children(chosen.then(|| icon(Icon::CircleCheck, IconSize::Base, PaletteColor::TextPrimary)));
+    .with_children(chosen.then(|| icon(Icon::CircleCheck, IconSize::Base, PaletteColor::Foreground)));
   let words = ctx.t(key);
   let (fill, stroke) = if chosen {
-    (Some(PaletteColor::AccentMuted), PaletteColor::BorderFocus)
+    (Some(PaletteColor::Highlight), PaletteColor::Ring)
   } else {
     (None, PaletteColor::Border)
   };

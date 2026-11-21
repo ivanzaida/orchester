@@ -11,6 +11,7 @@ use lurq::{
 
 use super::{
   ExtraColor,
+  palette::text_secondary,
   typography::{mono, style},
 };
 
@@ -82,11 +83,11 @@ impl MemoryText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::GroupLabel => style(10.5, FontWeight::Medium, 1.3, 0.5, palette.text_muted),
-      Self::GroupCount => mono(style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
-      Self::Flag => style(10.5, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
-      Self::ListLabel => style(11.5, FontWeight::Medium, 1.45, 0.0, palette.text_muted),
-      Self::NoticeText => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
+      Self::GroupLabel => style(10.5, FontWeight::Medium, 1.3, 0.5, palette.muted_foreground),
+      Self::GroupCount => mono(style(10.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground)),
+      Self::Flag => style(10.5, FontWeight::Medium, 1.3, 0.0, text_secondary(palette)),
+      Self::ListLabel => style(11.5, FontWeight::Medium, 1.45, 0.0, palette.muted_foreground),
+      Self::NoticeText => style(11.5, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
       Self::Link => style(
         11.5,
         FontWeight::Medium,
@@ -94,12 +95,12 @@ impl MemoryText {
         0.0,
         palette.get(ExtraColor::AccentText.role()),
       ),
-      Self::Scope => style(10.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::PanelTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::StateText => style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
-      Self::Record => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
-      Self::Chip => style(11.0, FontWeight::Medium, 1.2, 0.0, palette.text_secondary),
+      Self::Scope => style(10.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
+      Self::PanelTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::StateText => style(12.0, FontWeight::Normal, 1.5, 0.0, text_secondary(palette)),
+      Self::Record => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.foreground),
+      Self::Chip => style(11.0, FontWeight::Medium, 1.2, 0.0, text_secondary(palette)),
     }
   }
 }

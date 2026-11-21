@@ -98,7 +98,7 @@ fn bar(taken: usize, limit: usize) -> Element {
     .align_items(Alignment::Center)
     .with_children((0..limit).map(|at| {
       let fill = if at < taken {
-        PaletteColor::Accent
+        PaletteColor::Primary
       } else {
         PaletteColor::Border
       };
@@ -143,7 +143,7 @@ pub(super) fn used_by_group(ctx: &mut Ctx, view: &View, typed: &str) -> Element 
             format!("{id}-layer"),
             words::layer(ctx, suite.body.layer()),
           ))
-          .control(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
+          .control(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground))
           .opens(navigation.to(Route::Project(
             project,
             ProjectPage::Services(ServicesPage::Suite(suite.id)),
@@ -196,7 +196,7 @@ fn branch_line(branch: &Branch) -> Element {
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .describe("depth", branch.depth.to_string())
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&branch.name)
         .id(format!("settings-stack-dependency-{}-name", branch.name))

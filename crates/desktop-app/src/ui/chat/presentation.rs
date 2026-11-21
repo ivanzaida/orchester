@@ -35,7 +35,7 @@ pub fn presentation(
 ) -> MarkdownLinkPresentation {
   let followed = MarkdownLinkPresentation::link()
     .style(looks.link.clone())
-    .hovered(looks.hovered)
+    .hovered(looks.hovered.clone())
     .radius(looks.radius)
     .pointer_only();
   match ChatLink::of(destination) {

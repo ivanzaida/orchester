@@ -146,7 +146,7 @@ impl Error {
 
   const fn color(&self) -> PaletteColor {
     if self.is_error() {
-      PaletteColor::Danger
+      PaletteColor::Destructive
     } else {
       PaletteColor::Warning
     }

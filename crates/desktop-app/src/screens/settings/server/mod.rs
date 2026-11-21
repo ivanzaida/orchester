@@ -114,7 +114,7 @@ fn group(ctx: &Ctx, meta: &str) -> SettingGroup {
     Text::new(&ctx.t(meta))
       .id("settings-mcp-meta")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap(),
   )
 }
@@ -192,8 +192,8 @@ fn state_label(ctx: &Ctx, state: &ServerState) -> Element {
       ctx.t("settings.automation.server.state.listening"),
     ),
     ServerState::PortTaken { port, how } => (
-      PaletteColor::Danger,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
+      PaletteColor::Destructive,
       ctx.t_args(
         how.pick(
           "settings.automation.server.state.portTaken",
@@ -203,13 +203,13 @@ fn state_label(ctx: &Ctx, state: &ServerState) -> Element {
       ),
     ),
     ServerState::Off => (
-      PaletteColor::TextMuted,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
+      PaletteColor::MutedForeground,
       ctx.t("settings.automation.server.state.off"),
     ),
     ServerState::TokenUnreadable { .. } | ServerState::Unavailable => (
-      PaletteColor::Danger,
-      PaletteColor::Danger,
+      PaletteColor::Destructive,
+      PaletteColor::Destructive,
       ctx.t("settings.automation.server.state.notRunning"),
     ),
   };

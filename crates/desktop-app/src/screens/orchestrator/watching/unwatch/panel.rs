@@ -31,7 +31,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, IconSize, SlashText},
   ui::{
     icon::{Icon, icon},
-    menu::{menu_panel, separator},
+    menu::{held_panel, menu_panel, separator_line},
     message::message_text,
     slash::{Choice, PickerSearch},
   },
@@ -90,7 +90,7 @@ pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> 
         .color(if warn {
           PaletteColor::Warning
         } else {
-          PaletteColor::TextMuted
+          PaletteColor::MutedForeground
         })
         .flex_shrink(0.0)
         .nowrap();
@@ -108,7 +108,7 @@ pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> 
   if !rows.is_empty() {
     content.push(list(ctx, &format!("{}-unwatch-list", shown.id), rows));
   }
-  content.push(separator(ctx));
+  content.push(separator_line(ctx));
   let cancels = Text::new(&ctx.t("orchestrator.watch.unwatch.cancelsNothing"))
     .variant(TypographyStyle::Caption)
     .flex_shrink(0.0)
@@ -141,10 +141,11 @@ pub(super) fn unshown(ctx: &mut Ctx, (id, search): (&str, &PickerSearch), why: O
 }
 
 fn frame(id: &str, content: Vec<Element>) -> Element {
-  menu_panel(&format!("{id}-unwatch-picker"))
-    .width(Dimension::Px(WIDTH))
-    .with_children(content)
-    .into()
+  held_panel(
+    menu_panel(&format!("{id}-unwatch-picker"))
+      .width(WIDTH)
+      .with_children(content),
+  )
 }
 
 /// The picker's own search field, `{id}-unwatch-search`.
@@ -213,17 +214,17 @@ fn row(
       .child(
         Text::new(&ctx.t("orchestrator.watch.unwatch.added"))
           .variant(TypographyStyle::Caption)
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
-      .child(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary))
+      .child(icon(Icon::Check, IconSize::Md, PaletteColor::Foreground))
   });
   let row = line()
     .id(format!("{}-unwatch-{}", shown.id, choice.key))
     .describe("a11y_name", choice.label.clone())
     .describe("focused", focused.to_string())
     .describe("added", added.is_some().to_string())
-    .child(icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(choice.icon, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(matched_label(&choice.label, shown.filter, false))
     .child(
       Text::new(meta)

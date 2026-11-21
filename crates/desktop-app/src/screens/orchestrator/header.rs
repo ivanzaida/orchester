@@ -129,7 +129,7 @@ pub(super) fn header(
       Text::new(&meta.unwrap_or_default())
         .id("orchestrator-meta")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0)),
@@ -152,12 +152,12 @@ fn held(ctx: &Ctx, hold: Hold) -> Row {
     .padding(Padding::new().left(ExtraSpacing::Snug.role()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Pause, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+    .child(icon(Icon::Pause, IconSize::Sm, PaletteColor::MutedForeground).flex_shrink(0.0))
     .child(
       Text::new(&held_line(ctx, hold))
         .id("orchestrator-held-words")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)

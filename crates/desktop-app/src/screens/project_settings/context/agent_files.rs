@@ -209,14 +209,14 @@ fn pair(ctx: &Ctx, id: &str, key: &str, value: &str) -> Row {
       Text::new(&ctx.t(key))
         .id(id.to_owned())
         .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Px(AGENT_LABEL_WIDTH)),
     )
     .child(
       Text::new(value)
         .id(format!("{id}-values"))
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0),
     )
 }

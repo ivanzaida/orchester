@@ -21,7 +21,7 @@ use orchester_workspace::tasks::{
 };
 
 use crate::{
-  theme::{ConversationSpacing, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ConversationSpacing, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -88,7 +88,7 @@ impl RunState {
   /// The chip's icon, its color and its words; `None` when there is no run to say anything of, or it cannot
   /// be read.
   fn look(self) -> Option<(Icon, PaletteColor, &'static str)> {
-    let muted = PaletteColor::TextMuted;
+    let muted = PaletteColor::MutedForeground;
     Some(match self {
       Self::Live { following: true } => (Icon::Radio, PaletteColor::Success, "conversation.state.following"),
       Self::Live { following: false } => (Icon::Pause, muted, "conversation.state.notFollowing"),
@@ -101,7 +101,7 @@ impl RunState {
       Self::Interrupted => (Icon::CirclePause, muted, "conversation.state.interrupted"),
       Self::Ready => (Icon::GitPullRequest, muted, "conversation.state.ready"),
       Self::Merged => (Icon::GitMerge, muted, "conversation.state.merged"),
-      Self::Failed => (Icon::CircleX, PaletteColor::Danger, "conversation.state.failed"),
+      Self::Failed => (Icon::CircleX, PaletteColor::Destructive, "conversation.state.failed"),
       Self::Cancelled => (Icon::Square, muted, "conversation.state.cancelled"),
     })
   }
@@ -142,7 +142,7 @@ pub(super) fn toolbar(ctx: &Ctx, state: RunState) -> Element {
       .child(
         Text::new(&ctx.t(key))
           .variant(ExtraTypography::Note.role())
-          .color(PaletteColor::TextSecondary)
+          .color(ExtraColor::TextSecondary.role())
           .nowrap(),
       )
   });

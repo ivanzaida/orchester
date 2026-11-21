@@ -43,8 +43,8 @@ pub(super) fn panel(ctx: &mut Ctx, props: &ChipProps, heading: &str) -> Element 
     .width(Dimension::Px(WIDTH))
     .padding(ExtraSpacing::Snug.role())
     .spacing(ExtraSpacing::Tight.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(RadiusSize::Lg)
     .box_shadow(ShadowStyle::Lg)
     .child(heading_row(
@@ -59,7 +59,7 @@ pub(super) fn panel(ctx: &mut Ctx, props: &ChipProps, heading: &str) -> Element 
         .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
         .spacing(ExtraSpacing::Loose.role())
         .align_items(Alignment::Start)
-        .child(icon(Icon::TriangleAlert, IconSize::Md, PaletteColor::Danger))
+        .child(icon(Icon::TriangleAlert, IconSize::Md, PaletteColor::Destructive))
         .child(
           Text::new(&note)
             .id("conversation-permissions-dangerous-note")

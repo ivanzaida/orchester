@@ -3,11 +3,7 @@
 //! own ([`blocking_dialog`], T13 `DWfta`, T14 `uKVK2`) and Reopen's two choices, Back to Todo and Back to
 //! Backlog, with their foot line ([`reopen_menu`], T4 `V26A3`).
 
-use lurq::{
-  app::ctx::Ctx,
-  core::ElementRef,
-  node::{Element, dimension::Dimension},
-};
+use lurq::{app::ctx::Ctx, core::ElementRef, node::Element};
 use orchester_core::task::organization::WorkflowStatus;
 
 use super::{TeamAsk, TeamControls, TeamTaskShown};
@@ -108,10 +104,10 @@ pub fn reopen_menu(ctx: &mut Ctx, anchor: &ElementRef) -> Option<Element> {
       TeamAsk::BackToBacklog,
     ),
   ];
-  let rows: Vec<Element> = rows.into_iter().map(|row| row.render(ctx, &open)).collect();
+  let rows: Vec<_> = rows.into_iter().map(|row| row.render(ctx)).collect();
   let foot = foot(ctx, "task-reopen-free", &ctx.t("summary.team.lifecycle.reopen.free"));
   let panel = menu_panel("task-reopen-menu")
-    .width(Dimension::Px(REOPEN_WIDTH))
+    .width(REOPEN_WIDTH)
     .with_children(rows)
     .child(foot);
   Some(menu(anchor.clone(), open, panel).into())

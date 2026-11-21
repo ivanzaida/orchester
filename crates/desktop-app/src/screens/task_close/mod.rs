@@ -21,7 +21,8 @@ use lurq::{
   },
   components::Row,
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  node::Element,
+  ui::{self, SubmenuOpen},
 };
 use orchester_core::{
   id::{RunId, TaskId},
@@ -54,7 +55,7 @@ use crate::{
   ui::{
     icon::Icon,
     icon_button::IconButton,
-    menu::{MenuItem, menu_at_end, menu_panel, separator},
+    menu::{Entry, MenuItem, menu_at_end, menu_panel, separator},
   },
 };
 
@@ -269,19 +270,20 @@ impl Closer {
     self.run(Request::Delete(subject, self.unmerged.get_untracked()));
   }
 
-  /// The rows of `subject`'s *More actions* menu ([`more_menu`]), their ids starting with `id`, closed by a choice
-  /// through `open`: those that close or reopen it, then *Delete task…* apart.
-  pub fn menu(&self, ctx: &mut Ctx, (id, subject): (&str, &Subject), open: &Signal<bool>) -> Vec<Element> {
-    let (mut rows, delete) = self.rows(ctx, (id, subject), open);
-    rows.push(separator(ctx));
-    rows.push(delete);
+  /// The rows of `subject`'s *More actions* menu ([`more_menu`]), their ids starting with `id`: those that close or
+  /// reopen it, then *Delete task…* apart.
+  pub fn menu(&self, ctx: &mut Ctx, (id, subject): (&str, &Subject)) -> Vec<Entry> {
+    let (rows, delete) = self.rows(ctx, (id, subject));
+    let mut rows: Vec<Entry> = rows.into_iter().map(Entry::from).collect();
+    rows.push(separator());
+    rows.push(delete.into());
     rows
   }
 
-  /// The rows of a *More actions* menu that close, reopen and delete `subject`, their ids starting with `id`, closed
-  /// by a choice through `open`: those that close or reopen it, and *Delete task…* apart, for the menu's end (the
+  /// The rows of a *More actions* menu that close, reopen and delete `subject`, their ids starting with `id`: those
+  /// that close or reopen it, and *Delete task…* apart, for the menu's end (the
   /// task page's menu holds them among its own, ORC-100).
-  pub fn rows(&self, ctx: &mut Ctx, (id, subject): (&str, &Subject), open: &Signal<bool>) -> (Vec<Element>, Element) {
+  pub fn rows(&self, ctx: &mut Ctx, (id, subject): (&str, &Subject)) -> (Vec<ui::MenuItem>, ui::MenuItem) {
     let busy = self.action.state().get().is_pending();
     let item = |suffix: &str, (label, glyph): (Arc<str>, Icon), request: Request| {
       let id = format!("{id}-{suffix}");
@@ -329,8 +331,8 @@ impl Closer {
         closer.ask_delete(subject.clone())
       })
     };
-    let delete = delete.icon(Icon::Trash2).render(ctx, open);
-    let rows: Vec<Element> = items.into_iter().map(|item| item.render(ctx, open)).collect();
+    let delete = delete.icon(Icon::Trash2).render(ctx);
+    let rows = items.into_iter().map(|item| item.render(ctx)).collect();
     (rows, delete)
   }
 }
@@ -454,7 +456,7 @@ pub fn more_menu(
   ctx: &mut Ctx,
   place: &MenuPlace,
   (key, id, width): (&str, &str, f32),
-  rows: impl FnOnce(&mut Ctx, &Signal<bool>) -> Vec<Element>,
+  rows: impl FnOnce(&mut Ctx, &Signal<bool>) -> Vec<Entry>,
 ) -> Element {
   let open = place.open.clone();
   let label = ctx.t_args("task_close.menu.label", [("task", key)]);
@@ -465,9 +467,10 @@ pub fn more_menu(
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
     let panel = menu_panel(&format!("{id}-panel"))
-      .width(Dimension::Px(width))
+      .width(width)
       .with_children(rows(ctx, &place.open));
-    menu_at_end(place.anchor.clone(), place.open.clone(), panel)
+    // A row that opens a list beside the menu opens it on a press, as a card's menu does.
+    menu_at_end(place.anchor.clone(), place.open.clone(), panel).submenus(SubmenuOpen::Press)
   });
   Row::new().child(button).with_children(menu).into()
 }

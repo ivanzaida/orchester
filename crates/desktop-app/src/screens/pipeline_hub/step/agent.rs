@@ -34,7 +34,7 @@ use crate::{
   navigation::Navigation,
   routes::{AgentTab, ProjectPage, Route},
   screens::{pipeline_hub::edit::Edit, team_hub::words::cli_key},
-  theme::{AgentPickerText, ControlHeight, DISABLED_OPACITY, ExtraSpacing, IconSize},
+  theme::{AgentPickerText, ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
   ui::{
     agent_picker::{self, Actions, AgentPicker, Item},
     icon::{Icon, icon},
@@ -263,9 +263,9 @@ pub(super) struct FieldBox<'a> {
 pub(super) fn field_box(ctx: &Ctx, field: &FieldBox<'_>) -> Element {
   let (toggle, open) = (field.open.0.clone(), field.open.1);
   let stroke = match (field.flag, open) {
-    (Some(Flag::Unset), _) => PaletteColor::Danger,
+    (Some(Flag::Unset), _) => PaletteColor::Destructive,
     (Some(Flag::NotReady), _) => PaletteColor::Warning,
-    (None, true) => PaletteColor::Accent,
+    (None, true) => PaletteColor::Primary,
     (None, false) => PaletteColor::Border,
   };
   let mut row = Focus::Keyboard
@@ -287,12 +287,12 @@ pub(super) fn field_box(ctx: &Ctx, field: &FieldBox<'_>) -> Element {
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border_inside(BorderSize::Sm, stroke.clone())
     .hovered_style(Style::new().border_inside(
       BorderSize::Sm,
       if field.flag.is_none() && !open {
-        PaletteColor::BorderStrong
+        PaletteColor::Input
       } else {
         stroke
       },
@@ -333,7 +333,7 @@ pub(super) fn field_box(ctx: &Ctx, field: &FieldBox<'_>) -> Element {
     .child(icon(
       if open { Icon::ChevronUp } else { Icon::ChevronDown },
       IconSize::Md,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .into()
 }

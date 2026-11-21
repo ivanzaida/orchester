@@ -95,14 +95,23 @@ fn approve_mode_dangerous_asks_first_and_cancel_esc_and_enter_leave_it() {
   );
   assert!(
     page
-      .text("settings-dangerous-dialog-text")
+      .text("settings-dangerous-dialog-words")
       .starts_with("Every tool request of every agent in Kontur"),
     "names the project"
   );
   for index in 0..4 {
     assert!(page.exists(&format!("settings-dangerous-dialog-risk-{index}")));
   }
-  assert!(!page.exists("settings-dangerous-dialog-enter"), "no Enter hint");
+  // The footer's caps are lurq's `<id>-note_key_cap`, `-2`, …: Esc's alone, no Enter hint.
+  assert_eq!(
+    page.text("settings-dangerous-dialog-note_key_cap"),
+    "Esc",
+    "no Enter hint"
+  );
+  assert!(
+    !page.exists("settings-dangerous-dialog-note_key_cap-2"),
+    "no Enter hint"
+  );
   page.until("Cancel has the focus", |p| {
     focused(p).as_deref() == Some("settings-dangerous-dialog-cancel")
   });

@@ -15,7 +15,7 @@ fn instructions_source_typography_preserves_source_line_positions() {
     (12.0, FontWeight::Normal, "Geist Mono")
   );
   assert!(style.vertical_align == VerticalAlign::LineBox);
-  assert_eq!(style.color, app.theme().palette_color(PaletteColor::TextPrimary));
+  assert_eq!(style.color, app.theme().palette_color(PaletteColor::Foreground));
 }
 
 #[test]

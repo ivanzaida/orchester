@@ -18,7 +18,7 @@ use crate::{
   navigation::Navigation,
   routes::Route,
   services::path_picker::PathKind,
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, ProjectsText},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, ProjectsText},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
@@ -98,7 +98,7 @@ pub(super) fn folder(ctx: &mut Ctx, form: &Form, actions: &Actions) -> Column {
     None => Text::new(&ctx.t("setup.noFolder"))
       .id("project-folder-value")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted),
+      .color(PaletteColor::MutedForeground),
   };
   let field = Row::new()
     .id("project-folder-box")
@@ -107,7 +107,7 @@ pub(super) fn folder(ctx: &mut Ctx, form: &Form, actions: &Actions) -> Column {
     .height(Dimension::Px(ControlHeight::Md.value()))
     .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(

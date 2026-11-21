@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::{palette::ExtraColor, typography::style};
+use super::{
+  palette::{ExtraColor, text_secondary},
+  typography::style,
+};
 
 /// Text of the decisions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,12 +66,12 @@ impl DecisionText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::CardTitle => style(13.5, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::ReadyTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Subhead => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Plan => style(13.0, FontWeight::Normal, 1.6, 0.0, palette.text_secondary),
-      Self::Criterion => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::Report => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.text_primary),
+      Self::CardTitle => style(13.5, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::ReadyTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Subhead => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Plan => style(13.0, FontWeight::Normal, 1.6, 0.0, text_secondary(palette)),
+      Self::Criterion => style(12.5, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
+      Self::Report => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.foreground),
       Self::Link => style(
         12.0,
         FontWeight::Medium,
@@ -76,7 +79,7 @@ impl DecisionText {
         0.0,
         palette.get(ExtraColor::AccentText.role()),
       ),
-      Self::ChangeKind => super::typography::mono(style(11.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_secondary)),
+      Self::ChangeKind => super::typography::mono(style(11.0, FontWeight::SemiBold, 1.3, 0.0, text_secondary(palette))),
     }
   }
 }

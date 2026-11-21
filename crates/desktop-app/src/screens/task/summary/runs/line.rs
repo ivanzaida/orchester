@@ -36,7 +36,7 @@ impl Line {
       glyph,
       short,
       text,
-      color: PaletteColor::TextMuted,
+      color: PaletteColor::MutedForeground,
       present: false,
     }
   }
@@ -127,9 +127,9 @@ fn present(ctx: &Ctx, run: &Run, left: &Leftovers) -> Line {
     short: "summary.runs.short.kept",
     text,
     color: if left.loses_files() {
-      PaletteColor::TextPrimary
+      PaletteColor::Foreground
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     },
     present: true,
   }

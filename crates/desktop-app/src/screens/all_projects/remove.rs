@@ -28,7 +28,7 @@ use super::{Ask, Removing};
 use crate::{
   project::Projects,
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize, ProjectsSpacing, ProjectsText},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ProjectsSpacing, ProjectsText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -190,7 +190,7 @@ fn kept(ctx: &Ctx, project: &RegisteredProject) -> Column {
     Row::new()
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
       .child(Text::new(value).variant(ProjectsText::Path.role()))
       .child(Text::new(words).variant(ExtraTypography::Note.role()))
   };
@@ -228,12 +228,16 @@ fn actions(
         Row::new()
           .height(Dimension::Px(PROBLEM_SLOT))
           .align_items(Alignment::Center)
-          .child(icon(Icon::CircleAlert, IconSize::Base, PaletteColor::TextSecondary)),
+          .child(icon(
+            Icon::CircleAlert,
+            IconSize::Base,
+            ExtraColor::TextSecondary.role(),
+          )),
       )
       .child(
         Text::new(&message_text(ctx, problem))
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextPrimary)
+          .color(PaletteColor::Foreground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0)),
       )

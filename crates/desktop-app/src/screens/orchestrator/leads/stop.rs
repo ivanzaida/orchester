@@ -20,7 +20,7 @@ use orchester_core::orchestrator::watch::NamedTarget;
 
 use super::chip::Hold;
 use crate::{
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -75,9 +75,9 @@ impl Component for StopView {
     let name = props.named.name.clone().unwrap_or_default();
     let (stop, named) = (props.hold.stop.clone(), props.named.clone());
     let color = if props.lit || self.hovered.get() {
-      PaletteColor::TextSecondary
+      ExtraColor::TextSecondary.role()
     } else {
-      PaletteColor::TextMuted
+      PaletteColor::MutedForeground
     };
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     Button::empty()

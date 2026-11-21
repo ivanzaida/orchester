@@ -69,8 +69,8 @@ pub(in crate::screens) fn new_row(ctx: &Ctx, kind: Kind) -> Element {
     .describe("state", "chosen")
     .describe("kind", kind.name())
     .background(ExtraColor::Hover.role())
-    .border_left(Border::inside(BorderSize::Lg, PaletteColor::Accent))
-    .child(icon(glyph(kind), IconSize::Lg, PaletteColor::TextSecondary))
+    .border_left(Border::inside(BorderSize::Lg, PaletteColor::Primary))
+    .child(icon(glyph(kind), IconSize::Lg, ExtraColor::TextSecondary.role()))
     .child(
       Column::new()
         .flex(1.0)

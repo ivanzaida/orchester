@@ -1,5 +1,5 @@
 //! The shapes skeletons share: a line of words in bones, a count, a state, a switch, and a row group's heading,
-//! outline and rows in the geometry of `ui::row_group` (`Published` `pnnmh` in `x1lmXb`), so the real rows replace
+//! outline and rows in the geometry of grouped rows (`Published` `pnnmh` in `x1lmXb`), so the real rows replace
 //! them in place (`D · Bones` in `13 · Patterns` `AOQZ3`: count 14×8, 13 px words 10 high, 12 px 9, 11 px 8).
 
 use std::sync::Arc;
@@ -12,11 +12,12 @@ use lurq::{
   components::{Column, Row, Spacer, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::{Length, Skeleton as UiSkeleton},
 };
 
 use super::{bone, round_bone};
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, GroupText, IconSize, skeleton_line},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, GroupText, IconSize, skeleton_line},
   ui::icon::{Icon, icon},
 };
 
@@ -39,17 +40,14 @@ pub fn line(ctx: &Ctx, style: impl Into<TypographyStyle>, width: f32) -> Row {
 }
 
 /// A count beside a title.
-pub fn count() -> Column {
+pub fn count() -> UiSkeleton {
   bone(COUNT.0, COUNT.1)
 }
 
 /// A count's bone as high as [`count`]'s and as wide as the place it stands in: a count that keeps the room of the
 /// count it stands for (a tab's).
-pub fn count_in_room() -> Column {
-  Column::new()
-    .height(Dimension::Px(COUNT.1))
-    .rounded(RadiusSize::Sm)
-    .background(PaletteColor::Border)
+pub fn count_in_room() -> UiSkeleton {
+  UiSkeleton::block(Length::Fill, COUNT.1)
 }
 
 /// A state at a row's end: its dot and its words, `width` long, in 12.
@@ -63,7 +61,7 @@ pub fn status(ctx: &Ctx, width: f32) -> Row {
 }
 
 /// A switch whose state is not known yet: a bone the size of its track.
-pub fn switch() -> Column {
+pub fn switch() -> UiSkeleton {
   bone(SWITCH.0, SWITCH.1)
 }
 
@@ -77,7 +75,7 @@ pub fn field(ctx: &Ctx, width: f32, value: f32) -> Row {
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .child(line(ctx, TypographyStyle::Description, value))
 }
 
@@ -86,7 +84,7 @@ pub fn unit_field(ctx: &Ctx, width: f32, value: f32, unit: &str) -> Row {
   field(ctx, width, value).child(Spacer::new().flex(1.0)).child(
     Text::new(unit)
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap(),
   )
 }
@@ -106,17 +104,17 @@ pub fn select(ctx: &Ctx, width: f32, value: f32) -> Row {
   field(ctx, width, value).child(Spacer::new().flex(1.0)).child(icon(
     Icon::ChevronDown,
     IconSize::Md,
-    PaletteColor::TextMuted,
+    PaletteColor::MutedForeground,
   ))
 }
 /// A button that comes with the data: a bone of its size.
-pub fn button(width: f32) -> Column {
-  bone(width, ControlHeight::Md.value()).rounded(RadiusSize::Md)
+pub fn button(width: f32) -> UiSkeleton {
+  bone(width, ControlHeight::Md.value()).radius(RadiusSize::Md)
 }
 
 /// A row's chevron, real: the row will open a page.
 pub fn chevron() -> Text {
-  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)
+  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)
 }
 
 /// Words that stay real, or the bone of words not read yet, so long.
@@ -135,7 +133,7 @@ impl Words {
   }
 }
 
-/// A row group's outline around `rows`, a line between them (`ui::row_group`).
+/// A row group's outline around `rows`, a line between them (`pnnmh`).
 pub fn outline(id: &str, rows: Vec<Element>) -> Column {
   let lines = rows.into_iter().enumerate().map(|(index, row)| {
     let line = Column::new().width(Dimension::Pct(100.0)).child(row);
@@ -202,7 +200,7 @@ pub fn group(ctx: &Ctx, id: &str, (title, counted): (Words, bool), end: Option<E
     .child(outline(id, rows))
 }
 
-/// How a row stands in its group, as `ui::row_group::GroupRow` spaces it.
+/// How a row stands in its group, as grouped rows space it (`pnnmh`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Shape {
   /// A label over a hint, a control or a chevron at its end.

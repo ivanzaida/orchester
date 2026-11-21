@@ -28,7 +28,7 @@ use super::Ask;
 use crate::{
   screens::settings::orchester::PersonOnly,
   services::Services,
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -90,7 +90,7 @@ pub(super) fn shared_note(ctx: &Ctx, project: ProjectId) -> Element {
     .padding(Padding::new().left(SpacingSize::Md).bottom(ExtraSpacing::Snug.role()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Info, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Info, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(&ctx.t("projects.move.shared")).variant(TypographyStyle::Description))
     .into()
 }
@@ -229,7 +229,7 @@ impl Component for Question {
       .align_items(Alignment::Start)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Lg)
-      .child(icon(glyph, IconSize::Lg, PaletteColor::TextSecondary))
+      .child(icon(glyph, IconSize::Lg, ExtraColor::TextSecondary.role()))
       .child(words)
   }
 }

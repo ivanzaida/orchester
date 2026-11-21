@@ -216,11 +216,11 @@ fn mapping_row(ctx: &Ctx, task: &JoinedKey) -> Row {
   let now = if task.not_shared {
     Text::new(&ctx.t("sharing.mapping.notShared"))
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
   } else {
     Text::new(&task.key.to_string())
       .variant(ExtraTypography::MonoKey.role())
-      .color(PaletteColor::TextPrimary)
+      .color(PaletteColor::Foreground)
   };
   let note = if task.not_shared {
     Some(ctx.t("sharing.mapping.notSharedNote"))
@@ -245,7 +245,7 @@ fn mapping_row(ctx: &Ctx, task: &JoinedKey) -> Row {
     .child(
       Text::new(task.title.as_str())
         .variant(TypographyStyle::Body)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0),
     )
     .with_children(note.map(|note| {

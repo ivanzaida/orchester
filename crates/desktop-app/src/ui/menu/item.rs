@@ -1,121 +1,46 @@
-//! Menus: a list of commands that opens anchored to the control that opens it and closes on a choice,
-//! a press outside or Esc. Its panel is `surface_raised` inside a `border_strong` stroke, radius 8, 4
-//! inside and 2 between rows (`Pipeline menu` `ClKqz`, `Tag menu` `LLIjG`). A row (`Menu item` `mAHGP`)
-//! is 28 high, radius 4, 8 at its sides: a 14 `text_secondary` icon, the label in 12 `text_primary` and
-//! a shortcut in Geist Mono 11 `text_muted` at its end, 8 apart; a row with a detail (`Menu item/detail`
-//! `j6ZUhL`) is 6 over and under its label and the detail in 11 `text_muted` 2 under it, or the detail in 12
-//! `text_muted` after the label on one line (`Item` in 01d `jGqpS`), and a chosen
-//! row ends in a 14 check. A row that destroys has its icon and label in `danger` (`Cancel run` `Z1Uvbo` in
-//! `JapSp`). Rows take the `hover` fill under the pointer. A row that cannot be chosen
-//! is faded, ends in a lock and says why as its detail. Groups are split by a 1 `border` line with 4
-//! over and under it (`Menu separator` `UoDdI`).
+//! A menu's row (`Menu item` `mAHGP`): 28 high, radius 4, 8 at its sides: a 14 `text_secondary` icon, the label in 12
+//! `text_primary` and a shortcut in Geist Mono 11 `text_muted` at its end, 8 apart; a row with a detail (`Menu
+//! item/detail` `j6ZUhL`) is 6 over and under its label and the detail in 11 `text_muted` 2 under it, or the detail in
+//! 12 `text_muted` after the label on one line (`Item` in 01d `jGqpS`), and a chosen row ends in a 14 check. A row that
+//! destroys has its icon and label in `danger` (`Cancel run` `Z1Uvbo` in `JapSp`). Rows take the `hover` fill under
+//! the pointer. A row that cannot be chosen is faded, ends in a lock and says why as its detail.
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
+    events::MouseEvent,
+    theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Button, Column, Placement, Popup, Row, Text, TextOverflow},
-  core::{ElementRef, Signal},
+  components::{Column, Row, Text, TextOverflow},
+  core::Signal,
   layout::Alignment,
-  node::{Element, Style, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
+  ui::{self, Styled},
 };
 
-use super::{
-  icon::{Icon, icon},
-  pressable::{Focus, Press, inert},
-  tooltip::Truncated,
-};
+use super::standalone;
 use crate::{
-  navigation::link::Open,
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  navigation::{
+    link::{Open, follow},
+    press::OpenIn,
+  },
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
+  ui::{
+    icon::{Icon, icon},
+    pressable::Press,
+    tooltip::Truncated,
+  },
 };
 
 /// A row's label line, 16 high (`Label` in `Menu item/detail` `j6ZUhL`).
 const LABEL_HEIGHT: f32 = 16.0;
 
-/// The panel of a menu with the element id `id`; add its rows as children.
-pub fn menu_panel(id: &str) -> Column {
-  Column::new()
-    .id(id.to_owned())
-    .padding(SpacingSize::Xs)
-    .spacing(ExtraSpacing::Tight.role())
-    .rounded(ExtraRadius::Tile.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
-    .box_shadow(ShadowStyle::Md)
-}
-
-/// `panel` opened 6 under `anchor` at its start while `open` holds (`FpAul`); a choice (its rows close
-/// it, [`MenuItem::render`]), a press outside or Esc closes it.
-pub fn menu(anchor: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -> Popup {
-  Popup::new(anchor, panel)
-    .open(open)
-    .placement(Placement::BottomStart)
-    .offset(0.0, ExtraSpacing::Snug.value())
-}
-
-/// `panel` opened 6 under `anchor` at its end while `open` holds, for a control at the end of a row (`Version
-/// menu` `DqtY6` under its picker in `kadDh`); it closes as [`menu`] does.
-pub fn menu_at_end(anchor: ElementRef, open: Signal<bool>, panel: impl Into<Element>) -> Popup {
-  Popup::new(anchor, panel)
-    .open(open)
-    .placement(Placement::BottomEnd)
-    .offset(0.0, ExtraSpacing::Snug.value())
-}
-
-/// The foot of a menu: a `border` line over words in 11 `text_muted`, 8 over, 4 under and 8 at their sides, which puts
-/// them 12 from the menu's edge inside its padding (`Foot` `cJqb6` in T7 `gyG3z`, `Foot` in T4 `V26A3`).
-pub fn foot(ctx: &Ctx, id: &str, words: &str) -> Element {
-  let line = ctx.theme().border_size_value(BorderSize::Sm);
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(line))
-        .background(PaletteColor::Border),
-    )
-    .child(
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .padding(
-          Padding::new()
-            .top(SpacingSize::Sm)
-            .bottom(SpacingSize::Xs)
-            .left(SpacingSize::Sm)
-            .right(SpacingSize::Sm),
-        )
-        .child(
-          Text::new(words)
-            .id(id.to_owned())
-            .variant(TypographyStyle::Caption)
-            .color(PaletteColor::TextMuted)
-            .width(Dimension::Pct(100.0)),
-        ),
-    )
-    .into()
-}
-
-/// The line between groups of rows.
-pub fn separator(ctx: &Ctx) -> Element {
-  let line = ctx.theme().border_size_value(BorderSize::Sm);
-  Column::new()
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::vertical(SpacingSize::Xs))
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(line))
-        .background(PaletteColor::Border),
-    )
-    .into()
-}
-
 enum Choice {
   Action(Press),
+  /// It opens this menu beside it.
+  Submenu(Box<ui::Menu>),
   /// It cannot be chosen now, for this reason.
   Unavailable(Arc<str>),
 }
@@ -128,7 +53,8 @@ pub struct MenuItem {
   detail: Option<Arc<str>>,
   /// The detail says what is wrong with the choice.
   warning: bool,
-  chosen: bool,
+  /// Whether the row is the current choice, in a menu of choices.
+  chosen: Option<bool>,
   /// An unavailable row ends in a lock.
   lock: bool,
   /// The label is an identifier, in Geist Mono.
@@ -139,13 +65,10 @@ pub struct MenuItem {
   inline: bool,
   /// The row is 40 high whatever its detail, its content centered.
   tall: bool,
-  /// The row opens a list beside the menu: a 12 `text_muted` chevron at its end.
-  submenu: bool,
   /// What the row leads to, in 11 `text_muted` at its end, where a shortcut would be.
   hint: Option<Arc<str>>,
   /// An unavailable row's reason is said elsewhere, in the menu's foot: the row is only faded.
   reason_below: bool,
-  focus: Focus,
   choice: Choice,
 }
 
@@ -158,6 +81,12 @@ impl MenuItem {
   /// A row saying `label` that opens a place with `open` by a browser's rules when chosen (`navigation::link`).
   pub fn opens(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, open: Open) -> Self {
     Self::with_choice(id.into(), label.into(), Choice::Action(Press::Open(open)))
+  }
+
+  /// A row saying `label` that opens `submenu` beside the menu (a lurq submenu, given the row as its anchor): a 12
+  /// `text_muted` chevron at its end, after its keys (`Item · Move to` in `Card menu` `vV3BX`).
+  pub fn opening(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, submenu: ui::Menu) -> Self {
+    Self::with_choice(id.into(), label.into(), Choice::Submenu(Box::new(submenu)))
   }
 
   /// A row that cannot be chosen now, for `reason`: faded, ending in a lock, the reason as its detail.
@@ -173,16 +102,14 @@ impl MenuItem {
       shortcut: None,
       detail: None,
       warning: false,
-      chosen: false,
+      chosen: None,
       lock: true,
       mono: false,
       danger: false,
       inline: false,
       tall: false,
-      submenu: false,
       hint: None,
       reason_below: false,
-      focus: Focus::Pointer,
       choice,
     }
   }
@@ -191,14 +118,6 @@ impl MenuItem {
   #[must_use]
   pub const fn danger(mut self) -> Self {
     self.danger = true;
-    self
-  }
-
-  /// The row opens a list beside the menu: a chevron at its end, after its keys (`Item · Move to` in `Card menu`
-  /// `vV3BX`).
-  #[must_use]
-  pub const fn submenu(mut self) -> Self {
-    self.submenu = true;
     self
   }
 
@@ -249,7 +168,6 @@ impl MenuItem {
     self
   }
 
-  /// A choice within a form's field menu: reachable with Tab and activated with Enter or Space.
   /// The label is an identifier, such as a model id, in Geist Mono.
   #[must_use]
   pub const fn mono(mut self) -> Self {
@@ -257,14 +175,9 @@ impl MenuItem {
     self
   }
 
-  pub fn in_form(mut self) -> Self {
-    self.focus = Focus::Keyboard;
-    self
-  }
-
   /// The row is the current choice: a check at its end.
   pub fn chosen(mut self, chosen: bool) -> Self {
-    self.chosen = chosen;
+    self.chosen = Some(chosen);
     self
   }
 
@@ -290,7 +203,7 @@ impl MenuItem {
       TypographyStyle::Description
     };
     let label = Truncated::new(format!("{}-label", self.id), self.label.clone(), style)
-      .color(self.content_color(PaletteColor::TextPrimary))
+      .color(self.content_color(PaletteColor::Foreground))
       .render(ctx);
     let detail = detail.map(|detail| {
       let detail = Text::new(detail).id(format!("{}-detail", self.id));
@@ -298,7 +211,7 @@ impl MenuItem {
         // On the label's line the detail gives way first: it is cut, the label stays whole.
         detail
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .flex(1.0)
           .min_width(Dimension::Px(0.0))
           .nowrap()
@@ -339,21 +252,21 @@ impl MenuItem {
 
   /// The color of the row's icon or label, `color` unless the row destroys.
   fn content_color(&self, color: PaletteColor) -> PaletteColor {
-    if self.danger { PaletteColor::Danger } else { color }
+    if self.danger { PaletteColor::Destructive } else { color }
   }
 
   fn trailing(&self) -> Option<Element> {
-    match (&self.choice, self.chosen, &self.shortcut) {
+    match (&self.choice, self.chosen == Some(true), &self.shortcut) {
       (Choice::Unavailable(_), ..) if !self.lock => None,
-      (Choice::Action(_), false, _) if self.hint.is_some() => self.hint.as_deref().map(|hint| {
+      (Choice::Action(_) | Choice::Submenu(_), false, _) if self.hint.is_some() => self.hint.as_deref().map(|hint| {
         Text::new(hint)
           .id(format!("{}-hint", self.id))
           .variant(TypographyStyle::Caption)
           .nowrap()
           .into()
       }),
-      (Choice::Unavailable(_), ..) => Some(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).into()),
-      (_, true, _) => Some(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary).into()),
+      (Choice::Unavailable(_), ..) => Some(icon(Icon::Lock, IconSize::Sm, PaletteColor::MutedForeground).into()),
+      (_, true, _) => Some(icon(Icon::Check, IconSize::Md, PaletteColor::Foreground).into()),
       (_, false, Some(keys)) => Some(
         Text::new(keys)
           .variant(ExtraTypography::MonoNote.role())
@@ -364,15 +277,51 @@ impl MenuItem {
     }
   }
 
-  /// The row of the menu that `open` shows: a choice closes it.
-  pub fn render(self, ctx: &mut Ctx, open: &Signal<bool>) -> Element {
-    let (detail, reason) = match &self.choice {
-      Choice::Unavailable(reason) if self.reason_below => (None, Some(reason.clone())),
-      Choice::Unavailable(reason) => (Some(reason.clone()), None),
-      Choice::Action(_) => (self.detail.clone(), None),
+  /// The kit's row as lurq's menu item: what it shows is the row ([`ui::MenuItem::content`]), and the item is the
+  /// menu's, so a choice closes the menu before it runs. A row that opens a place opens it in the active tab, or where
+  /// a middle press or one with Ctrl (Cmd on macOS) asks (`navigation::link`).
+  pub fn render(self, ctx: &mut Ctx) -> ui::MenuItem {
+    let detail = match &self.choice {
+      Choice::Unavailable(_) if self.reason_below => None,
+      Choice::Unavailable(reason) => Some(reason.clone()),
+      Choice::Action(_) | Choice::Submenu(_) => self.detail.clone(),
     };
+    let row = self.row(ctx, detail.as_deref());
+    let item = ui::MenuItem::new(&self.label)
+      .id(self.id.clone())
+      .content(row)
+      .destructive(self.danger)
+      .describe("chosen", if self.chosen == Some(true) { "true" } else { "false" });
+    let item = match self.chosen {
+      Some(chosen) => item.checked(chosen),
+      None => item,
+    };
+    match self.choice {
+      Choice::Action(Press::Run(choose)) => item.on_select(move || choose()).describe("state", "enabled"),
+      Choice::Action(Press::Open(open)) => {
+        let aside = open.clone();
+        item
+          .on_select(move || open(OpenIn::ActiveTab))
+          .on_open_aside(move |event: MouseEvent| follow(&aside, &event))
+          .describe("state", "enabled")
+      }
+      Choice::Submenu(submenu) => item.submenu(*submenu).describe("state", "enabled"),
+      Choice::Unavailable(reason) => item
+        .unavailable(&reason)
+        .describe("state", "unavailable")
+        .describe("reason", reason),
+    }
+  }
+
+  /// The row in a section of a menu that scrolls ([`standalone`]).
+  pub fn render_scrolled(self, ctx: &mut Ctx, open: &Signal<bool>) -> Element {
+    standalone(self.render(ctx), open)
+  }
+
+  /// What the row shows: its icon, label and detail, and at its end its hint, keys, check, lock or chevron.
+  fn row(&self, ctx: &mut Ctx, detail: Option<&str>) -> Row {
     let stacked = detail.is_some() && !self.inline && !self.tall;
-    let row = Row::new()
+    Row::new()
       .width(Dimension::Pct(100.0))
       .min_height(Dimension::Px(if self.tall {
         ControlHeight::Agent.value()
@@ -387,59 +336,18 @@ impl MenuItem {
       .spacing(SpacingSize::Sm)
       .align_items(if stacked { Alignment::Start } else { Alignment::Center })
       .with_children(self.icon.map(|glyph| {
-        icon(glyph, IconSize::Md, self.content_color(PaletteColor::TextSecondary)).id(format!("{}-icon", self.id))
+        icon(
+          glyph,
+          IconSize::Md,
+          self.content_color(ExtraColor::TextSecondary.role()),
+        )
+        .id(format!("{}-icon", self.id))
       }))
-      .child(self.text(ctx, detail.as_deref()))
+      .child(self.text(ctx, detail))
       .with_children(self.trailing())
       .with_children(
-        self
-          .submenu
-          .then(|| icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::TextMuted)),
-      );
-    let surface = |row: Row| {
-      Button::empty()
-        .id(self.id.clone())
-        .describe("a11y_name", self.label.clone())
-        .width(Dimension::Pct(100.0))
-        .rounded(RadiusSize::Sm)
-        .align_items(Alignment::Center)
-        .child(row)
-    };
-    match self.choice {
-      Choice::Action(choose) => {
-        let open = open.clone();
-        let choose = match choose {
-          Press::Run(choose) => Press::run(move || {
-            open.set(false);
-            choose();
-          }),
-          Press::Open(to) => Press::Open(Arc::new(move |at| {
-            open.set(false);
-            to(at);
-          })),
-        };
-        self
-          .focus
-          .apply(choose.button())
-          .id(self.id.clone())
-          .describe("a11y_name", self.label.clone())
-          .width(Dimension::Pct(100.0))
-          .rounded(RadiusSize::Sm)
-          .describe("chosen", if self.chosen { "true" } else { "false" })
-          .child(row)
-          .describe("state", "enabled")
-          .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-          .into()
-      }
-      Choice::Unavailable(_) => {
-        let faded = inert(surface(row))
-          .describe("state", "unavailable")
-          .opacity(DISABLED_OPACITY);
-        match reason {
-          Some(reason) => faded.describe("reason", reason).into(),
-          None => faded.into(),
-        }
-      }
-    }
+        matches!(self.choice, Choice::Submenu(_))
+          .then(|| icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::MutedForeground)),
+      )
   }
 }

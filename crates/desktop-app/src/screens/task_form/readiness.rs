@@ -22,7 +22,7 @@ use super::{
   reason::{Kind, Reason},
   state::View,
 };
-use crate::services::Services;
+use crate::{services::Services, theme::ExtraColor};
 
 /// What a read is made from: when any of it differs, the answer is another one.
 #[derive(Clone, PartialEq)]
@@ -160,7 +160,7 @@ pub(super) fn option_status(ctx: &Ctx, view: &View, choice: &PipelineChoice) -> 
         } else {
           "task_form.readiness.ready.local"
         }),
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
         PaletteColor::Success,
       ),
       ReadinessStanding::Missing(readiness) => {

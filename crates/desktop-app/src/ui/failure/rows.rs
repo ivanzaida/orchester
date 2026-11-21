@@ -17,7 +17,7 @@ use orchester_workspace::messages::Message;
 
 use super::{Failure, card::log_button, why};
 use crate::{
-  theme::{ExtraSpacing, FailureSpacing, FailureText, IconSize},
+  theme::{ExtraColor, ExtraSpacing, FailureSpacing, FailureText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -70,7 +70,7 @@ pub(super) fn row(ctx: &mut Ctx, failure: &Failure, name: Option<&str>) -> Eleme
       Text::new(&name)
         .id(format!("{}-title", failure.id))
         .variant(FailureText::RowTitle.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap(),
       ctx.t_args("ui.failure.row", [("reason", reason)]),
     ),
@@ -91,7 +91,7 @@ fn line(id: &str, glyph: Option<Icon>, (title, hint): (Text, Arc<str>), end: Opt
     ))
     .spacing(FailureSpacing::Gap.role())
     .align_items(Alignment::Center)
-    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Md, PaletteColor::Danger)))
+    .with_children(glyph.map(|glyph| icon(glyph, IconSize::Md, PaletteColor::Destructive)))
     .child(
       Column::new()
         .flex(1.0)
@@ -119,7 +119,7 @@ pub fn not_saved(ctx: &Ctx, id: &str, retry: impl Fn() + Send + Sync + 'static) 
     .describe("state", "not-saved")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Danger))
+    .child(icon(Icon::CircleAlert, IconSize::Sm, PaletteColor::Destructive))
     .child(Text::new(&ctx.t("ui.failure.notSaved")).variant(FailureText::NotSaved.role()))
     .child(again)
     .into()

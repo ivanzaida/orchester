@@ -100,7 +100,7 @@ pub(super) fn bar(ctx: &Ctx, env: &Env) -> Option<Element> {
       .padding(Padding::horizontal(SpacingSize::Lg))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
       .child(icon(Icon::LoaderCircle, IconSize::Nav, PaletteColor::Info))
@@ -117,14 +117,14 @@ pub(super) fn bar(ctx: &Ctx, env: &Env) -> Option<Element> {
             ))
             .id("review-agent-title")
             .variant(ExtraTypography::Strong.role())
-            .color(PaletteColor::TextPrimary)
+            .color(PaletteColor::Foreground)
             .nowrap(),
           )
           .child(
             Text::new(&ctx.t("review_page.agent.body"))
               .id("review-agent-body")
               .variant(TypographyStyle::Description)
-              .color(PaletteColor::TextMuted)
+              .color(PaletteColor::MutedForeground)
               .nowrap(),
           ),
       )

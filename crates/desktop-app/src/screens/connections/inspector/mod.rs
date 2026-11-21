@@ -34,7 +34,7 @@ use super::{
 use crate::{
   navigation::link::Open,
   screens::project_settings::kit::{Glyph, SettingRow, back, entity_head},
-  theme::{ExtraRadius, ExtraSpacing, IconSize, ProjectSettingsText},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ProjectSettingsText},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -197,10 +197,11 @@ fn more_menu(ctx: &mut Ctx, actions: &Actions, items: Vec<MenuItem>) -> Element 
     .element(anchor.clone())
     .on_click(move || toggle.update(|open| *open = !*open));
   let button = if open.get() { button.active() } else { button }.render(ctx);
-  let panel = items.into_iter().fold(
-    menu_panel("connection-more-menu").width(Dimension::Px(MENU_WIDTH)),
-    |panel, item| panel.child(item.render(ctx, &open)),
-  );
+  let panel = items
+    .into_iter()
+    .fold(menu_panel("connection-more-menu").width(MENU_WIDTH), |panel, item| {
+      panel.child(item.render(ctx))
+    });
   Row::new().child(button).child(menu_at_end(anchor, open, panel)).into()
 }
 
@@ -215,7 +216,7 @@ fn title(name: &str) -> Text {
 /// is a native connection's (`native`).
 fn head_status(ctx: &Ctx, status: Shown, detail: Option<&str>, native: bool) -> Row {
   let words = if native {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   } else {
     status.tone.word_color()
   };
@@ -345,6 +346,6 @@ fn used_by_row(ctx: &mut Ctx, labels: &[String], actions: &Actions, none_key: &s
 fn sentence_tone(status: Shown) -> PaletteColor {
   match status.tone {
     super::words::Tone::Warning | super::words::Tone::Danger => PaletteColor::Warning,
-    _ => PaletteColor::TextMuted,
+    _ => PaletteColor::MutedForeground,
   }
 }

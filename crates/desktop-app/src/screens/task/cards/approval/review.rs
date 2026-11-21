@@ -12,7 +12,7 @@ use lurq::{
 use orchester_core::run::review::{DecisionVerdict, Probability, Review, ReviewFailure, Risk};
 
 use crate::{
-  theme::{CardsSpacing, CardsText, ControlHeight, ExtraSpacing, IconSize},
+  theme::{CardsSpacing, CardsText, ControlHeight, ExtraColor, ExtraSpacing, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -49,7 +49,7 @@ pub(super) fn left_to_person(review: Option<&Review>) -> bool {
 /// The older review card's surface, preserved outside the decision-model shell.
 pub(super) fn card(frame: Column, review: Option<&Review>) -> Column {
   if Content::of(review).is_some() {
-    frame.background(PaletteColor::SurfacePanel)
+    frame.background(PaletteColor::Canvas)
   } else {
     frame
   }
@@ -81,7 +81,7 @@ fn chip(id: &str, probability: Probability, risk: bool) -> Element {
     .background(if risk {
       PaletteColor::WarningMuted
     } else {
-      PaletteColor::SurfaceRaised
+      PaletteColor::Card
     })
     .align_items(Alignment::Center)
     .flex_shrink(0.0)
@@ -98,7 +98,7 @@ fn verdict(ctx: &Ctx, id: &str, decision: &DecisionVerdict) -> Element {
   let color = if risk.is_some() {
     PaletteColor::Warning
   } else {
-    PaletteColor::TextMuted
+    PaletteColor::MutedForeground
   };
   let threshold = format!("{:.2}", decision.threshold.value());
   let under = ctx.t_args(
@@ -113,20 +113,20 @@ fn verdict(ctx: &Ctx, id: &str, decision: &DecisionVerdict) -> Element {
     .child(words(
       &format!("{id}-review-model"),
       &ctx.t_args("cards.approval.decision.left", [("model", decision.model.as_str())]),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ))
     .child(chip(&format!("{id}-review-probability"), decision.approve, false))
     .child(words(
       &format!("{id}-review-threshold"),
       &under,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ));
   if let Some((risk, probability)) = risk {
     row = row
       .child(words(
         &format!("{id}-review-risk"),
         &ctx.t(risk_key(risk)),
-        PaletteColor::TextPrimary,
+        PaletteColor::Foreground,
       ))
       .child(chip(&format!("{id}-review-risk-probability"), probability, true));
   }
@@ -159,12 +159,12 @@ fn failed(ctx: &Ctx, id: &str, failure: ReviewFailure, model: Option<&str>) -> E
     .child(words(
       &format!("{id}-review-failure"),
       &ctx.t_args(key, [("model", &*model)]),
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ))
     .child(words(
       &format!("{id}-review-settings"),
       &ctx.t("cards.approval.decision.settings"),
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .into()
 }

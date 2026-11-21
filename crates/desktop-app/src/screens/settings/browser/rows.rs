@@ -23,7 +23,7 @@ use orchester_workspace::{
 
 use super::{Choice, ChooseAction};
 use crate::{
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     copied_value::CopiedValue,
@@ -120,10 +120,12 @@ fn usable(program: &BrowserProgram) -> Row {
     Icon::CircleCheck,
     PaletteColor::Success,
     program.name(),
-    PaletteColor::TextSecondary,
+    ExtraColor::TextSecondary.role(),
   );
   match program.version() {
-    Some(version) => name.child(mono_value("settings-browser-found-version", version).color(PaletteColor::TextMuted)),
+    Some(version) => {
+      name.child(mono_value("settings-browser-found-version", version).color(PaletteColor::MutedForeground))
+    }
     None => name,
   }
 }

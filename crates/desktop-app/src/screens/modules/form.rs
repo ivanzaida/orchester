@@ -40,7 +40,7 @@ use crate::{
   project::ShownProject,
   routes::{ModuleListTab, ModuleTab, ProjectPage, Route},
   screens::task_form::{bar, brief::text_styles},
-  theme::{ExtraSpacing, IconSize, TaskFormSpacing, TaskFormText},
+  theme::{ExtraColor, ExtraSpacing, IconSize, TaskFormSpacing, TaskFormText},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     button::{ActionButton, ButtonKind},
@@ -213,14 +213,14 @@ impl ModuleFormPage {
 
   /// The name, typed as the title (`Title field` `A1VuCL`), and why it is refused under it.
   fn name(&self, ctx: &mut Ctx, errors: &ModuleFormErrors) -> Element {
-    let [text, placeholder] = text_styles(ctx, TaskFormText::Title.role(), PaletteColor::TextPrimary);
+    let [text, placeholder] = text_styles(ctx, TaskFormText::Title.role(), PaletteColor::Foreground);
     let input = TextInput::styled(self.fields.name.clone(), text)
       .placeholder_style(placeholder)
       .placeholder(&ctx.t("modules.form.namePlaceholder"))
       .id("module-name")
       .describe("a11y_name", ctx.t("modules.form.name"))
       .width(Dimension::Pct(100.0))
-      .caret_color(PaletteColor::TextPrimary)
+      .caret_color(PaletteColor::Foreground)
       .ref_element(self.name_input.clone());
     let error = errors
       .name
@@ -238,7 +238,7 @@ impl ModuleFormPage {
 
   /// What the module delivers (`Description field` `cXTQY`), growing with its lines.
   fn description(&self, ctx: &mut Ctx) -> Element {
-    let [text, placeholder] = text_styles(ctx, TaskFormText::Outcome.role(), PaletteColor::TextSecondary);
+    let [text, placeholder] = text_styles(ctx, TaskFormText::Outcome.role(), ExtraColor::TextSecondary.role());
     let input = TextInput::styled(self.fields.description.clone(), text)
       .placeholder_style(placeholder)
       .placeholder(&ctx.t("modules.form.descriptionPlaceholder"))
@@ -247,7 +247,7 @@ impl ModuleFormPage {
       .textarea()
       .rows(1, DESCRIPTION_MAX_LINES)
       .width(Dimension::Pct(100.0))
-      .caret_color(PaletteColor::TextPrimary);
+      .caret_color(PaletteColor::Foreground);
     Column::new()
       .id("module-description-field")
       .width(Dimension::Pct(100.0))
@@ -371,7 +371,7 @@ fn crumbs(ctx: &mut Ctx, props: &FormProps) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(breadcrumb(ctx, "module-form-crumbs", CrumbSeparator::Slash, trail))
     .into()
 }

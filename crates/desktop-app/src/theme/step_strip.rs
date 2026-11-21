@@ -12,6 +12,7 @@ use lurq::{
 
 use super::{
   fonts::ICONS,
+  palette::text_secondary,
   typography::{mono, style},
 };
 
@@ -45,9 +46,9 @@ impl StripText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Number => mono(style(11.0, FontWeight::Normal, 1.2, 0.0, palette.text_muted)),
-      Self::Name => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
-      Self::Current => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_primary),
+      Self::Number => mono(style(11.0, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground)),
+      Self::Name => style(12.0, FontWeight::Normal, 1.2, 0.0, text_secondary(palette)),
+      Self::Current => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.foreground),
       Self::GateHand => TextStyle {
         font_family: Arc::from(ICONS),
         ..style(9.0, FontWeight::Normal, 1.0, 0.0, palette.warning)

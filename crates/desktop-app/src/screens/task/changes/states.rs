@@ -170,7 +170,7 @@ pub fn worktree_failed(
       }),
     )
     .icon(Icon::CircleAlert)
-    .mark(PaletteColor::Danger)
+    .mark(PaletteColor::Destructive)
     .body(body)
     .action(again),
   )

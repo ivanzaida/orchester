@@ -18,7 +18,7 @@ use lurq::{
 
 use super::{Answer, AnsweredLine, Decision, Handler, Mark, Stage};
 use crate::{
-  theme::{CardsSpacing, CardsText, ExtraSpacing, IconSize, NOT_CHOSEN_OPACITY},
+  theme::{CardsSpacing, CardsText, ExtraColor, ExtraSpacing, IconSize, NOT_CHOSEN_OPACITY},
   ui::{
     button::{ActionButton, ButtonKind},
     clipboard::Clipboard,
@@ -82,7 +82,7 @@ impl DecisionView {
     let fold = pressable(move || folded.set(true))
       .id(format!("{id}-fold"))
       .describe("a11y_name", ctx.t("cards.fold"))
-      .child(icon(Icon::X, IconSize::Lg, PaletteColor::TextMuted));
+      .child(icon(Icon::X, IconSize::Lg, PaletteColor::MutedForeground));
     let top = Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Lg)
@@ -210,7 +210,11 @@ impl DecisionView {
     let show = pressable(move || whole.set(true))
       .id(format!("{id}-whole"))
       .spacing(SpacingSize::Sm)
-      .child(icon(Icon::ChevronDown, IconSize::Base, PaletteColor::TextSecondary))
+      .child(icon(
+        Icon::ChevronDown,
+        IconSize::Base,
+        ExtraColor::TextSecondary.role(),
+      ))
       .child(
         Text::new(&ctx.t_args("cards.question.whole", [("count", lines.to_string().as_str())]))
           .variant(CardsText::Whole.role())
@@ -382,13 +386,17 @@ fn meta(ctx: &mut Ctx, decision: &Decision) -> Row {
   })
   .id(format!("{id}-copy"))
   .describe("a11y_name", ctx.t("common.copy"))
-  .child(icon(Icon::Copy, IconSize::Base, PaletteColor::TextMuted));
+  .child(icon(Icon::Copy, IconSize::Base, PaletteColor::MutedForeground));
   let reply = decision.reply.as_ref().map(|reply| {
     let reply = reply.0.clone();
     pressable(move || reply())
       .id(format!("{id}-reply"))
       .describe("a11y_name", ctx.t("cards.reply"))
-      .child(icon(Icon::MessageSquareReply, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(
+        Icon::MessageSquareReply,
+        IconSize::Base,
+        PaletteColor::MutedForeground,
+      ))
   });
   let asked = &decision.asked;
   let words = ctx.t_args(

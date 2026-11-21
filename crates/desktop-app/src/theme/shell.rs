@@ -7,7 +7,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// Text of the shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,14 +64,14 @@ impl ShellText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::SwitcherInitial => style(12.0, FontWeight::SemiBold, 1.35, 0.0, palette.text_secondary),
-      Self::SwitcherPath => mono(style(10.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted)),
-      Self::MenuSection => style(10.5, FontWeight::Medium, 1.35, 0.6, palette.text_muted),
-      Self::FolderTitle => style(12.5, FontWeight::Medium, 1.4, 0.0, palette.text_primary),
-      Self::FolderBody => style(11.5, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::JumpResult => style(12.5, FontWeight::Normal, 1.35, 0.0, palette.text_primary),
-      Self::JumpCount => style(11.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted),
-      Self::DangerChip => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.danger),
+      Self::SwitcherInitial => style(12.0, FontWeight::SemiBold, 1.35, 0.0, text_secondary(palette)),
+      Self::SwitcherPath => mono(style(10.5, FontWeight::Normal, 1.35, 0.0, palette.muted_foreground)),
+      Self::MenuSection => style(10.5, FontWeight::Medium, 1.35, 0.6, palette.muted_foreground),
+      Self::FolderTitle => style(12.5, FontWeight::Medium, 1.4, 0.0, palette.foreground),
+      Self::FolderBody => style(11.5, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
+      Self::JumpResult => style(12.5, FontWeight::Normal, 1.35, 0.0, palette.foreground),
+      Self::JumpCount => style(11.5, FontWeight::Normal, 1.35, 0.0, palette.muted_foreground),
+      Self::DangerChip => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.destructive),
     }
   }
 }

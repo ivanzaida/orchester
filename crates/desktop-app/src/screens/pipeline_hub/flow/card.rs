@@ -107,7 +107,7 @@ pub(super) fn step(ctx: &lurq::app::ctx::Ctx, step: &StepCard, opening: Opening)
     .with_children(
       open
         .is_some()
-        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)),
     );
   let mut body = Column::new()
     .width(Dimension::Pct(100.0))
@@ -141,12 +141,12 @@ fn failure_line(ctx: &lurq::app::ctx::Ctx, (id, step, route): (&str, &StepCard, 
     .padding(Padding::new().left(Dimension::Px(HANDLE_INDENT)))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&words::failure(ctx, step, route))
         .id(format!("{id}-failure-words"))
         .variant(FlowText::Line.role())
-        .color(PaletteColor::TextMuted),
+        .color(PaletteColor::MutedForeground),
     )
 }
 
@@ -159,7 +159,7 @@ fn waits_line(ctx: &lurq::app::ctx::Ctx, id: &str, waits: &Waits) -> Row {
     .padding(Padding::new().left(Dimension::Px(HANDLE_INDENT)))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::GitMerge, IconSize::Sm, PaletteColor::Accent))
+    .child(icon(Icon::GitMerge, IconSize::Sm, PaletteColor::Primary))
     .child(
       Text::new(&words::waits(ctx, waits))
         .id(format!("{id}-waits-words"))
@@ -201,7 +201,7 @@ pub(super) fn deliver(ctx: &lurq::app::ctx::Ctx, deliver: &DeliverCard, open: Op
     .with_children(
       open
         .is_some()
-        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)),
     );
   let body = Column::new()
     .width(Dimension::Pct(100.0))
@@ -271,14 +271,14 @@ fn choose_chip(id: &str, words: &str) -> Row {
 /// without one it only shows its step.
 fn surface(open: Option<Button>, id: &str, (not_ready, look): (bool, Look), body: Column) -> Button {
   let outline = match (look, not_ready) {
-    (Look::Target, _) => Border::inside(BorderSize::Lg, PaletteColor::Accent),
+    (Look::Target, _) => Border::inside(BorderSize::Lg, PaletteColor::Primary),
     (_, true) => Border::inside(BorderSize::Sm, PaletteColor::Warning),
     (_, false) => Border::inside(BorderSize::Sm, PaletteColor::Border),
   };
   let hovered = match (look, not_ready) {
     (Look::Target, _) => outline.clone(),
     (_, true) => Border::inside(BorderSize::Sm, PaletteColor::Warning),
-    (_, false) => Border::inside(BorderSize::Sm, PaletteColor::BorderStrong),
+    (_, false) => Border::inside(BorderSize::Sm, PaletteColor::Input),
   };
   let padding = Padding::new()
     .top(SpacingSize::Sm)
@@ -292,7 +292,7 @@ fn surface(open: Option<Button>, id: &str, (not_ready, look): (bool, Look), body
     .width(Dimension::Pct(100.0))
     .padding(padding)
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(outline)
     .rounded(RadiusSize::Md);
   // A card that only shows its step does nothing, so the keyboard does not stop on it.

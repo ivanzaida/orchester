@@ -267,7 +267,7 @@ fn join_team_wrong_code_shows_in_place_of_the_hint() {
   let server = TeamServer::start();
   server.expire_later_code();
   let mut window = opened(&server, JoinWay::Code);
-  assert!(has(&mut window, "join-team-code-code-field-hint"));
+  assert!(has(&mut window, "join-team-code-code-field-description"));
   join_with(&mut window, (&server.url(), LATER_CODE));
 
   shows(&mut window, "join-team-code-wrong");
@@ -276,7 +276,7 @@ fn join_team_wrong_code_shows_in_place_of_the_hint() {
     "Wrong or expired. A code works once, within 10 minutes: ask for a new one."
   );
   assert!(
-    !has(&mut window, "join-team-code-code-field-hint"),
+    !has(&mut window, "join-team-code-code-field-description"),
     "the error takes the hint's place"
   );
   assert_eq!(value(&mut window, "join-team-code-address"), server.url());
@@ -304,7 +304,10 @@ fn join_team_unreachable_server_offers_try_again() {
   );
   assert_eq!(value(&mut window, "join-team-code-address"), host);
   assert_eq!(value(&mut window, "join-team-code-code"), CODE);
-  assert!(has(&mut window, "join-team-code-code-field-hint"), "the hint stays");
+  assert!(
+    has(&mut window, "join-team-code-code-field-description"),
+    "the hint stays"
+  );
 
   server.set_down(false);
   window.press("join-team-code-try-again");

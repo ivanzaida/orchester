@@ -96,7 +96,7 @@ pub(super) fn count(id: &str, count: usize) -> Text {
 }
 
 fn chevron() -> Text {
-  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)
+  icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)
 }
 
 fn services(ctx: &mut Ctx, pages: &Pages, services: &[Entry<Service>]) -> Element {
@@ -267,7 +267,7 @@ fn agents_note(ctx: &Ctx) -> Element {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Bot, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::Bot, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(&ctx.t("project_settings.services.agentsNote"))
         .id("settings-services-agents-text")

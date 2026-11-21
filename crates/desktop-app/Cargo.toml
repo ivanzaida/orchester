@@ -73,11 +73,8 @@ orchester-workspace = { workspace = true, features = ["devtools-inspect"] }
 lurq = { workspace = true, features = [
   "winit",
   "wgpu",
-  # The dashed add-step slot from v1nZD.
-  "svg",
   "router",
   "form",
-  "i18n",
   # `I18n::add_json` for the bundled locale files.
   "serde",
   # Text agents and people write, read as Markdown (`ui::markdown`).
@@ -91,7 +88,7 @@ lurq = { workspace = true, features = [
   "mcp",
   # Futures and streams of screens run on the app's runtime, off the UI thread.
   "tokio",
-  # The Usage page's charts; tiny-skia and lyon are already built for `svg`, so it adds no crate.
+  # The Usage page's charts and the SVGs (the dashed add-step slot from v1nZD).
   "canvas",
   # A team project's reads from its server, cached for the session's windows (`team`); it adds no crate.
   "query",

@@ -136,7 +136,7 @@ pub(super) fn failed(
   ];
   state(
     "conversation-failed",
-    (Icon::CircleAlert, PaletteColor::Danger),
+    (Icon::CircleAlert, PaletteColor::Destructive),
     (&title, Some(&text)),
     actions,
   )
@@ -203,7 +203,7 @@ pub(super) fn nothing_yet(ctx: &Ctx, run: &RunView) -> Element {
   };
   state(
     "conversation-empty",
-    (Icon::MessageSquareDashed, PaletteColor::TextMuted),
+    (Icon::MessageSquareDashed, PaletteColor::MutedForeground),
     (&title, Some(&text)),
     Vec::new(),
   )
@@ -221,7 +221,7 @@ pub(super) fn without_run(
     let text = ctx.t("conversation.unreadable");
     return state(
       "conversation-unreadable",
-      (Icon::CircleAlert, PaletteColor::Danger),
+      (Icon::CircleAlert, PaletteColor::Destructive),
       (&title, Some(&text)),
       Vec::new(),
     );
@@ -231,7 +231,7 @@ pub(super) fn without_run(
     let text = ctx.t("conversation.empty.queuedTask");
     return state(
       "conversation-empty",
-      (Icon::MessageSquareDashed, PaletteColor::TextMuted),
+      (Icon::MessageSquareDashed, PaletteColor::MutedForeground),
       (&title, Some(&text)),
       Vec::new(),
     );
@@ -241,7 +241,7 @@ pub(super) fn without_run(
     let text = ctx.t("conversation.noRun.text");
     return state(
       "conversation-no-run",
-      (Icon::Clock, PaletteColor::TextMuted),
+      (Icon::Clock, PaletteColor::MutedForeground),
       (&title, Some(&text)),
       Vec::new(),
     );

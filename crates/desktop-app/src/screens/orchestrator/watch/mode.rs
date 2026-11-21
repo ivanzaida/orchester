@@ -163,9 +163,9 @@ impl LeadChoice {
 /// pointer's only: Tab is the picker's key for it, and a press leaves the focus in the picker's search.
 fn segment(id: &str, (glyph, words): (Icon, &str), chosen: bool, press: Press) -> Element {
   let (tone, style) = if chosen {
-    (PaletteColor::TextPrimary, ExtraTypography::NoteStrong.role())
+    (PaletteColor::Foreground, ExtraTypography::NoteStrong.role())
   } else {
-    (PaletteColor::TextMuted, LeadingText::Way.role())
+    (PaletteColor::MutedForeground, LeadingText::Way.role())
   };
   let way = press
     .button()

@@ -45,7 +45,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskView},
   services::Services,
-  theme::{ConversationSpacing, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ConversationSpacing, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -155,7 +155,7 @@ fn fix_line(ctx: &mut Ctx, (share, id): (&CiShare, &str), event: &FixEvent, agen
   let failed = failed_words(ctx, event).to_string();
   let (glyph, text) = match event.kind {
     FixEventKind::Sent { by: FixedBy::Hand, .. } => (
-      (Icon::CircleX, PaletteColor::Danger),
+      (Icon::CircleX, PaletteColor::Destructive),
       ctx.t_args(
         "ci.event.sent",
         [
@@ -169,7 +169,7 @@ fn fix_line(ctx: &mut Ctx, (share, id): (&CiShare, &str), event: &FixEvent, agen
       by: FixedBy::Automatically { count, limit },
       ..
     } => (
-      (Icon::CircleX, PaletteColor::Danger),
+      (Icon::CircleX, PaletteColor::Destructive),
       ctx.t_args(
         "ci.event.sentAuto",
         [
@@ -208,7 +208,7 @@ fn now(ctx: &mut Ctx, (share, detail, run): (&CiShare, &TaskDetail, &RunView), i
   match look {
     Look::Running => {
       let text = ctx.t_args("ci.event.running", [("number", number), ("count", total.to_string())]);
-      event_line(id, (Icon::LoaderCircle, PaletteColor::TextSecondary), &text, None)
+      event_line(id, (Icon::LoaderCircle, ExtraColor::TextSecondary.role()), &text, None)
     }
     Look::Passed => {
       let passed = shown.read().map_or(0, |read| words::passed(&read.checks));
@@ -224,7 +224,7 @@ fn now(ctx: &mut Ctx, (share, detail, run): (&CiShare, &TaskDetail, &RunView), i
     }
     Look::NoChecks => {
       let text = ctx.t_args("ci.event.none", [("number", number)]);
-      event_line(id, (Icon::CircleDashed, PaletteColor::TextMuted), &text, None)
+      event_line(id, (Icon::CircleDashed, PaletteColor::MutedForeground), &text, None)
     }
     Look::Unknown => not_read(ctx, (share, id), &shown.found.ci),
     Look::Failed | Look::Fixing => card(ctx, (share, detail, run), id, agent),
@@ -298,12 +298,12 @@ fn card(ctx: &mut Ctx, (share, detail, run): (&CiShare, &TaskDetail, &RunView), 
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::CircleX, IconSize::Base, PaletteColor::Danger))
+    .child(icon(Icon::CircleX, IconSize::Base, PaletteColor::Destructive))
     .child(Text::new(&title).variant(ExtraTypography::FormSection.role()).nowrap())
     .child(
       Text::new(&count)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
@@ -315,8 +315,8 @@ fn card(ctx: &mut Ctx, (share, detail, run): (&CiShare, &TaskDetail, &RunView), 
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Md))
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))
     .rounded(RadiusSize::Lg)
     .child(head)
     .with_children(rows)
@@ -373,7 +373,7 @@ fn foot(ctx: &mut Ctx, (share, detail, run): (&CiShare, &TaskDetail, &RunView), 
       ],
     );
     return row
-      .child(icon(Icon::Repeat, IconSize::Base, PaletteColor::TextSecondary))
+      .child(icon(Icon::Repeat, IconSize::Base, ExtraColor::TextSecondary.role()))
       .child(
         Text::new(&sent)
           .variant(TypographyStyle::Description)
@@ -414,7 +414,7 @@ fn foot(ctx: &mut Ctx, (share, detail, run): (&CiShare, &TaskDetail, &RunView), 
     .child(
       Text::new(&auto)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

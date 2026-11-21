@@ -315,7 +315,7 @@ impl ToolEditor {
         ctx.t("tools.saveFailed"),
       )
       .icon(Icon::CircleAlert)
-      .mark(lurq::app::theme::PaletteColor::Danger)
+      .mark(lurq::app::theme::PaletteColor::Destructive)
       .body(message_text(ctx, error))
       .into(),
     )

@@ -20,6 +20,7 @@ use lurq::{
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, HitTestBehavior, dimension::Dimension, padding::Padding},
+  ui::MenuKeys,
 };
 use orchester_workspace::mentions::{Mention, Typed, ending_at, find, typed_at};
 use parking_lot::Mutex;
@@ -42,8 +43,8 @@ pub struct MentionField {
   /// The field has the focus: only then is the menu open and does it take keys.
   focused: Signal<bool>,
   controller: TextInputController,
-  /// The row with the keyboard's focus.
-  focus: Signal<usize>,
+  /// The menu's keys while the field has the focus: lurq's active row, which Up and Down move and Enter inserts.
+  keys: MenuKeys,
   /// The `@` whose menu Esc closed: it stays closed until that `@` types no more.
   closed: Signal<Option<usize>>,
   /// Set to put the focus back in the field after a choice.
@@ -62,11 +63,12 @@ impl PartialEq for MentionField {
 impl MentionField {
   /// The field of `draft`, whose composer keeps whether it has the focus in `focused`.
   pub fn new(ctx: &mut Ctx, draft: Signal<String>, focused: Signal<bool>) -> Self {
+    let controller = TextInputController::new();
     Self {
       draft,
       focused,
-      controller: TextInputController::new(),
-      focus: ctx.signal(0),
+      keys: MenuKeys::new(controller.element_ref()),
+      controller,
       closed: ctx.signal(None),
       refocus: ctx.signal(false),
       marker: ElementRef::new(),
@@ -163,21 +165,18 @@ impl MentionField {
     let Some(shown) = self.shown.lock().clone() else {
       return false;
     };
-    let rows = shown.rows.len();
+    // lurq's menu: Up and Down move its active row, Enter inserts it, Esc closes the menu (`on_dismiss`).
+    if self.keys.key_down(event) {
+      return true;
+    }
     match event.key.as_str() {
-      "Escape" => self.close(&shown),
-      "ArrowDown" | "ArrowUp" if rows > 0 => {
-        let at = self.focus.get_untracked().min(rows - 1);
-        let next = if event.key == "ArrowDown" {
-          (at + 1) % rows
-        } else {
-          (at + rows - 1) % rows
+      // With nothing that matches, Esc still closes the menu.
+      "Escape" => self.close(),
+      "Tab" if !event.shift && !event.ctrl && !event.meta => {
+        let Some(mention) = self.keys.active().and_then(|at| shown.rows.get(at)) else {
+          return false;
         };
-        self.focus.set(next);
-      }
-      "Enter" | "Tab" if rows > 0 && !event.shift && !event.ctrl && !event.meta => {
-        let at = self.focus.get_untracked().min(rows - 1);
-        self.insert(shown.replaces, &shown.rows[at]);
+        self.insert(shown.replaces, mention);
       }
       _ => return false,
     }
@@ -201,9 +200,12 @@ impl MentionField {
     }
   }
 
-  fn close(&self, shown: &Shown) {
+  /// Esc closed the menu: its `@` stays closed until it types no more.
+  fn close(&self) {
+    let Some(shown) = self.shown.lock().take() else {
+      return;
+    };
     self.closed.set(Some(shown.replaces.start));
-    *self.shown.lock() = None;
   }
 
   /// Puts `mention` and a space in place of `replaces`, the `@` and what was typed after it, as one undo step, and
@@ -224,7 +226,6 @@ impl MentionField {
       });
     }
     *self.shown.lock() = None;
-    self.focus.set(0);
     self.refocus.set(true);
   }
 }

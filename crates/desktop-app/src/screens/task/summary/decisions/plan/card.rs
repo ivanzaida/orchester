@@ -25,7 +25,7 @@ use super::{
   Shown,
 };
 use crate::{
-  theme::{DecisionText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DecisionText, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     card::{CardSurface, card},
     field::SelectField,
@@ -54,16 +54,16 @@ impl PlanCard<'_> {
   pub fn render(&self, ctx: &mut Ctx, shown: &Signal<Shown>, decision: Element) -> Element {
     let text = self.plan_text(ctx);
     let card = card("plan-review", CardSurface::Attention)
-      .spacing(ExtraSpacing::Loose.role())
+      .gap(ExtraSpacing::Loose.role())
       .child(self.head(ctx, shown))
       .child(divider())
       .child(text)
-      .with_children(self.change_line(ctx))
+      .children(self.change_line(ctx))
       .child(divider())
       .child(self.criteria(ctx))
       .child(divider())
       .child(decision);
-    self.pointing.ring(card).into()
+    self.pointing.ring(card)
   }
 
   /// "Plan v2 · Add retry to webhook sender", "by Planner · 16:14", and the version choice.
@@ -140,7 +140,7 @@ impl PlanCard<'_> {
       .width(Dimension::Pct(100.0))
       .child(
         MarkdownView::new("plan-review-markdown", self.shown.text.as_str(), self.on_link.clone())
-          .style(DecisionText::Plan.role(), PaletteColor::TextSecondary)
+          .style(DecisionText::Plan.role(), ExtraColor::TextSecondary.role())
           .render(ctx),
       )
       .into()
@@ -225,7 +225,7 @@ fn criterion(number: usize, text: &str) -> Element {
     .child(
       Text::new(&number.to_string())
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Px(NUMBER_WIDTH)),
     )
     .child(
@@ -245,9 +245,9 @@ fn changed(text: &str) -> Element {
     .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(ExtraRadius::Tile.role())
-    .child(icon(Icon::GitCompare, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::GitCompare, IconSize::Base, PaletteColor::MutedForeground))
     .child(Text::new(text).variant(TypographyStyle::Description).flex(1.0))
     .into()
 }

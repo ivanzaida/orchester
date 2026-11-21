@@ -13,9 +13,10 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, TypographyStyle},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Row, Text},
   core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, padding::Padding},
+  ui::MenuKeys,
 };
 use orchester_core::{
   id::{ModuleId, ResourceId, TagId},
@@ -28,9 +29,9 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     field::FieldInput,
-    filter::{FilterChip, filter_group, filter_menu_panel, filter_option},
+    filter::{FilterChip, filter_group, filter_option},
     icon::Icon,
-    menu::menu,
+    menu::{Entry, MenuPanel, filter_menu_panel, menu},
     status::priority_look,
   },
 };
@@ -178,18 +179,35 @@ impl DevtoolsInspectable for FilterProps {}
 pub(super) struct FilterControl {
   open: Signal<bool>,
   anchor: ElementRef,
-  /// What the menu's search looks for among the options.
+  /// What the menu's search looks for among the options, the field it is typed in, which keeps the focus while the
+  /// menu is open, and the menu's keys while it has it.
   query: Signal<String>,
+  field: ElementRef,
+  keys: MenuKeys,
+  /// The menu just opened: its search is to take the focus.
+  focus: Signal<bool>,
 }
 
 impl Component for FilterControl {
   type Props = FilterProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let (open, focus) = (ctx.signal(false), ctx.signal(false));
+    // The search takes the focus as the menu opens: the arrows then move through the options and Enter checks one.
+    let opened = focus.clone();
+    ctx.watch(&open, move |open: &bool| {
+      if *open {
+        opened.set(true);
+      }
+    });
+    let field = ElementRef::default();
     Self {
-      open: ctx.signal(false),
+      open,
       anchor: ElementRef::default(),
       query: ctx.signal(String::new()),
+      keys: MenuKeys::new(field.clone()),
+      field,
+      focus,
     }
   }
 
@@ -219,14 +237,12 @@ impl Component for FilterControl {
 }
 
 impl FilterControl {
-  /// The menu: its search, then each facet with the options the search finds.
-  fn panel(&self, ctx: &mut Ctx, options: &Options, facets: &Signal<Facets>) -> Column {
+  /// The menu: its search, which keeps the focus, then each facet with the options the search finds, in a section that
+  /// scrolls.
+  fn panel(&self, ctx: &mut Ctx, options: &Options, facets: &Signal<Facets>) -> MenuPanel {
     let query = self.query.get().trim().to_lowercase();
     let chosen = facets.get();
-    let mut groups = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Tight.role());
-    let mut found = false;
+    let mut groups: Vec<Entry> = Vec::new();
     for facet in &options.0 {
       let values: Vec<&(Value, Arc<str>)> = facet
         .values
@@ -236,28 +252,31 @@ impl FilterControl {
       if values.is_empty() {
         continue;
       }
-      found = true;
-      groups = groups.child(filter_group(
-        format!("tasks-filter-{}", facet.name),
-        facet.glyph,
-        &ctx.t(facet.key),
-      ));
+      groups.push(filter_group(format!("tasks-filter-{}", facet.name), facet.glyph, &ctx.t(facet.key)).into());
       for (index, (value, words)) in values.into_iter().enumerate() {
         let (facets, value) = (facets.clone(), *value);
-        groups = groups.child(filter_option(
+        let option = filter_option(
           format!("tasks-filter-{}-{index}", facet.name),
           (words, value.chosen(&chosen), false),
           None,
           move || facets.update(|facets| value.toggle(facets)),
-        ));
+        );
+        groups.push(option.into());
       }
+    }
+    if self.focus.get_untracked() {
+      self.focus.set(false);
+      ctx.focus(&self.field);
     }
     let search = FieldInput::new("tasks-filter-search", ctx.t("tasks.filter.search"), self.query.clone())
       .search()
       .placeholder(ctx.t("tasks.filter.search"))
+      .element(self.field.clone())
       .render(ctx);
-    let panel = filter_menu_panel("tasks-filter-menu", MENU_WIDTH).child(search);
-    if !found {
+    let panel = filter_menu_panel("tasks-filter-menu", MENU_WIDTH)
+      .keeps_focus(&self.keys)
+      .child(search);
+    if groups.is_empty() {
       return panel.child(
         Row::new()
           .padding(Padding::symmetric(
@@ -268,11 +287,11 @@ impl FilterControl {
             Text::new(&ctx.t_args("tasks.filter.noMatch", [("query", self.query.get().trim())]))
               .id("tasks-filter-no-match")
               .variant(TypographyStyle::Description)
-              .color(PaletteColor::TextMuted),
+              .color(PaletteColor::MutedForeground),
           ),
       );
     }
-    panel.child(ScrollVertical::new(groups).max_height(Dimension::Px(OPTIONS_MAX_HEIGHT)))
+    panel.scrolling(groups, (OPTIONS_MAX_HEIGHT, Some(ExtraSpacing::Tight)))
   }
 }
 

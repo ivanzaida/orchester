@@ -118,8 +118,9 @@ fn answer(ctx: &mut Ctx, id: &str, time: &str, env: &TurnEnv) -> Element {
       let said = ctx.t_args("orchestrator.watching.unreadable", [("reason", reason)]);
       body.child(words(&format!("{id}-unreadable"), &said))
     }
-    Some(Read::Loading) | None => body
-      .child(words(&format!("{id}-reading"), &ctx.t("orchestrator.watching.reading")).color(PaletteColor::TextMuted)),
+    Some(Read::Loading) | None => body.child(
+      words(&format!("{id}-reading"), &ctx.t("orchestrator.watching.reading")).color(PaletteColor::MutedForeground),
+    ),
   };
   let (from, meta) = (
     ctx.t("orchestrator.watching.from"),
@@ -275,7 +276,7 @@ pub(super) fn line(kind: Line, height: f32) -> Row {
   if kind == Line::Under {
     row
   } else {
-    row.background(PaletteColor::SurfaceRaised)
+    row.background(PaletteColor::Card)
   }
 }
 
@@ -316,7 +317,11 @@ fn head(ctx: &mut Ctx, (id, at): (&str, usize), (watched, same): (&WatchedSubscr
     .id(row_id.clone())
     .describe("target", target_name(target))
     .describe("mode", if leads { "lead" } else { "follow" })
-    .child(icon(target_icon(target), IconSize::Base, PaletteColor::TextSecondary))
+    .child(icon(
+      target_icon(target),
+      IconSize::Base,
+      ExtraColor::TextSecondary.role(),
+    ))
     .child(
       Text::new(&message_text(ctx, &watched.target.name))
         .id(format!("{row_id}-name"))

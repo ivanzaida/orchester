@@ -45,7 +45,7 @@ pub fn detail(
     Some(value) => Text::new(value)
       .id("instruction-variable-value")
       .variant(instructions::detail_value())
-      .color(PaletteColor::TextPrimary),
+      .color(PaletteColor::Foreground),
     None => Text::new(&ctx.t(if variable == Variable::RunRevision {
       "instructions.unavailableCommit"
     } else {
@@ -60,7 +60,7 @@ pub fn detail(
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Lg)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .child(caption)
@@ -174,7 +174,7 @@ fn option(radio: Element, label: &str, (hint, locked): (&str, bool)) -> Element 
     Row::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
-      .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
+      .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground))
       .child(hint)
       .into()
   } else {

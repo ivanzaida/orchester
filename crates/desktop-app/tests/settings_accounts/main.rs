@@ -29,7 +29,7 @@ fn home() -> std::path::PathBuf {
 
 /// An account's row in the list.
 fn row(account: AgentAccountId) -> String {
-  format!("account-row-{account}-row")
+  format!("account-row-{account}")
 }
 
 /// Opens the account page's *…* menu.
@@ -77,11 +77,11 @@ fn settings_accounts_lists_accounts_by_cli_with_what_their_clis_say() {
         "Default sorts last"
       );
       assert!(joined(&mut window, "settings-tab-accounts").contains("Accounts 3"));
-      click(&mut window, &format!("account-row-{}-open", work.id()));
+      click(&mut window, &format!("account-row-{}", work.id()));
       window.until("Work's page", |window| {
         joined(window, "account-head-title").contains("Codex · Work")
       });
-      assert!(joined(&mut window, "account-fact-checked-with-row").contains("codex 0.159.2 on the PATH"));
+      assert!(joined(&mut window, "account-fact-checked-with").contains("codex 0.159.2 on the PATH"));
       // A long folder path keeps to its width, so the label and its hint keep theirs (`c0L3F` in `xN1Jy`).
       let mut bounds = |id: &str| {
         window
@@ -91,14 +91,14 @@ fn settings_accounts_lists_accounts_by_cli_with_what_their_clis_say() {
           .unwrap_or_else(|| panic!("{id} is laid out"))
       };
       let (folder, path, hint) = (
-        bounds("account-fact-folder-row"),
+        bounds("account-fact-folder"),
         bounds("account-fact-folder-path"),
-        bounds("account-fact-folder-hint"),
+        bounds("account-fact-folder-description"),
       );
       assert!(path.width <= 325.5, "{path:?}");
       assert!(hint.height < 20.0, "the hint is one line: {hint:?}");
       assert!(folder.height < 70.0, "{folder:?}");
-      assert!(joined(&mut window, "account-fact-method-row").contains("ChatGPT"));
+      assert!(joined(&mut window, "account-fact-method").contains("ChatGPT"));
       assert!(joined(&mut window, "account-facts-note").contains("codex login status"));
       assert!(shown(&mut window, "settings-tab-general") && shown(&mut window, "settings-tab-orchester"));
     },
@@ -119,12 +119,12 @@ fn settings_accounts_shows_why_an_account_does_not_run_and_the_login_to_copy() {
       let command = joined(&mut window, "account-sign-in-command").replace(' ', "");
       assert!(command.contains("claudeauthlogin"), "{command}");
       // The sign-in and Check again are the notice's actions under the head (`M32Lv`), not the folder's.
-      let actions = joined(&mut window, "account-state-sentence-actions");
+      let actions = joined(&mut window, "account-state-sentence-action");
       assert!(
         actions.contains("Sign in in a terminal") && actions.contains("Check again"),
         "{actions}"
       );
-      let folder = joined(&mut window, "account-fact-folder-row");
+      let folder = joined(&mut window, "account-fact-folder");
       assert!(!folder.contains("Sign in"), "{folder}");
     },
   );
@@ -141,7 +141,7 @@ fn settings_accounts_adds_a_folder_the_person_already_uses_and_refuses_one_in_a_
       assert!(joined(&mut window, "account-add-crumb").contains("Accounts"));
       click(&mut window, "account-add-cli-codex");
       set(&mut window, "account-add-name", "Client");
-      assert!(joined(&mut window, "account-add-name-row-hint").contains("Codex · Client"));
+      assert!(joined(&mut window, "account-add-name-row-description").contains("Codex · Client"));
       click(&mut window, "account-add-folder-existing");
       let repository = root.join("repo");
       fs::create_dir_all(repository.join(".git")).expect("a repository");

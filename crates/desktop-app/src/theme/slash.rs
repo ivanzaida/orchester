@@ -9,7 +9,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SlashText {
@@ -82,18 +85,18 @@ impl SlashText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Section => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.text_muted),
-      Self::Note => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Label => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::Match => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
-      Self::Detail => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::SkillLabel => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
-      Self::SkillMatch => mono(style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary)),
-      Self::Chip => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::Search => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::BadgeVerb => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_secondary),
-      Self::BadgeTarget => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_primary),
-      Self::BadgeMore => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
+      Self::Section => style(11.0, FontWeight::Medium, 1.3, 0.0, palette.muted_foreground),
+      Self::Note => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Label => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::Match => style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground),
+      Self::Detail => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::SkillLabel => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.foreground)),
+      Self::SkillMatch => mono(style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.foreground)),
+      Self::Chip => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::Search => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::BadgeVerb => style(12.0, FontWeight::Medium, 1.2, 0.0, text_secondary(palette)),
+      Self::BadgeTarget => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.foreground),
+      Self::BadgeMore => style(11.0, FontWeight::Normal, 1.4, 0.0, text_secondary(palette)),
     }
   }
 }

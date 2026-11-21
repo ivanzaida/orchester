@@ -105,7 +105,7 @@ pub(super) fn bones(ctx: &Ctx, (name, folder): (f32, f32), last: bool) -> Row {
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(bone(TILE, TILE).rounded(RadiusSize::Md))
+    .child(bone(TILE, TILE).radius(RadiusSize::Md))
     .child(text);
   let cell = |width: f32| Row::new().width(Dimension::Px(width)).align_items(Alignment::Center);
   let row = Row::new()
@@ -271,7 +271,7 @@ fn identity(ctx: &Ctx, listed: &ListedProject) -> Row {
     .align_items(Alignment::Center)
     .justify(Justify::Center)
     .rounded(RadiusSize::Md)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .child(Text::new(&initial).variant(ProjectsText::Initial.role()));
   let tile = if listed.opens() {
@@ -320,7 +320,7 @@ fn where_cell(ctx: &mut Ctx, listed: &ListedProject, place: Option<&Place>) -> R
   let shown: Element = match place {
     None => Text::new(&ctx.t("projects.where.unknown"))
       .variant(ProjectsText::Value.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .into(),
     Some(Place::Local) => {
       let key = if listed.project.owner.is_some() {
@@ -332,7 +332,7 @@ fn where_cell(ctx: &mut Ctx, listed: &ListedProject, place: Option<&Place>) -> R
     }
     Some(Place::Shared { team: Some(team) }) => {
       let words = ctx.t_args("projects.where.shared", [("team", team.as_str())]);
-      cut_badge(ctx, &badge_id, BadgeTone::Info, &words).into()
+      cut_badge(&badge_id, BadgeTone::Info, &words).into()
     }
     Some(Place::Shared { team: None }) => {
       badge(&badge_id, BadgeTone::Info, &ctx.t("projects.where.sharedUnknown")).into()
@@ -394,10 +394,10 @@ fn count(ctx: &Ctx, listed: &ListedProject, which: Count) -> Row {
     Count::NeedsYou => counts.needs_you,
   });
   let (words, color) = match (which, value) {
-    (_, None) => (ctx.t("projects.unknownCount"), PaletteColor::TextMuted),
-    (_, Some(0)) => (Arc::from("0"), PaletteColor::TextMuted),
+    (_, None) => (ctx.t("projects.unknownCount"), PaletteColor::MutedForeground),
+    (_, Some(0)) => (Arc::from("0"), PaletteColor::MutedForeground),
     (Count::NeedsYou, Some(waiting)) => (Arc::from(waiting.to_string()), PaletteColor::Warning),
-    (Count::Active, Some(active)) => (Arc::from(active.to_string()), PaletteColor::TextSecondary),
+    (Count::Active, Some(active)) => (Arc::from(active.to_string()), ExtraColor::TextSecondary.role()),
   };
   Row::new()
     .id(format!("project-row-{name}-{}", listed.project.id))
@@ -446,6 +446,6 @@ fn chevron(listed: &ListedProject) -> Row {
     .with_children(
       listed
         .opens()
-        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted)),
+        .then(|| icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground)),
     )
 }

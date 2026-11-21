@@ -11,7 +11,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{SpacingSize, TypographyStyle},
   },
   components::{Row, Text},
   layout::Alignment,
@@ -31,6 +31,7 @@ use crate::{
   mcp::is_synthetic_input,
   project::ProjectFeed,
   screens::task::TaskContext,
+  theme::ExtraColor,
   ui::{
     chip::{BadgeTone, TagChip, state_badge},
     field::field_error,
@@ -124,7 +125,7 @@ impl Component for RunMode {
     let switch = props.may_switch.then(|| {
       let words = Text::new(&ctx.t("task.run.mode.switchToManual"))
         .variant(TypographyStyle::Button)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap();
       let action = self.switch.clone();
       // A press while the switch is under way asks nothing more: the run is switched once.

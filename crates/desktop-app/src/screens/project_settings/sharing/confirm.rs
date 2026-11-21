@@ -29,7 +29,7 @@ pub(super) fn pair(id: &str, (key, width): (&str, f32), value: &str) -> Row {
       Text::new(key)
         .id(format!("{id}-key"))
         .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Px(width))
         .flex_shrink(0.0),
     )
@@ -37,7 +37,7 @@ pub(super) fn pair(id: &str, (key, width): (&str, f32), value: &str) -> Row {
       Text::new(value)
         .id(format!("{id}-value"))
         .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0),
     )
 }
@@ -63,8 +63,8 @@ pub(super) fn question(id: &str, (title, body): (&str, &str), pairs: Vec<Row>, a
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role()))
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
     .rounded(ExtraRadius::Tile.role())
     .child(text)
     .with_children(pairs)
@@ -85,7 +85,7 @@ pub(super) fn panel(id: &str, title: &str, pairs: Vec<Row>) -> Element {
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Inset.role(), SpacingSize::Md))
     .spacing(SpacingSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Tile.role())
     .child(

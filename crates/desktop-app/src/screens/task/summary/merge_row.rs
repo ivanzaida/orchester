@@ -233,7 +233,7 @@ impl Component for MergeRow {
           .text_overflow(TextOverflow::Elipsis),
       )
       .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)))
-      .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::TextMuted).id("task-property-merge-open"));
+      .child(icon(Icon::ArrowUpRight, IconSize::Sm, PaletteColor::MutedForeground).id("task-property-merge-open"));
     let property = row(
       "task-property-merge",
       &ctx.t("summary.properties.merge.label"),

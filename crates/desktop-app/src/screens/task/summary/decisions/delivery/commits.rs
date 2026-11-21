@@ -83,7 +83,7 @@ pub(super) fn section(ctx: &Ctx, read: Option<&Result<Commits, Message>>) -> Ele
           ExtraSpacing::Tight.role(),
           ExtraSpacing::Hair.role(),
         ))
-        .with_children(commits.iter().map(row))
+        .children(commits.iter().map(row))
         .into(),
     ),
   };
@@ -121,7 +121,7 @@ fn row(commit: &LoggedCommit) -> Element {
     .child(
       Text::new(&commit.subject)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap()
@@ -130,7 +130,7 @@ fn row(commit: &LoggedCommit) -> Element {
     .child(
       Text::new(&clock(commit.at))
         .variant(ExtraTypography::Note.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()

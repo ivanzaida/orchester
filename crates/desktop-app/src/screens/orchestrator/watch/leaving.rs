@@ -144,7 +144,7 @@ impl Component for BeforeYouLeave {
       &format!("{}-again", props.id),
       (
         &ctx.t("orchestrator.leaving.checkAgain"),
-        Some(PaletteColor::TextSecondary),
+        Some(ExtraColor::TextSecondary.role()),
       ),
       Press::run(move || again.update(|asked| *asked += 1)),
     );
@@ -169,7 +169,7 @@ impl Component for BeforeYouLeave {
 fn unreadable(ctx: &Ctx, props: &LeavingProps, why: &Message, check: Element) -> Element {
   let reason = message_text(ctx, why);
   let said = Said {
-    glyph: (Icon::DoorOpen, PaletteColor::TextMuted),
+    glyph: (Icon::DoorOpen, PaletteColor::MutedForeground),
     words: ctx.t("orchestrator.leaving.title"),
     tag: None,
     aside: Some(ctx.t_args("orchestrator.leaving.unreadable", [("reason", &*reason)])),
@@ -193,7 +193,7 @@ fn ready(ctx: &Ctx, props: &LeavingProps, leaving: &Leaving, check: Element) -> 
     None => ctx.t_args("orchestrator.leaving.readyAsideAll", [target]),
   };
   let said = Said {
-    glyph: (Icon::DoorOpen, PaletteColor::TextMuted),
+    glyph: (Icon::DoorOpen, PaletteColor::MutedForeground),
     words: ctx.t("orchestrator.leaving.ready"),
     tag: None,
     aside: Some(aside),
@@ -218,7 +218,7 @@ fn card(ctx: &mut Ctx, props: &LeavingProps, leaving: &Leaving, check: Element) 
       NotChecked::Servers => "orchestrator.leaving.notChecked.servers",
     });
     let id = format!("{}-not-checked-{}", props.id, lines.len());
-    let muted = Some(PaletteColor::TextMuted);
+    let muted = Some(PaletteColor::MutedForeground);
     lines.push(finding(ctx, (&id, "not_checked"), (&words, muted), None));
   }
   let count = if stopping == 1 {

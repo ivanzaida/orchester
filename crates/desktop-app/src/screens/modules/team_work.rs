@@ -203,7 +203,7 @@ impl Component for ModuleWork {
     let heading = Text::new(&ctx.t("modules.team.work.heading"))
       .id("module-team-work-heading")
       .variant(TaskText::SectionTitle.role())
-      .color(PaletteColor::TextPrimary);
+      .color(PaletteColor::Foreground);
     Column::new()
       .id("module-team-work")
       .width(Dimension::Pct(100.0))

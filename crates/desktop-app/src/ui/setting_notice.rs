@@ -1,8 +1,9 @@
 //! What Settings says in place (the states sheets `poD7g`, `shpsk` and `ZUuMT` of the new `orchester.pen`):
-//! - a notice (`Notice · warning` `TPqRf`): a 14 icon in its tone's color and, 10 after it, an optional title in 13/500
-//!   `text_primary`, what happened in 12 `text_secondary`, parts such as a code, actions 8 apart and a note in 11.5
-//!   `text_muted`, 6 apart; 10 over and under and 12 at its sides, on its tone's muted fill, radius 6, no stroke. A
-//!   question asked in place is a notice whose actions answer it (`Rotate the token?` `XG6M1`).
+//! - a notice (`Notice · warning` `TPqRf`), lurq's `ui::Alert` flat in the notice's recipe (`theme::kit::notice`): a 14
+//!   icon in its tone's color and, 10 after it, an optional title in 13/500 `text_primary`, what happened in 12
+//!   `text_secondary`, parts such as a code, actions 8 apart and a note in 11.5 `text_muted`, 6 apart; 10 over and
+//!   under and 12 at its sides, on its tone's muted fill, radius 6, no stroke. A question asked in place is a notice
+//!   whose actions answer it (`Rotate the token?` `XG6M1`).
 //! - a panel (`Sign in` `yKzFt`, `Remove` `CTa4g`): a title in 13/600, what it says and its parts and actions 10 apart,
 //!   12 over and under and 14 at its sides inside a `border` stroke, radius 10; a destructive question is on
 //!   `danger_muted` inside a `danger` stroke.
@@ -14,33 +15,14 @@ use lurq::{
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::{Alert, Styled},
 };
 
 use super::{
   icon::{Icon, icon},
   notice::NoticeTone,
 };
-use crate::theme::{ExtraSpacing, ExtraTypography, IconSize, SettingsText};
-
-const fn colors(tone: NoticeTone) -> (PaletteColor, PaletteColor, Icon) {
-  match tone {
-    NoticeTone::Neutral => (PaletteColor::SurfaceRaised, PaletteColor::TextMuted, Icon::Info),
-    NoticeTone::Info => (PaletteColor::InfoMuted, PaletteColor::Info, Icon::Info),
-    NoticeTone::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning, Icon::TriangleAlert),
-    NoticeTone::Danger => (PaletteColor::DangerMuted, PaletteColor::Danger, Icon::CircleAlert),
-    NoticeTone::Success => (PaletteColor::SuccessMuted, PaletteColor::Success, Icon::CircleCheck),
-  }
-}
-
-const fn tone_name(tone: NoticeTone) -> &'static str {
-  match tone {
-    NoticeTone::Neutral => "neutral",
-    NoticeTone::Info => "info",
-    NoticeTone::Warning => "warning",
-    NoticeTone::Danger => "danger",
-    NoticeTone::Success => "success",
-  }
-}
+use crate::theme::{ExtraSpacing, ExtraTypography, IconSize, SettingsText, kit::notice::FLAT};
 
 /// A notice in place.
 pub struct SettingNotice {
@@ -55,7 +37,8 @@ pub struct SettingNotice {
 }
 
 impl SettingNotice {
-  /// The notice `id` (its title `<id>-title`, its words `<id>-body`, its note `<id>-note`).
+  /// The notice `id` (its title `<id>-title`, its words `<id>-description`, its actions `<id>-action`, its note
+  /// `<id>-note`).
   pub fn new(id: impl Into<Arc<str>>, tone: NoticeTone) -> Self {
     Self {
       id: id.into(),
@@ -105,51 +88,26 @@ impl SettingNotice {
 
 impl From<SettingNotice> for Element {
   fn from(notice: SettingNotice) -> Self {
-    let (fill, mark, glyph) = colors(notice.tone);
-    let actions = (!notice.actions.is_empty()).then(|| {
-      Row::new()
-        .id(format!("{}-actions", notice.id))
-        .wrap()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .with_children(notice.actions)
-    });
-    let text = Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Snug.role())
-      .with_children(notice.title.map(|title| {
-        Text::new(&title)
-          .id(format!("{}-title", notice.id))
-          .variant(ExtraTypography::Strong.role())
-          .width(Dimension::Pct(100.0))
-      }))
-      .with_children(notice.body.map(|body| {
-        Text::new(&body)
-          .id(format!("{}-body", notice.id))
-          .variant(ExtraTypography::Prose.role())
-          .width(Dimension::Pct(100.0))
-      }))
-      .with_children(notice.parts)
-      .with_children(actions)
-      .with_children(notice.note.map(|note| {
-        Text::new(&note)
-          .id(format!("{}-note", notice.id))
-          .variant(ExtraTypography::Note.role())
-          .width(Dimension::Pct(100.0))
-      }));
-    Row::new()
-      .id(notice.id.to_string())
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-      .spacing(ExtraSpacing::Loose.role())
-      .align_items(Alignment::Start)
-      .background(fill)
-      .rounded(RadiusSize::Md)
-      .describe("tone", tone_name(notice.tone))
-      .child(icon(notice.icon.unwrap_or(glyph), IconSize::Md, mark).id(format!("{}-icon", notice.id)))
-      .child(text)
-      .into()
+    let alert = match &notice.title {
+      Some(title) => Alert::new(title),
+      None => Alert::untitled(),
+    };
+    let mut alert = alert
+      .id(notice.id.clone())
+      .variant(notice.tone.variant())
+      .icon(notice.icon.unwrap_or(notice.tone.icon()).name().as_str())
+      .stacked(true)
+      .state(FLAT, true)
+      .children(notice.parts)
+      .actions(notice.actions)
+      .describe("tone", notice.tone.name());
+    if let Some(body) = &notice.body {
+      alert = alert.description(body);
+    }
+    if let Some(note) = &notice.note {
+      alert = alert.note(note);
+    }
+    alert.into()
   }
 }
 
@@ -232,8 +190,8 @@ impl From<SettingPanel> for Element {
       .with_children(panel.parts);
     let frame = if panel.danger {
       frame
-        .background(PaletteColor::DangerMuted)
-        .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
+        .background(PaletteColor::DestructiveMuted)
+        .border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))
         .describe("tone", "danger")
     } else {
       frame.border(Border::inside(BorderSize::Sm, PaletteColor::Border))
@@ -249,7 +207,7 @@ pub fn status_line(id: &str, glyph: Icon, words: &str) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, PaletteColor::MutedForeground))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))

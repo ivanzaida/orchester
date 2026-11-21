@@ -223,7 +223,11 @@ impl Editor {
         .id("agent-save-status")
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .child(icon(glyph, IconSize::Sm, lurq::app::theme::PaletteColor::TextMuted))
+        .child(icon(
+          glyph,
+          IconSize::Sm,
+          lurq::app::theme::PaletteColor::MutedForeground,
+        ))
         .child(Text::new(&ctx.t(key)).variant(HubText::Hint.role()))
         .into(),
     )

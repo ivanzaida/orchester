@@ -39,13 +39,13 @@ pub(crate) enum Tone {
 }
 
 impl Tone {
-  pub(crate) const fn color(self) -> PaletteColor {
+  pub(crate) fn color(self) -> PaletteColor {
     match self {
-      Self::Muted => PaletteColor::TextMuted,
-      Self::Secondary => PaletteColor::TextSecondary,
+      Self::Muted => PaletteColor::MutedForeground,
+      Self::Secondary => ExtraColor::TextSecondary.role(),
       Self::Success => PaletteColor::Success,
       Self::Warning => PaletteColor::Warning,
-      Self::Danger => PaletteColor::Danger,
+      Self::Danger => PaletteColor::Destructive,
     }
   }
 }
@@ -273,7 +273,7 @@ impl SettingRow {
     let (label, hint) = (self.label(ctx), self.hint_line(ctx));
     let id = self.id.clone();
     let info = self.info.take().map(|info| {
-      let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id(format!("{id}-info"));
+      let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground).id(format!("{id}-info"));
       Tooltip::new(format!("{id}-info"), info).wrap(ctx, glyph)
     });
     let heading = Row::new()

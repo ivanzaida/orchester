@@ -298,7 +298,7 @@ fn chain(ctx: &Ctx, started: &[Arc<str>]) -> Element {
     .align_items(Alignment::Center);
   for (at, name) in started.iter().enumerate() {
     if at > 0 {
-      row = row.child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::TextMuted));
+      row = row.child(icon(Icon::ArrowRight, IconSize::Sm, PaletteColor::MutedForeground));
     }
     row = row.child(
       Row::new()
@@ -307,7 +307,7 @@ fn chain(ctx: &Ctx, started: &[Arc<str>]) -> Element {
         .padding(Padding::horizontal(SpacingSize::Sm))
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
-        .background(PaletteColor::SurfaceRaised)
+        .background(PaletteColor::Card)
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .rounded(RadiusSize::Md)
         .child(Text::new(&(at + 1).to_string()).variant(ServicesText::ChainNumber.role()))

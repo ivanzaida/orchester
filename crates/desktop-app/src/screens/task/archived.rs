@@ -19,6 +19,7 @@ use lurq::{
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  ui::CardPart,
 };
 use orchester_api::SharedResourceKind;
 use orchester_core::{
@@ -34,7 +35,7 @@ use crate::{
   navigation::{Navigation, link::Open},
   routes::{HubFilter, HubView, ProjectPage, Route},
   services::Services,
-  theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize, NOT_READY_ROW_HEIGHT, TaskRadius, TaskText},
+  theme::{CardsText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, NOT_READY_ROW_HEIGHT, TaskRadius, TaskText},
   ui::{
     agent_mark::AgentMark,
     card::{CardSurface, card},
@@ -139,12 +140,15 @@ impl Component for ArchivedCard {
     };
     let mut rows = vec![row(
       "task-archived-resource",
-      (icon(glyph, IconSize::Md, PaletteColor::Danger).into(), still.is_empty()),
+      (
+        icon(glyph, IconSize::Md, PaletteColor::Destructive).into(),
+        still.is_empty(),
+      ),
       Text::new(resource).variant(CardsText::Decided.role()),
       Some(
         Text::new(&need)
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::Danger),
+          .color(PaletteColor::Destructive),
       ),
       open,
     )];
@@ -161,14 +165,14 @@ impl Component for ArchivedCard {
       ));
     }
     card("task-archived", CardSurface::Stopped)
-      .rounded(TaskRadius::NotReadyCard.role())
-      .spacing(SpacingSize::Md)
+      .style(CardPart::Root, |style| style.radius(TaskRadius::NotReadyCard.role()))
+      .gap(SpacingSize::Md)
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
           .align_items(Alignment::Center)
           .spacing(SpacingSize::Sm)
-          .child(icon(Icon::Archive, IconSize::Md, PaletteColor::Danger))
+          .child(icon(Icon::Archive, IconSize::Md, PaletteColor::Destructive))
           .child(
             Text::new(&words("summary.archived.title"))
               .id("task-archived-title")
@@ -186,7 +190,7 @@ impl Component for ArchivedCard {
           .variant(ExtraTypography::Lead.role()),
       )
       .child(rows_box(rows))
-      .with_children(archived_foot::foot(ctx, &task))
+      .children(archived_foot::foot(ctx, &task))
   }
 }
 
@@ -296,7 +300,7 @@ fn profile_row(ctx: &Ctx, (index, profile): (usize, &Profile), (resource, last):
   let link = open_link(ctx, &id, open);
   let glyph: Element = match profile.cli {
     Some(cli) => AgentMark::of(cli).render(ctx, IconSize::Md),
-    None => icon(Icon::Bot, IconSize::Md, PaletteColor::TextSecondary).into(),
+    None => icon(Icon::Bot, IconSize::Md, ExtraColor::TextSecondary.role()).into(),
   };
   row(
     &id,

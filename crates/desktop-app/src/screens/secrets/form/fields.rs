@@ -69,7 +69,7 @@ pub(super) fn replace_box(_ctx: &Ctx, body: Element, footer: Element) -> Element
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
     .spacing(SpacingSize::Md)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(body)
@@ -199,7 +199,7 @@ impl SecretForm {
         Text::new(&hint)
           .id("secret-name-field-hint")
           .variant(ExtraTypography::Note.role())
-          .color(PaletteColor::Danger)
+          .color(PaletteColor::Destructive)
       }));
     form_row(Label::new("secret-name-field", ctx.t("secrets.form.name")), field)
   }

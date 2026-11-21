@@ -12,7 +12,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
-    theme::PaletteColor,
   },
   core::Signal,
   node::Element,
@@ -32,7 +31,7 @@ use crate::{
   navigation::Navigation,
   routes::{OrchesterView, Route},
   services::Services,
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     callout::{Callout, CalloutTone},
@@ -158,7 +157,11 @@ pub(super) fn row(ctx: &mut Ctx, connects: &Connects, (address, server): &(Serve
       })
   };
   SettingRow::new(row_id, address.authority())
-    .lead(row_tile(icon(Icon::Server, IconSize::Md, PaletteColor::TextSecondary)))
+    .lead(row_tile(icon(
+      Icon::Server,
+      IconSize::Md,
+      ExtraColor::TextSecondary.role(),
+    )))
     .hint(ctx.t("cloud.list.browser.line"))
     .control(connect)
     .render(ctx)

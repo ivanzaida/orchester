@@ -71,7 +71,7 @@ impl Component for Since {
       Counted::Waiting(definition) => Text::new(&words::waiting(ctx, &service, definition.as_deref(), ran))
         .id(id.to_string())
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     }
   }

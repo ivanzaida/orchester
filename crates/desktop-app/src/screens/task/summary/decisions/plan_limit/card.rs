@@ -36,7 +36,7 @@ use super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, may_press},
-  theme::{DecisionText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DecisionText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -95,7 +95,7 @@ impl ChoiceCard<'_> {
       self.choice.set(Choice::Wait);
     }
     let mut card = card("plan-limit-choice", CardSurface::Attention)
-      .spacing(ExtraSpacing::Inset.role())
+      .gap(ExtraSpacing::Inset.role())
       .child(self.head(ctx));
     if let Some(reading) = &self.stop.reading {
       card = card.child(windows(ctx, reading, now));
@@ -109,8 +109,8 @@ impl ChoiceCard<'_> {
     let offline = (!self.online).then(|| ctx.t("task.controls.offline"));
     card
       .child(self.actions(ctx, resets, now, (pending.is_some(), offline.is_some())))
-      .with_children(offline.map(|reason| reason_line("plan-limit-offline", &reason)))
-      .with_children(refused.map(|refused| field_error("plan-limit-refused", &message_text(ctx, &refused))))
+      .children(offline.map(|reason| reason_line("plan-limit-offline", &reason)))
+      .children(refused.map(|refused| field_error("plan-limit-refused", &message_text(ctx, &refused))))
       .into()
   }
 
@@ -247,7 +247,7 @@ impl ChoiceCard<'_> {
           .child(
             Text::new(&label)
               .variant(ExtraTypography::Note.role())
-              .color(PaletteColor::TextSecondary),
+              .color(ExtraColor::TextSecondary.role()),
           )
           .child(
             SelectField::new("plan-limit-connection", label.clone(), self.other.clone(), options)

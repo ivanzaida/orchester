@@ -36,7 +36,7 @@ use super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, may_press},
-  theme::{DecisionText, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{DecisionText, ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -70,7 +70,7 @@ pub struct RaiseCard<'a> {
 impl RaiseCard<'_> {
   pub fn render(&self, ctx: &mut Ctx) -> Element {
     let card = card("raise-limit", CardSurface::Attention)
-      .spacing(ExtraSpacing::Inset.role())
+      .gap(ExtraSpacing::Inset.role())
       .child(head(ctx, self.stop.limit))
       .child(self.used(ctx));
     let (Some(unit), Some(read)) = (self.stop.field(), self.stop.read(&self.text.get(), self.separator)) else {
@@ -79,7 +79,7 @@ impl RaiseCard<'_> {
         _ => ctx.t("decisions.limit.groupReason"),
       };
       let card = card.child(reason_line("raise-limit-unavailable", &reason));
-      return self.pointing.ring(card).into();
+      return self.pointing.ring(card);
     };
     let (pending, refused) = state(self.action, self.asked.get());
     let offline = (!self.online).then(|| ctx.t("task.controls.offline"));
@@ -94,15 +94,15 @@ impl RaiseCard<'_> {
     let removing = Text::new(&removing)
       .id("raise-limit-remove-meaning")
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted);
+      .color(PaletteColor::MutedForeground);
     let card = card
       .child(divider())
       .child(self.input_row(ctx, unit, read.as_ref()))
       .child(self.actions(ctx, unit, read.ok(), (pending, offline.clone())))
       .child(removing)
-      .with_children(offline.map(|reason| reason_line("raise-limit-offline", &reason)))
-      .with_children(refused.map(|refused| field_error("raise-limit-refused", &message_text(ctx, &refused))));
-    self.pointing.ring(card).into()
+      .children(offline.map(|reason| reason_line("raise-limit-offline", &reason)))
+      .children(refused.map(|refused| field_error("raise-limit-refused", &message_text(ctx, &refused))));
+    self.pointing.ring(card)
   }
 
   /// What the run used of its tokens, with the meter, and of its active agent time.
@@ -150,7 +150,7 @@ impl RaiseCard<'_> {
       .spacing(SpacingSize::Sm);
     if let Some((text, bar)) = tokens {
       used = used
-        .child(used_row("raise-limit-tokens", &name, &text, PaletteColor::TextPrimary))
+        .child(used_row("raise-limit-tokens", &name, &text, PaletteColor::Foreground))
         .with_children(bar.map(|bar| {
           Row::new()
             .width(Dimension::Pct(100.0))
@@ -165,7 +165,7 @@ impl RaiseCard<'_> {
         "raise-limit-time",
         &ctx.t("decisions.limit.activeTime"),
         &time,
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       ))
       .into()
   }
@@ -391,7 +391,7 @@ fn used_row(id: &str, name: &str, value: &str, color: PaletteColor) -> Element {
     .child(
       Text::new(name)
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Px(LABEL_WIDTH)),
     )
     .child(

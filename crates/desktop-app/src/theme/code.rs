@@ -14,6 +14,7 @@ use orchester_workspace::highlight::TokenKind;
 
 use super::{
   ExtraColor,
+  palette::text_secondary,
   typography::{mono, style},
 };
 
@@ -49,10 +50,10 @@ impl CodeText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::ChangeType => mono(style(11.0, FontWeight::SemiBold, 1.4, 0.0, palette.text_secondary)),
-      Self::DiffPath => mono(style(12.5, FontWeight::Medium, 1.4, 0.0, palette.text_primary)),
-      Self::GroupHeading => style(10.5, FontWeight::Medium, 1.35, 0.5, palette.text_muted),
-      Self::GroupCount => mono(style(10.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted)),
+      Self::ChangeType => mono(style(11.0, FontWeight::SemiBold, 1.4, 0.0, text_secondary(palette))),
+      Self::DiffPath => mono(style(12.5, FontWeight::Medium, 1.4, 0.0, palette.foreground)),
+      Self::GroupHeading => style(10.5, FontWeight::Medium, 1.35, 0.5, palette.muted_foreground),
+      Self::GroupCount => mono(style(10.5, FontWeight::Normal, 1.35, 0.0, palette.muted_foreground)),
     }
   }
 }
@@ -70,7 +71,7 @@ pub fn token_color(kind: TokenKind) -> PaletteColor {
     TokenKind::Keyword => ExtraColor::CodeKeyword.role(),
     TokenKind::String => ExtraColor::CodeString.role(),
     TokenKind::Constant => ExtraColor::CodeNumber.role(),
-    TokenKind::Comment => PaletteColor::TextMuted,
-    TokenKind::Plain | TokenKind::Function | TokenKind::Variable => PaletteColor::TextPrimary,
+    TokenKind::Comment => PaletteColor::MutedForeground,
+    TokenKind::Plain | TokenKind::Function | TokenKind::Variable => PaletteColor::Foreground,
   }
 }

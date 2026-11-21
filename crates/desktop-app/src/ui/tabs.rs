@@ -1,55 +1,35 @@
-//! Page tabs (`Page tab/active` `loUWZ`, `Page tab/default` `NspMt`): 34 high, 2 at their sides, 20
-//! apart, on a 1 `border` line (`Workflow tabs` `bxhee`). The current tab's label is 13/500
-//! `text_primary` over a 2 `accent` underline, the others' 13 `text_secondary`, each in the box the current one needs,
-//! so a switch moves no tab (`L00 · The tab row never moves` `g5mqSl`); a count follows the label
-//! in its words (`All 24`), or as a 12 `text_muted` number after it (Settings' *Accounts 3*), or, for what waits for
-//! the person, in a badge 6 after it: mono 11/500 `warning` on a `warning_muted` pill, 1 over and under and 6 at its
-//! sides (`Count badge` `CiYKk`). A tab not built yet is its
-//! label in 13 `text_muted` and an 11 `text_muted` lock, 5 apart, with why in its tooltip (`Page tab/locked`
-//! `Smb4t`). Tabs are pointer-only.
+//! Page tabs (`Page tab/active` `loUWZ`, `Page tab/default` `NspMt`): lurq's `ui::Tabs` in the theme's recipe
+//! (`theme::kit::tabs`), each label in the box the current one needs, so a switch moves no tab (`L00 · The tab row
+//! never moves` `g5mqSl`); a count follows the label in its words (`All 24`), or as a number after it (Settings'
+//! *Accounts 3*), or, for what waits for the person, in a badge after it (`Count badge` `CiYKk`). A tab not built yet
+//! is its label and a lock, with why in its tooltip (`Page tab/locked` `Smb4t`). Tabs are pointer-only; a press of the
+//! current tab opens its place again, as a link would.
 //!
-//! Segmented control (`Segmented/text` `S5Fsve`, `Segmented` `C9VsTA`): 26 high, `surface_input` inside
-//! a `border` stroke, radius 6, 2 inside and between segments. The chosen segment is filled with
-//! `pressed` and its label 12/500 `text_primary`, the others 12 `text_muted`; a text segment is 22 high,
-//! radius 4, 10 at its sides; an icon segment is 28 wide, radius 4, its 13 glyph `text_primary` when
-//! chosen and `text_muted` otherwise, the chosen one filled with `hover`.
+//! The segmented control is [`segments`].
+
+mod segments;
 
 use std::sync::Arc;
 
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, TypographyStyle},
+    events::{MouseButton, MouseEvent},
+    theme::PaletteColor,
   },
-  components::{Button, Column, Row, Spacer, Stack, Text},
-  core::ElementRef,
-  layout::{Alignment, StackAlignment, layout_kind::Justify},
-  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::Element,
+  ui::{Tab, Tabs},
 };
 
-use super::{
-  icon::{Icon, icon},
-  pressable::{Focus, Press, inert, pressable},
-  skeleton,
-  tooltip::Tooltip,
-};
+pub use self::segments::{Segment, SegmentFace, face, segmented};
+use super::{icon::Icon, pressable::Press, tooltip::Tooltip};
 use crate::{
-  navigation::link::Open,
-  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  navigation::{
+    link::{Open, follow},
+    press::OpenIn,
+  },
+  theme::kit::tabs::{COMPACT, LOCKED, WAITS},
 };
-
-/// `Page tab/*` height.
-const TAB_HEIGHT: f32 = 34.0;
-/// A compact page tab's height: the Agents hub's tabs and a tool's (`Tabs` `Cc3JP`).
-const COMPACT_TAB_HEIGHT: f32 = 32.0;
-/// `Segmented` height, and a text segment's (`c4p0b`) and an icon segment's width (`wsGU4`).
-const SEGMENTED_HEIGHT: f32 = 26.0;
-const TEXT_SEGMENT_HEIGHT: f32 = 22.0;
-const ICON_SEGMENT_WIDTH: f32 = 28.0;
-/// The height of what only holds a width.
-const NO_ROOM: f32 = 0.0;
-/// A tab's dot (`Dot` `JrkWf` in `cjvRr`).
-const DOT_SIZE: f32 = 6.0;
 
 #[derive(Clone)]
 enum TabState {
@@ -75,7 +55,7 @@ pub struct PageTab {
   dot: Option<PaletteColor>,
   /// The count is still read: its bone after the label.
   reading: bool,
-  height: f32,
+  compact: bool,
 }
 
 impl PageTab {
@@ -90,14 +70,14 @@ impl PageTab {
       count: None,
       dot: None,
       reading: false,
-      height: TAB_HEIGHT,
+      compact: false,
     }
   }
 
   /// The tab 32 high instead of 34, as the Agents hub draws its tabs and a tool's (`Cc3JP`).
   #[must_use]
   pub const fn compact(mut self) -> Self {
-    self.height = COMPACT_TAB_HEIGHT;
+    self.compact = true;
     self
   }
 
@@ -128,7 +108,7 @@ impl PageTab {
     Self::of(id, label, true, TabState::Here)
   }
 
-  /// Opens an explanation panel for an unavailable feature, with the design's lock glyph.
+  /// A lock after the label, and `reason` in the tab's tooltip: what the tab opens is not all there yet.
   pub fn explanation(mut self, reason: impl Into<Arc<str>>) -> Self {
     self.explanation = Some(reason.into());
     self
@@ -158,175 +138,115 @@ impl PageTab {
     self
   }
 
-  /// How many there are is still read: a count's bone after the label (`D · Bones` in `13 · Patterns` `AOQZ3`), as
-  /// wide as one digit so a count of one digit moves no tab after it; its element id is `<id>-count`.
+  /// How many there are is still read: a count's bone after the label (`D · Bones` in `13 · Patterns` `AOQZ3`); its
+  /// element id is `<id>-count`.
   #[must_use]
   pub const fn count_reading(mut self) -> Self {
     self.reading = true;
     self
   }
 
-  fn render(self, ctx: &mut Ctx) -> Element {
-    let open = match self.state {
-      TabState::Unavailable(reason) => {
-        let tab = inert(Button::empty())
-          .id(self.id.clone())
-          .height(Dimension::Px(self.height))
-          .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
-          .spacing(ExtraSpacing::Pair.role())
-          .align_items(Alignment::Center)
-          .describe("a11y_name", self.label.clone())
-          .describe("state", "unavailable")
-          .describe("reason", reason.clone())
-          .child(
-            Text::new(&self.label)
-              .id(format!("{}-label", self.id))
-              .variant(TypographyStyle::Body)
-              .color(PaletteColor::TextMuted)
-              .nowrap(),
-          )
-          .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted).id(format!("{}-icon", self.id)));
-        return Tooltip::new(self.id, reason).wrap(ctx, tab);
-      }
-      TabState::Open(open) => Some(open),
-      TabState::Here => None,
-    };
-    let label: Element = if self.current {
-      current_label(&self.label).id(format!("{}-label", self.id)).into()
-    } else {
-      label_in_room(&self.id, &self.label, PaletteColor::TextSecondary).into()
-    };
-    let button = open
-      .map_or_else(|| Button::empty().focusable(false), Press::button)
+  /// lurq's tab of value `index`, and what a press of it does, if anything.
+  fn into_tab(self, index: usize) -> (Tab<usize>, Option<Press>) {
+    let mut tab = Tab::new(index, &self.label)
       .id(self.id.clone())
-      .height(Dimension::Px(self.height))
-      .padding(Padding::horizontal(ExtraSpacing::Tight.role()))
-      .spacing(ExtraSpacing::Pair.role())
-      .align_items(Alignment::Center)
-      .describe("a11y_name", self.label.clone())
-      .describe("state", if self.current { "current" } else { "enabled" });
-    let button = button.child(counted_label(
-      &self.id,
-      label,
-      (self.badge, self.count, self.reading),
-      self.dot,
-    ));
-    let button = if self.explanation.is_some() {
-      button.child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
-    } else {
-      button
+      .state(COMPACT, self.compact);
+    tab = match (self.badge, self.count) {
+      (Some(count), _) => tab.badge(count),
+      (None, Some((count, waits))) => tab.count(count).state(WAITS, waits),
+      (None, None) => tab.count_pending(self.reading),
     };
-    let button: Element = if self.current {
-      button
-        .border_bottom(Border::inside(BorderSize::Md, PaletteColor::Accent))
-        .into()
-    } else {
-      button.into()
-    };
-    match self.explanation {
-      Some(reason) => Tooltip::new(self.id, reason).wrap(ctx, button),
-      None => button,
+    if let Some(tone) = self.dot {
+      tab = tab.dot(tone);
     }
+    let press = match self.state {
+      TabState::Open(press) => {
+        tab = opens_aside(tab, press.clone());
+        Some(press)
+      }
+      TabState::Here => {
+        tab = tab.inert(true);
+        None
+      }
+      TabState::Unavailable(reason) => {
+        tab = locked(tab.disabled_reason(&reason), &self.id, reason);
+        None
+      }
+    };
+    if let Some(reason) = self.explanation {
+      tab = locked(tab, &self.id, reason);
+    }
+    (tab, press)
   }
 }
 
-/// The current tab's label.
-fn current_label(label: &str) -> Text {
-  Text::new(label).variant(ExtraTypography::TabCurrent.role()).nowrap()
+/// `tab` with a lock after its label and `reason` in its tooltip, `<id>-tooltip`.
+fn locked(tab: Tab<usize>, id: &str, reason: Arc<str>) -> Tab<usize> {
+  tab
+    .trailing_icon(Icon::Lock.name())
+    .state(LOCKED, true)
+    .tooltip(Tooltip::new(id, reason).to_ui())
 }
 
-/// A tab's label in `color`, its element `<id>-label` in the box it has as the current tab: the current label's width
-/// is held by a copy no higher than nothing, so a switch moves no tab.
-fn label_in_room(id: &str, label: &str, color: PaletteColor) -> Column {
-  let room = Row::new()
-    .height(Dimension::Px(NO_ROOM))
-    .clip()
-    .child(current_label(label));
-  Column::new()
-    .align_items(Alignment::Stretch)
-    .child(
-      Text::new(label)
-        .id(format!("{id}-label"))
-        .variant(TypographyStyle::Body)
-        .color(color)
-        .nowrap(),
-    )
-    .child(room)
+/// `tab`, whose press with the middle button or Ctrl (Cmd on macOS) runs `press` too: an action, or its place opened
+/// by a browser's rules.
+fn opens_aside(tab: Tab<usize>, press: Press) -> Tab<usize> {
+  match press {
+    Press::Run(action) => tab.on_open_aside(move |event: MouseEvent| {
+      if event.button != MouseButton::Middle {
+        action();
+      }
+    }),
+    Press::Open(open) => tab.on_open_aside(move |event: MouseEvent| follow(&open, &event)),
+  }
 }
 
-/// A tab's label with its badge, its quiet count (in `warning` when it counts what waits for the person), or the
-/// count's bone while it is read, and its dot after them. The count and its bone stand in the room of one digit at
-/// least, so a count of one digit replaces the bone without moving the tabs after it.
-fn counted_label(
+/// The row of page tabs on its line, as wide as its parent: `tabs` at its start, `end` at its end, with `rule` between
+/// the tabs before `end` and those after it, and `element` at the end of the line. Mounted, so each label keeps the
+/// room it takes as the current tab, and a line too narrow for its tabs scrolls them, with a More menu at its end.
+fn tab_line(
+  ctx: &mut Ctx,
   id: &str,
-  label: Element,
-  (badge, count, reading): (Option<usize>, Option<(usize, bool)>, bool),
-  dot: Option<PaletteColor>,
+  tabs: Vec<PageTab>,
+  end: Vec<PageTab>,
+  (rule, element): (Option<usize>, Option<Element>),
 ) -> Element {
-  let counted: Option<Element> = match (badge, count) {
-    (Some(count), _) => Some(count_badge(&format!("{id}-badge"), count).into()),
-    (None, Some((count, waits))) => Some(
-      digit_room(
-        Text::new(&count.to_string())
-          .id(format!("{id}-count"))
-          .variant(TypographyStyle::Description)
-          .color(if waits {
-            PaletteColor::Warning
-          } else {
-            PaletteColor::TextMuted
-          })
-          .nowrap(),
+  let at_end = tabs.len();
+  let selected = tabs
+    .iter()
+    .chain(&end)
+    .position(|tab| tab.current)
+    .unwrap_or(usize::MAX);
+  let (shown, presses): (Vec<Tab<usize>>, Vec<Option<Press>>) = tabs
+    .into_iter()
+    .chain(end)
+    .enumerate()
+    .map(|(index, tab)| {
+      let (tab, press) = tab.into_tab(index);
+      (
+        tab
+          .at_end(rule.is_none() && index >= at_end)
+          .separated(rule == Some(index)),
+        press,
       )
-      .into(),
-    ),
-    (None, None) if reading => Some(digit_room(skeleton::count_in_room()).id(format!("{id}-count")).into()),
-    (None, None) => None,
-  };
-  let dot = dot.map(|tone| {
-    Row::new()
-      .id(format!("{id}-dot"))
-      .width(Dimension::Px(DOT_SIZE))
-      .height(Dimension::Px(DOT_SIZE))
-      .flex_shrink(0.0)
-      .rounded(ExtraRadius::Full.role())
-      .background(tone)
-  });
-  Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(label)
-    .with_children(counted)
-    .with_children(dot)
-    .into()
-}
-
-/// `count` in the room of one digit of a count at least: a copy of the widest digit no higher than nothing holds it.
-fn digit_room(count: impl Into<Element>) -> Column {
-  let room = Row::new()
-    .height(Dimension::Px(NO_ROOM))
-    .clip()
-    .child(Text::new(&0.to_string()).variant(TypographyStyle::Description).nowrap());
-  Column::new()
-    .flex_shrink(0.0)
-    .align_items(Alignment::Stretch)
-    .child(count)
-    .child(room)
-}
-
-/// A tab's count of what waits for the person (`CiYKk`).
-fn count_badge(id: &str, count: usize) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .padding(Padding::symmetric(ExtraSpacing::Snug.role(), ExtraSpacing::Hair.role()))
-    .align_items(Alignment::Center)
-    .background(PaletteColor::WarningMuted)
-    .rounded(ExtraRadius::Full.role())
-    .child(
-      Text::new(&count.to_string())
-        .variant(ExtraTypography::MonoLabel.role())
-        .color(PaletteColor::Warning)
-        .nowrap(),
-    )
+    })
+    .unzip();
+  let mut line = Tabs::controlled(selected, shown, move |index: &usize| match presses.get(*index) {
+    Some(Some(Press::Run(action))) => action(),
+    Some(Some(Press::Open(open))) => open(OpenIn::ActiveTab),
+    Some(None) | None => {}
+  })
+  .reselect(true)
+  .reserve_selected_width(true)
+  .tab_stop(false)
+  .more_label(&ctx.t("ui.tabs.more"))
+  .scroll_back_label(&ctx.t("ui.tabs.scrollBack"))
+  .scroll_on_label(&ctx.t("ui.tabs.scrollOn"))
+  .id(id.to_owned());
+  if let Some(element) = element {
+    line = line.end(element);
+  }
+  line.mount(ctx)
 }
 
 /// A tab's label followed by its count, as the locale words it (`All 24`).
@@ -339,9 +259,8 @@ pub fn counted(ctx: &Ctx, label: &str, count: usize) -> Arc<str> {
 
 /// The row of page tabs on its line, as wide as its parent. The line is drawn under the tabs, so the
 /// current tab's underline covers it (`BzK1B`).
-pub fn page_tabs(ctx: &mut Ctx, id: &str, tabs: impl IntoIterator<Item = PageTab>) -> Stack {
-  let tabs: Vec<Element> = tabs.into_iter().map(|tab| tab.render(ctx)).collect();
-  tab_line(ctx, id, tabs)
+pub fn page_tabs(ctx: &mut Ctx, id: &str, tabs: impl IntoIterator<Item = PageTab>) -> Element {
+  tab_line(ctx, id, tabs.into_iter().collect(), Vec::new(), (None, None))
 }
 
 /// [`page_tabs`] with `end` at the right end of the line, e.g. a page's Settings after its lists (`NestZ` in
@@ -351,11 +270,14 @@ pub fn page_tabs_with_end(
   id: &str,
   tabs: impl IntoIterator<Item = PageTab>,
   end: impl IntoIterator<Item = PageTab>,
-) -> Stack {
-  let mut row: Vec<Element> = tabs.into_iter().map(|tab| tab.render(ctx)).collect();
-  row.push(Spacer::new().flex(1.0).into());
-  row.extend(end.into_iter().map(|tab| tab.render(ctx)));
-  tab_line(ctx, id, row)
+) -> Element {
+  tab_line(
+    ctx,
+    id,
+    tabs.into_iter().collect(),
+    end.into_iter().collect(),
+    (None, None),
+  )
 }
 
 /// [`page_tabs`] with `note` at the right end of the line, e.g. why a tab cannot be opened (`NWxZx` in `ptqq0`).
@@ -364,231 +286,24 @@ pub fn page_tabs_with_note(
   id: &str,
   tabs: impl IntoIterator<Item = PageTab>,
   note: impl Into<Element>,
-) -> Stack {
-  let mut row: Vec<Element> = tabs.into_iter().map(|tab| tab.render(ctx)).collect();
-  row.push(Spacer::new().flex(1.0).into());
-  row.push(note.into());
-  tab_line(ctx, id, row)
+) -> Element {
+  tab_line(
+    ctx,
+    id,
+    tabs.into_iter().collect(),
+    Vec::new(),
+    (None, Some(note.into())),
+  )
 }
 
-/// [`page_tabs`] with `after` set apart by a rule (`Divider` `Fbmqe` before *Archived* in `Agents · v2` L13 `moPNo`):
-/// a line as wide as the tabs' stroke and [`TAB_DIVIDER_HEIGHT`] high in `border_strong`, centered on the tabs.
+/// [`page_tabs`] with `after` set apart by a rule (`Divider` `Fbmqe` before *Archived* in `Agents · v2` L13 `moPNo`).
 pub fn page_tabs_divided(
   ctx: &mut Ctx,
   id: &str,
   tabs: impl IntoIterator<Item = PageTab>,
   after: Vec<PageTab>,
-) -> Stack {
-  let mut row: Vec<Element> = tabs.into_iter().map(|tab| tab.render(ctx)).collect();
-  if !after.is_empty() {
-    let width = ctx.theme().border_size_value(BorderSize::Sm);
-    row.push(
-      Row::new()
-        .id(format!("{id}-divider"))
-        .width(Dimension::Px(width))
-        .height(Dimension::Px(TAB_DIVIDER_HEIGHT))
-        .background(PaletteColor::BorderStrong)
-        .into(),
-    );
-    row.extend(after.into_iter().map(|tab| tab.render(ctx)));
-  }
-  tab_line(ctx, id, row)
-}
-
-/// The height of the rule between groups of tabs (`Rule` `Y3Ixz4` in `Fbmqe`).
-const TAB_DIVIDER_HEIGHT: f32 = 14.0;
-
-fn tab_line(ctx: &Ctx, id: &str, tabs: Vec<Element>) -> Stack {
-  let line = ctx.theme().border_size_value(BorderSize::Sm);
-  Stack::new()
-    .id(id.to_owned())
-    .width(Dimension::Pct(100.0))
-    .stack_align(StackAlignment::BottomStart)
-    .child(
-      Row::new()
-        .id(format!("{id}-line"))
-        .width(Dimension::Pct(100.0))
-        .height(Dimension::Px(line))
-        .background(PaletteColor::Border),
-    )
-    .child(
-      Row::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(ExtraSpacing::Tabs.role())
-        .align_items(Alignment::Center)
-        .with_children(tabs),
-    )
-}
-
-/// What a segment shows.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SegmentFace {
-  Text(Arc<str>),
-  /// A label and its count, 6 apart, the count in 12 `text_muted` (`Segment · All` in `Agents · v2` A1).
-  Counted(Arc<str>, Arc<str>),
-  /// A glyph; the label names it for tools.
-  Icon(Icon, Arc<str>),
-  /// A 13 glyph before the label, 6 apart, both in the label's color (`System` `J9tyr` in Settings › General).
-  Labelled(Icon, Arc<str>),
-  /// A choice that warns: an 11 `triangle-alert` in `danger` before the label, 5 apart; chosen, on `danger_muted` with
-  /// its label in `danger` (`Segment · Dangerous auto-approve` `cky7h`, `vBuWb` in `v5d5r`).
-  Warned(Arc<str>),
-}
-
-pub struct Segment {
-  id: Arc<str>,
-  face: SegmentFace,
-  chosen: bool,
-  choose: Arc<dyn Fn() + Send + Sync>,
-  element: Option<ElementRef>,
-  /// The segments share the control's width equally.
-  fill: bool,
-}
-
-impl Segment {
-  pub fn new(
-    id: impl Into<Arc<str>>,
-    face: SegmentFace,
-    chosen: bool,
-    choose: impl Fn() + Send + Sync + 'static,
-  ) -> Self {
-    Self {
-      id: id.into(),
-      face,
-      chosen,
-      choose: Arc::new(choose),
-      element: None,
-      fill: false,
-    }
-  }
-
-  /// The segment's element, for a popup it opens to anchor to: lurq switches to that popup in one press, from
-  /// another open dropdown, only when the pressed segment is the popup's anchor itself.
-  pub fn element(mut self, element: ElementRef) -> Self {
-    self.element = Some(element);
-    self
-  }
-
-  /// The segment takes an equal share of a control as wide as its place (`Layout` `O1Xwma` in `J0ncJ`).
-  #[must_use]
-  pub const fn fill(mut self) -> Self {
-    self.fill = true;
-    self
-  }
-
-  fn render(self, focus: Focus) -> Element {
-    let choose = self.choose;
-    let label_id = format!("{}-label", self.id);
-    let count_id = format!("{}-count", self.id);
-    let mut button = focus
-      .apply(pressable(move || choose()))
-      .id(self.id)
-      .justify(Justify::Center)
-      .rounded(RadiusSize::Sm)
-      .describe("state", if self.chosen { "chosen" } else { "enabled" });
-    if let Some(element) = self.element {
-      button = button.ref_element(element);
-    }
-    if self.fill {
-      button = button.flex(1.0).min_width(Dimension::Px(0.0));
-    }
-    let (text, glyph) = if self.chosen {
-      (PaletteColor::TextPrimary, PaletteColor::TextPrimary)
-    } else {
-      (PaletteColor::TextMuted, PaletteColor::TextMuted)
-    };
-    let typography = if self.chosen {
-      TypographyStyle::Label
-    } else {
-      TypographyStyle::Description
-    };
-    button = match self.face {
-      SegmentFace::Text(label) => {
-        let button = button
-          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
-          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-          .describe("a11y_name", label.clone())
-          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
-        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
-      }
-      SegmentFace::Counted(label, count) => {
-        let button = button
-          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
-          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-          .spacing(ExtraSpacing::Snug.role())
-          .describe("a11y_name", label.clone())
-          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap())
-          .child(
-            Text::new(&count)
-              .id(count_id)
-              .variant(TypographyStyle::Description)
-              .color(PaletteColor::TextMuted)
-              .nowrap(),
-          );
-        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
-      }
-      SegmentFace::Labelled(face, label) => {
-        let button = button
-          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
-          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .describe("a11y_name", label.clone())
-          .child(icon(face, IconSize::Base, glyph))
-          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
-        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
-      }
-      SegmentFace::Warned(label) => warned(button, (&label, label_id), typography, self.chosen),
-      SegmentFace::Icon(face, label) => {
-        let button = button
-          .width(Dimension::Px(ICON_SEGMENT_WIDTH))
-          .height(Dimension::Pct(100.0))
-          .describe("a11y_name", label)
-          .child(icon(face, IconSize::Base, glyph).id(label_id));
-        chosen_fill(button, self.chosen, ExtraColor::Hover.role())
-      }
-    };
-    button.into()
-  }
-}
-
-/// A choice that warns ([`SegmentFace::Warned`]): its triangle always in `danger`; chosen, its label in `danger` on
-/// `danger_muted`, else `text_muted`.
-fn warned(button: Button, (label, label_id): (&Arc<str>, String), typography: TypographyStyle, chosen: bool) -> Button {
-  let color = if chosen {
-    PaletteColor::Danger
-  } else {
-    PaletteColor::TextMuted
-  };
-  let button = button
-    .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
-    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-    .spacing(ExtraSpacing::Pair.role())
-    .align_items(Alignment::Center)
-    .describe("a11y_name", label.clone())
-    .child(icon(Icon::TriangleAlert, IconSize::Xs, PaletteColor::Danger))
-    .child(Text::new(label).id(label_id).variant(typography).color(color).nowrap());
-  chosen_fill(button, chosen, PaletteColor::DangerMuted)
-}
-
-fn chosen_fill(button: Button, chosen: bool, fill: PaletteColor) -> Button {
-  if chosen {
-    button.background(fill)
-  } else {
-    button.hovered_style(Style::new().background(ExtraColor::Hover.role()))
-  }
-}
-
-/// A segmented control of `segments`; in a form its segments are Tab stops.
-pub fn segmented(id: &str, segments: impl IntoIterator<Item = Segment>, focus: Focus) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .height(Dimension::Px(SEGMENTED_HEIGHT))
-    .padding(ExtraSpacing::Tight.role())
-    .spacing(ExtraSpacing::Tight.role())
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .with_children(segments.into_iter().map(|segment| segment.render(focus)))
+) -> Element {
+  let tabs: Vec<PageTab> = tabs.into_iter().collect();
+  let rule = (!after.is_empty()).then_some(tabs.len());
+  tab_line(ctx, id, tabs, after, (rule, None))
 }

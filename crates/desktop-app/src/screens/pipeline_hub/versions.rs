@@ -36,7 +36,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
-    menu::{menu_panel, separator},
+    menu::{inline_menu, menu_panel, separator},
     message::message_text,
     pressable::Press,
     skeleton::{self, Skeleton},
@@ -116,13 +116,13 @@ impl Component for Versions {
       (None, Some(error)) => vec![self.failed(ctx, &error)],
       (None, None) => vec![reading(ctx)],
     };
-    let separator = separator(ctx);
-    menu_panel("pipeline-hub-versions")
-      .width(Dimension::Px(WIDTH))
+    let panel = menu_panel("pipeline-hub-versions")
+      .width(WIDTH)
       .child(heading(ctx, &props.name))
       .with_children(body)
-      .child(separator)
-      .child(foot(ctx))
+      .child(separator())
+      .child(foot(ctx));
+    inline_menu(props.open, panel)
   }
 }
 
@@ -191,7 +191,7 @@ impl Versions {
       Some(view_more(ctx, &id))
     } else {
       current.then(|| {
-        icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)
+        icon(Icon::Check, IconSize::Md, PaletteColor::Foreground)
           .id(format!("{id}-check"))
           .into()
       })
@@ -288,7 +288,7 @@ fn view_more(ctx: &Ctx, id: &str) -> Element {
         .variant(HubText::PanelLink.role())
         .nowrap(),
     )
-    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::TextMuted))
+    .child(icon(Icon::ChevronRight, IconSize::Md, PaletteColor::MutedForeground))
     .into()
 }
 

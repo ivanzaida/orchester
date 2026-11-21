@@ -353,7 +353,7 @@ impl RunsOnPicker {
     let (glyph_color, words_color) = if warns {
       (PaletteColor::Warning, PaletteColor::Warning)
     } else {
-      (PaletteColor::TextSecondary, PaletteColor::TextSecondary)
+      (ExtraColor::TextSecondary.role(), ExtraColor::TextSecondary.role())
     };
     let toggle = props.open.clone();
     let chip = pressable(move || toggle.update(|open| *open = !*open))
@@ -379,7 +379,7 @@ impl RunsOnPicker {
           .text_overflow(lurq::components::TextOverflow::Elipsis)
           .min_width(Dimension::Px(0.0)),
       )
-      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground));
     let chip = match (open, warns) {
       (true, _) => chip.background(ExtraColor::Pressed.role()),
       (false, true) => chip.background(PaletteColor::WarningMuted),

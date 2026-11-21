@@ -22,7 +22,7 @@ use crate::{
   routes::{ProjectPage, ProjectSettingsTab, Route},
   screens::settings::orchester::shown_address,
   team::lock::{lock_words, locked, shielded},
-  theme::IconSize,
+  theme::{ExtraColor, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::opening,
@@ -61,7 +61,7 @@ fn facts(ctx: &Ctx, (place, role): (&str, CallerRole)) -> Row {
   let quiet = |words: &str| {
     Text::new(words)
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .nowrap()
   };
   let dot = || quiet(&ctx.t("tasks.shared.separator"));
@@ -75,12 +75,12 @@ fn facts(ctx: &Ctx, (place, role): (&str, CallerRole)) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::Cloud, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(Icon::Cloud, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&ctx.t_args("tasks.team.on", [("place", shown_address(place))]))
         .id("tasks-team-place")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary)
+        .color(PaletteColor::Foreground)
         .nowrap(),
     )
     .child(dot())

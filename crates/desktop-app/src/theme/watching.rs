@@ -8,7 +8,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WatchingText {
@@ -54,12 +57,12 @@ impl WatchingText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Answer => style(13.0, FontWeight::Normal, 1.6, 0.0, palette.text_primary),
-      Self::Name => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::Meta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
-      Self::Key => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
-      Self::Title => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::Action => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::Answer => style(13.0, FontWeight::Normal, 1.6, 0.0, palette.foreground),
+      Self::Name => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::Meta => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.muted_foreground),
+      Self::Key => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, text_secondary(palette))),
+      Self::Title => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.foreground),
+      Self::Action => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
     }
   }
 }

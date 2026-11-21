@@ -1003,14 +1003,113 @@ scaled displays in 0.30.4. This workspace uses 0.41.2 (a long text clipped to it
 admits it) and, to keep naming the version in use, this line.
 
 **Markdown code blocks scroll sideways (ORC-82, lurq 0.51.1).** A fenced code block keeps its lines unwrapped and,
-since lurq 0.51.1, scrolls them sideways inside its box (`ScrollHorizontal` under the label, the theme's
-`code_block_scrollbar`, `None` in `theme::markdown` so the app's own scrollbar draws it, overlaid on the box's bottom
-padding); 0.50.0 painted a line wider than the column past the box, out of reach. Every chat and agent Markdown goes
+since lurq 0.51.1, scrolls them sideways inside its box; 0.50.0 painted a line wider than the column past the box, out
+of reach. Since lurq 0.63 a Markdown code block is lurq's `ui::CodeBlock` (its recipe patched in `theme::markdown`),
+and a chat's code block draws its lines as one `Mono` text in a sideways `ui::ScrollArea` (`ui::chat::code_block`). Every chat and agent Markdown goes
 through `ui::markdown::MarkdownView` or `ui::chat::agent_text` with the app's theme, so the Orchestrator chat, the task
 Conversation, plans, Details' brief and decision cards all have it. Headless: `ui_kit markdown_code_scroll`,
 `conversation code_block` and `orchestrator code_block` (the swipe moves the line and nothing else, the line's end
 comes into the box, a wheel up over the block scrolls the chat and stops following, a swipe leaves it following, a
 selection copies the long line whole).
+
+## K · The UI kit on `lurq::ui` (lurq 0.63)
+
+lurq 0.63 ships a design-system component library, `lurq::ui`: components drawn by recipes (parts and states) that an
+app patches on its theme. The app keeps its own kit (`crates/desktop-app/src/ui/`, about 28k lines, drawn to the
+Pencil design). The goal is that the kit's primitives render `lurq::ui` components with the app's recipes, so the app
+draws what it draws today and lurq's fixes and accessibility reach it. Screens do not change: a primitive keeps its
+API, and its call sites move only where the API must change. Each step is a UI task (design verification, `AGENTS.md`
+rule 15). The survey of 2026-11-19 (lurq 0.63.0) sorted the kit:
+
+- **Replace or wrap now** (no behaviour change): `kbd` → `Kbd`; `avatar` → `Avatar`; `card` → `Card` (one recipe
+  variant per `CardSurface`); `detail_row` → `DataList`; `meter` → `Progress`; `chip` → `Badge` and `Tag`;
+  `callout` → `Callout`; `loader` and `typing` → `Icon` spin and `Spinner` (check that lurq draws no frames with no
+  loader shown, and that the dots stay still under reduced motion); `menu_button` and `picker` → `Button`; `toggle`
+  → `Checkbox`, `Radio`, `Switch`; `skeleton`'s bones → `Skeleton` inside the kit's wrapper (its show delay stays);
+  `code_box` → `CodeBlock`; `hover_card` → `HoverCard`; `date_picker`'s month → `Calendar`.
+- **Wait for lurq** (each gap is a lurq feature first, then the kit step): `button`, `icon_button`, `breadcrumb`,
+  `tabs`, `row_group`, `setting_rows`, `menu`, `popover`, `tooltip`, `notice`, `setting_notice`, `dialog`, `field`,
+  `option_card`, `nav_item`, `status`, `table`.
+- **Keep**: `pressable` (where the app's focus rule lives), `unavailable`, `tinted_note`, `add_slot`, `agent_mark`
+  and `github_mark` (SVG marks), `command_row`, `copied_value`; and the domain composites (chat, decision, failure,
+  attachments, composer, mention, slash, runs-on picker, todo list, context meter …), which follow their primitives.
+
+### K1 · Icons in the theme's icon set (UI)
+
+lurq's components name icons from the theme's set (`theme.set_icon(name, IconGlyph)`), font glyphs only. Register
+every `ui::icon::Icon` of the app's `lucide` font in `theme/` and make `ui::icon::icon` draw `lurq::ui::Icon`.
+**Done when** every kit icon renders through `lurq::ui::Icon` at its size and color, `ui_kit` and `theme` tests pass,
+and a design verification of three screens shows no change. Every K step below needs it.
+
+K1 is done on `claude/lurq-063` (`theme/icons.rs`): the set holds every app icon under its design name and 30 of
+lurq's names mapped to the app's glyph. `ui::icon::icon` still builds a `Text` (851 call sites chain its builder);
+it draws what `lurq::ui::Icon` would.
+
+### K2 · The look-only primitives (UI)
+
+Move, one commit each, the first list's `kbd`, `avatar`, `card`, `detail_row`, `meter`, `chip`, `callout`, `loader`,
+`typing`, with their recipes in `theme/kit/`. **Done when** each renders its `lurq::ui` component, its kit tests pass,
+and a design verification of a screen that uses it shows no blocking or major mismatch.
+
+State on 2026-11-19 (`claude/lurq-063`): `kbd` is `ui::Kbd` (`theme/kit/kbd.rs`, `ui_kit kbd_`), design verification
+not run yet. The others wait for lurq (K4, items 8–12): `avatar` (lurq builds the letters from a name; giving it the
+initials made its accessible name "A L"), `card` (170 call sites chain `Column`'s builder on it; lurq's `Card` is an
+`Element` with its content two levels down), `detail_row`, `meter`, `chip`'s badges and `callout` (no ids on the
+parts the tests and the MCP tree read: a `DataList` term, a `Progress` fill, a `Badge` dot and label, a `Callout`
+title and body; no `describe` on `Callout`), `chip`'s tag (its remove is a Tab stop), `loader` and `typing` (lurq's
+spin and dots move every frame and keep moving under reduced motion; the kit's turn in 24 steps a second and stay
+still).
+
+### K3 · Form controls (UI)
+
+`toggle`, `menu_button`, `picker`, `code_box`, `hover_card`, `date_picker`'s month, `skeleton`'s bones. These keep
+lurq's keyboard behaviour (they are form controls and Tab stops already). Same **Done when** as K2, plus the kit's
+keyboard tests.
+
+### K4 · lurq features the kit needs (lurq, then the kit; needs decision on order)
+
+From the survey, in the order they unblock the most call sites:
+1. Pointer-only pressables: a `ui::Button`, `ListItem`, `Tab`, `Segment` and a breadcrumb link that is not a Tab
+   stop (the app's focus rule), and a press that opens like a link (middle button, a new tab) and stays on the
+   control. Unblocks `button` (403 call sites), `icon_button`, `breadcrumb`, `tabs`, `row_group`, `setting_rows`.
+2. `Alert` with several actions (`notice`, 101 sites; `setting_notice`).
+3. `Tooltip`: a wrap width, a second (note) line, mono text, shown only while a text is cut; an icon-only `Button`
+   with its label as a tooltip outside a toolbar.
+4. `Menu` items with a detail line, an unavailable reason (lock and words) and a leading element; `Popover` and
+   `Menu` kept inside a container.
+5. `SegmentedControl` and `RadioGroup` choices with their own `id`, state, count and element ref; `Tabs` with a
+   disabled reason and a count badge.
+6. `Dialog`: a mark in the header, a note at the footer's start, Enter confirms. `Field`: an error icon, a horizontal
+   row with the control at the end.
+7. A status label (icon and toned words, no fill, turning icon); `RadioCard` with content, mark, reason and waiting
+   state; `CodeBlock` with a failed copy and a copy that differs from the shown text; `Calendar` footer; `Tag` with
+   two labels; `BreadcrumbStep` state; SVG icons in the icon set.
+8. Ids on a component's parts (`id` of the component, then `<id>-<part>`, or a way to name a part), so the kit's
+   element ids, which tests and the MCP tree read, survive: `DataList` terms, `Progress` fill, `Badge` dot and label,
+   `Callout` title, body and icon.
+9. `describe` on a component's root (`Callout`, `Badge`, `Progress` …), for the state the MCP tree reads.
+10. `Avatar` given its letters, not only a name to take them from.
+11. `Tag`'s remove button that is not a Tab stop (with item 1).
+12. Spin and `Spinner` with a stepped cadence (a pose a step, so no frame between), and still under reduced motion.
+13. `Card` (and the other surfaces) usable as a layout builder: the app's padding, spacing and position on the
+    surface itself.
+
+These are lurq's API: lurq's `AGENTS.md` keeps Ivan's decisions in `design/decisions.md` before work starts, so each
+item is decided there first.
+
+### K5 · Follow-ups of the lurq 0.63 move (UI)
+
+- `components::Image` is deprecated; the attachment chip and preview and the browser page keep it under a scoped
+  `#[expect(deprecated)]`: `ui::Picture` draws its own skeleton and error line where the attachments draw their own
+  placeholder and error, and loads as a component where the browser page shows a live frame. Move them when
+  `Picture` takes an app's placeholder and error view, or when the design takes Picture's.
+- Design verification of the 0.63 move as a whole (not run on 2026-11-19: the Pencil app was not running, so the
+  verifier had no design screenshots): scroll bars (lurq's new lane), Markdown code blocks and quotes in
+  plans and briefs (`ui::CodeBlock` with a header and Copy, `ui::Blockquote`), headings in Markdown, the chat's code
+  block lines.
+- The headless tests `ui_kit decision_card_draws_its_words_question_answers_with_keys_and_meta_line` and
+  `ui_kit prompt_input_retains_utf8_selection_after_picker_and_inserts_as_one_undo_step` fail on macOS on master
+  before the move too (lurq 0.59); look at them on a Mac.
 
 ## S · Shared server (self-hosted)
 

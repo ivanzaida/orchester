@@ -36,7 +36,7 @@ use super::{
   work::Write,
 };
 use crate::{
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -149,8 +149,8 @@ impl Component for RecordEditor {
       .id(id.clone())
       .width(Dimension::Pct(100.0))
       .describe("mode", mode_name(props.mode))
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .rounded(lurq::app::theme::RadiusSize::Lg)
       .child(self.head(ctx, &state, &props, &id))
       .child(self.fields(ctx, &state, &props, &id))
@@ -205,7 +205,7 @@ impl RecordEditor {
       (EditorMode::Edit, Some(memory)) if memory.edited_at().is_some() => Some(parts::status(
         &format!("{id}-status"),
         (Icon::Pencil, ctx.t("memory.editor.editedByYou")),
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
       )),
       _ => None,
     };
@@ -232,7 +232,7 @@ impl RecordEditor {
       .spacing(ExtraSpacing::Loose.role())
       .align_items(Alignment::Center)
       .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(icon(words::glyph(kind), IconSize::Md, PaletteColor::TextSecondary))
+      .child(icon(words::glyph(kind), IconSize::Md, ExtraColor::TextSecondary.role()))
       .child(titles)
       .with_children(status)
       .child(fold)

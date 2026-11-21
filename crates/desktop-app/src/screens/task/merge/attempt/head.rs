@@ -61,7 +61,7 @@ pub(super) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&TaskKe
     .id("merge-attempt-crumbs-row")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::MutedForeground))
     .child(breadcrumb(ctx, "merge-attempt-crumbs", CrumbSeparator::Slash, trail))
     .into()
 }
@@ -153,7 +153,7 @@ pub(super) fn status(
       Text::new(&meta)
         .id("merge-attempt-status-meta")
         .variant(ExtraTypography::Property.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .with_children(watch)

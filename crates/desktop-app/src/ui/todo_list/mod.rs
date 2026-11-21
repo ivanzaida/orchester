@@ -119,8 +119,8 @@ fn item_row(id: String, item: &TodoItem, ended: bool) -> Element {
   };
   let (glyph, color) = match state {
     TodoState::Done => (Icon::CircleCheck, PaletteColor::Success),
-    TodoState::InProgress => (Icon::LoaderCircle, PaletteColor::TextSecondary),
-    TodoState::Pending => (Icon::Circle, PaletteColor::TextMuted),
+    TodoState::InProgress => (Icon::LoaderCircle, ExtraColor::TextSecondary.role()),
+    TodoState::Pending => (Icon::Circle, PaletteColor::MutedForeground),
   };
   let text = Text::new(&item.text)
     .id(format!("{id}-text"))
@@ -132,7 +132,7 @@ fn item_row(id: String, item: &TodoItem, ended: bool) -> Element {
     .flex(1.0)
     .min_width(Dimension::Px(0.0));
   let text = if state == TodoState::Done {
-    text.color(PaletteColor::TextMuted)
+    text.color(PaletteColor::MutedForeground)
   } else {
     text
   };
@@ -173,7 +173,7 @@ fn folded_line(
       Text::new(words)
         .id(format!("{id}-text"))
         .variant(TodoText::Item.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
@@ -205,10 +205,10 @@ pub fn chip(
     .flex_shrink(0.0)
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Tight.role()))
     .spacing(SpacingSize::Xs)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Full.role())
-    .child(icon(Icon::ListChecks, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(Icon::ListChecks, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(&words)
         .id(format!("{id}-label"))
@@ -218,7 +218,7 @@ pub fn chip(
     .child(icon(
       if open { Icon::ChevronUp } else { Icon::ChevronDown },
       IconSize::Sm,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ))
     .into()
 }

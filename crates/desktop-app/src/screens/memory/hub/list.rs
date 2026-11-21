@@ -116,7 +116,7 @@ pub(super) fn list(ctx: &mut Ctx, state: &MemoryState, shown: &Shown<'_>) -> Ele
     column = column.child(section_row(
       &section.name,
       &section.label,
-      (&section.count, PaletteColor::TextMuted),
+      (&section.count, PaletteColor::MutedForeground),
     ));
     for record in &section.records {
       let of = RowOf {
@@ -191,7 +191,11 @@ fn person_only(ctx: &Ctx) -> Element {
     .padding(Padding::symmetric(SpacingSize::Lg, SpacingSize::Md))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Start)
-    .child(icon(Icon::UserRoundCheck, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(
+      Icon::UserRoundCheck,
+      IconSize::Base,
+      PaletteColor::MutedForeground,
+    ))
     .child(
       Text::new(&ctx.t("memory.personOnly"))
         .id("memory-person-only-text")

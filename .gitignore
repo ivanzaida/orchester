@@ -10,3 +10,6 @@ __pycache__/
 # their untracked web/ folders (node_modules, builds), which must never be committed.
 /web/
 node_modules/
+
+# macOS Finder metadata
+.DS_Store

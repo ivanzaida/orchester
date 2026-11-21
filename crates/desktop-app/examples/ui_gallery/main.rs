@@ -20,11 +20,10 @@ use orchester_app::{
   app_log, i18n,
   mcp::{APP_NAME, AppMcp, InputGate, McpMode, McpSettings},
   theme::{self, Mode},
-  ui::loader,
 };
 use tokio::runtime::Runtime;
 
-use self::gallery::Gallery;
+use self::gallery::{Copies, Gallery};
 
 /// `1` opens the window without taking the focus, as the app does for agents.
 const START_WITHOUT_FOCUS_VARIABLE: &str = "ORCHESTER_APP_MCP_START_WITHOUT_FOCUS";
@@ -38,7 +37,6 @@ fn main() {
 
   let mut tree = Tree::new();
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
-  loader::install(&mut tree);
   let settings = McpSettings::of_build().with_environment();
   let config = McpConfig::new().app_name(APP_NAME).scopes(settings.scopes());
   // The gallery shows no person-only control, so nothing is protected. It has no settings of its own: a free port
@@ -62,7 +60,9 @@ fn main() {
       "the UI kit's gallery runs without its MCP server"
     ),
   }
-  tree.mount_root::<Gallery>(&mut app, ());
+  let copies = Copies::new();
+  copies.clipboard().install(&app);
+  tree.mount_root::<Gallery>(&mut app, copies);
 
   let without_focus = std::env::var_os(START_WITHOUT_FOCUS_VARIABLE).is_some_and(|value| value == "1");
   WinitWindow::new(app, tree)

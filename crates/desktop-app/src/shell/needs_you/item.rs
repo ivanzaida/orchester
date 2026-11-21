@@ -48,7 +48,7 @@ pub(super) fn group(ctx: &Ctx, id: &str, (name, this_tab): (&str, bool), count: 
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(NeedsYouRadius::Initial.role())
     .child(Text::new(&initial).variant(NeedsYouText::Initial.role()));
@@ -203,7 +203,7 @@ pub(super) fn expanded(
     .width(Dimension::Pct(100.0))
     .padding(SpacingSize::Md)
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfacePanel)
+    .background(PaletteColor::Canvas)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Warning))
     .rounded(ExtraRadius::Tile.role())
     .child(

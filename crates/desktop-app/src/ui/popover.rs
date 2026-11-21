@@ -10,9 +10,10 @@ use lurq::{
     ctx::{CollisionStrategy, Ctx},
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
   },
-  components::{Column, Placement, Popup},
+  components::{Column, Placement},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
+  ui,
 };
 
 use crate::{shell::status_bar::STATUS_BAR_HEIGHT, theme::ExtraSpacing};
@@ -23,6 +24,17 @@ pub enum PopoverSide {
   Below,
   Above,
   BelowEnd,
+}
+
+impl PopoverSide {
+  /// lurq's placement of this side; lurq counts a popup's offset away from its anchor on every side.
+  const fn placement(self) -> Placement {
+    match self {
+      Self::Below => Placement::BottomStart,
+      Self::Above => Placement::TopStart,
+      Self::BelowEnd => Placement::BottomEnd,
+    }
+  }
 }
 
 /// The panel of a popover `width` wide with the element id `id`; add its content as children.
@@ -43,39 +55,44 @@ pub fn padded_popover_panel(id: &str, width: f32, padding: Padding) -> Column {
     .padding(padding)
     .spacing(SpacingSize::Md)
     .rounded(RadiusSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .background(PaletteColor::Card)
+    .border_inside(BorderSize::Sm, PaletteColor::Input)
     .box_shadow(ShadowStyle::Lg)
 }
 
-/// `panel` opened on `side` of `anchor` while `open` holds; a press outside or Esc closes it.
-pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> Popup {
-  let gap = ExtraSpacing::Snug.value();
-  let (placement, offset) = match side {
-    PopoverSide::Below => (Placement::BottomStart, gap),
-    PopoverSide::Above => (Placement::TopStart, -gap),
-    PopoverSide::BelowEnd => (Placement::BottomEnd, gap),
-  };
-  Popup::new(anchor, panel)
-    .open(open)
-    .placement(placement)
-    .offset(0.0, offset)
+/// `panel` opened 6 from `anchor` on `side` while `open` holds, in lurq's `ui::Popover`, whose own panel draws nothing
+/// (`theme::kit::popover`): the kit's panel is the popover's. The focus goes to the first control in it as it opens and
+/// back as it closes; a press outside or Esc closes it.
+pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> ui::Popover {
+  ui::Popover::new(open, anchor)
+    .placement(side.placement())
+    .offset(ExtraSpacing::Snug.role())
+    .child(panel)
 }
 
-/// `panel`, `width` wide, opened under `anchor` from its start while `open` holds, moved back just enough that it ends
-/// `end_inset` or more before `frame` does (a column it belongs in), as both were last laid out. It never flips over
-/// its anchor: give it [`room_under`] as its most height.
+/// `panel` opened 6 from `anchor` on `side` while `open` holds, which a press on `anchor` never opens: the app alone
+/// opens it (a card's question), and a press of the anchor only closes it, as a press elsewhere does. It is
+/// [`popover`] otherwise.
+pub fn popup_by_app(
+  anchor: ElementRef,
+  open: Signal<bool>,
+  side: PopoverSide,
+  panel: impl Into<Element>,
+) -> ui::Popover {
+  popover(anchor, open, side, panel).switch_on_anchor_press(false)
+}
+
+/// `panel` opened 6 under `anchor` from its start while `open` holds, moved back just enough that it ends `end_inset`
+/// or more before `frame` does (a column it belongs in): lurq's `within_inset` with the `Clamp` collision. It never
+/// flips over its anchor: give it [`room_under`] as its most height.
 pub fn popover_inside(
   (anchor, frame): (&ElementRef, &ElementRef),
   open: Signal<bool>,
-  (width, end_inset): (f32, f32),
+  end_inset: f32,
   panel: impl Into<Element>,
-) -> Popup {
-  let past = (anchor.x() + width) - (frame.x() + frame.width() - end_inset);
-  Popup::new(anchor.clone(), panel)
-    .open(open)
-    .placement(Placement::BottomStart)
-    .offset(-past.max(0.0), ExtraSpacing::Snug.value())
+) -> ui::Popover {
+  popover(anchor.clone(), open, PopoverSide::Below, panel)
+    .within_inset(frame.clone(), Padding::new().right(end_inset))
     .collision(CollisionStrategy::Clamp)
 }
 
@@ -90,20 +107,21 @@ pub fn room_under(ctx: &Ctx, anchor: &ElementRef, above_bar: f32) -> Option<f32>
 }
 
 /// `panel` opened by the status bar item `item` while `open` holds, placed over the status bar `bar` (the MCP
-/// item's popover, `QqBCj`): 9 above the bar and its end 12 from the bar's, so it stays inside the window.
+/// item's popover, `QqBCj`): 9 above the bar and its end 12 from the bar's, so it stays inside the window. The item
+/// stays its trigger, where the focus goes back.
 pub fn bar_popover(
   ctx: &Ctx,
   (item, bar): (&ElementRef, &ElementRef),
   open: Signal<bool>,
   panel: impl Into<Element>,
-) -> Popup {
+) -> ui::Popover {
   let inset = ctx.theme().spacing_value(SpacingSize::Md).to_px();
-  let (x, y) = at_frame_end(item, bar, PopoverSide::Above);
-  Popup::new(item.clone(), panel)
-    .open(open)
+  ui::Popover::new(open, item.clone())
+    .placed_by(bar.clone())
     .placement(Placement::TopEnd)
-    // Over its anchor, lurq counts the offset away from it.
-    .offset(x - inset, y + ExtraSpacing::Inline.value())
+    .offset(ExtraSpacing::Inline.role())
+    .cross_offset(-inset)
+    .child(panel)
 }
 
 /// How far a popup at the end of `trigger`, over or under it, moves to open at the end of `frame`, the element

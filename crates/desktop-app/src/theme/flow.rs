@@ -7,7 +7,10 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::{mono, style};
+use super::{
+  palette::text_secondary,
+  typography::{mono, style},
+};
 
 /// A card whose place is faded while its drag is under way (`Card · 05 Review` `s1SIUj` in P3 `K4B56`).
 pub const DRAGGED_OPACITY: f32 = 0.35;
@@ -67,14 +70,14 @@ impl FlowText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Label => mono(style(10.5, FontWeight::Normal, 1.2, 0.6, palette.text_muted)),
-      Self::Hint => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_muted),
+      Self::Label => mono(style(10.5, FontWeight::Normal, 1.2, 0.6, palette.muted_foreground)),
+      Self::Hint => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground),
       Self::Gate => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.warning),
-      Self::Number => mono(style(10.5, FontWeight::Normal, 1.2, 0.0, palette.text_secondary)),
-      Self::CardNumber => mono(style(11.5, FontWeight::Normal, 1.2, 0.0, palette.text_muted)),
-      Self::Name => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
-      Self::Line => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
-      Self::Landing => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
+      Self::Number => mono(style(10.5, FontWeight::Normal, 1.2, 0.0, text_secondary(palette))),
+      Self::CardNumber => mono(style(11.5, FontWeight::Normal, 1.2, 0.0, palette.muted_foreground)),
+      Self::Name => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.foreground),
+      Self::Line => style(12.0, FontWeight::Normal, 1.3, 0.0, text_secondary(palette)),
+      Self::Landing => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.foreground),
     }
   }
 }

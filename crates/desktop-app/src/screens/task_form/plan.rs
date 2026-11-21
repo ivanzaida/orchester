@@ -36,9 +36,8 @@ use crate::{
   screens::pipeline_link,
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
-    filter::filter_menu_panel,
     icon::{Icon, icon},
-    menu::{MenuItem, separator},
+    menu::{MenuItem, filter_menu_panel, inline_menu, separator},
     message::message_text,
     pressable::{Focus, opening},
     tooltip::Truncated,
@@ -102,7 +101,7 @@ fn menu(ctx: &mut Ctx, view: &View, (state, nav): (&ChipState, &Nav), pick: &Sig
         ctx.t("task_form.fields.pipeline.none"),
         ctx.t("task_form.fields.pipeline.noneShort"),
       )
-      .render(ctx, &state.open),
+      .render(ctx),
     );
   }
   for (index, choice) in view.pipelines.iter().flat_map(|pipelines| pipelines.iter()).enumerate() {
@@ -118,7 +117,7 @@ fn menu(ctx: &mut Ctx, view: &View, (state, nav): (&ChipState, &Nav), pick: &Sig
         chosen: chosen == Some(id),
         mono: false,
       }
-      .render(&state.open, move || pick.set(Pick(Some(id)))),
+      .render(move || pick.set(Pick(Some(id)))),
     );
   }
   let manage = MenuItem::opens(
@@ -127,9 +126,8 @@ fn menu(ctx: &mut Ctx, view: &View, (state, nav): (&ChipState, &Nav), pick: &Sig
     nav.to_pipelines(),
   )
   .icon(Icon::ArrowUpRight)
-  .in_form()
-  .render(ctx, &state.open);
-  panel.child(separator(ctx)).child(manage).into()
+  .render(ctx);
+  inline_menu(state.open.clone(), panel.child(separator()).child(manage))
 }
 
 /// A shared task's pipeline that this computer has none of, and what saving does with it.
@@ -205,7 +203,7 @@ pub fn plan_line(ctx: &mut Ctx, view: &View, project: &ShownProject) -> Option<E
       ctx.t_args("task_form.plan.lineGates", [("gates", gates)]),
       PaletteColor::Warning,
     ),
-    None => (ctx.t("task_form.plan.lineNoGates"), PaletteColor::TextMuted),
+    None => (ctx.t("task_form.plan.lineNoGates"), PaletteColor::MutedForeground),
   };
   let route = Route::Project(project.open.project.id(), pipeline_link::page(choice.id));
   let view_pipeline = Focus::Link
@@ -223,7 +221,7 @@ pub fn plan_line(ctx: &mut Ctx, view: &View, project: &ShownProject) -> Option<E
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Route, IconSize::Base, PaletteColor::TextMuted))
+      .child(icon(Icon::Route, IconSize::Base, PaletteColor::MutedForeground))
       .child(Row::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(steps))
       .child(
         Text::new(&gate)

@@ -11,7 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, Text, TextOverflow},
+  components::{Column, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, dimension::Dimension, padding::Padding},
@@ -25,7 +25,7 @@ use crate::{
   theme::{BrowserSpacing, BrowserText, ExtraColor, ExtraRadius, ExtraSpacing, IconSize, ShellText},
   ui::{
     icon::{Icon, icon},
-    menu::{menu_panel, separator},
+    menu::{MenuPanel, menu, menu_panel, separator},
     pressable::{in_title_bar, pressable},
   },
 };
@@ -35,6 +35,8 @@ const BUTTON_HEIGHT: f32 = 28.0;
 const TILE: f32 = 20.0;
 const ROW_TILE: f32 = 24.0;
 const MENU_WIDTH: f32 = 300.0;
+/// The menu's element id.
+const MENU_ID: &str = "browser-project-menu";
 /// The dot before *acting* in a row (`f9Z3no`).
 const ACTING_DOT: f32 = 6.0;
 
@@ -75,24 +77,25 @@ impl Component for Switcher {
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(tile(&showing.name, TILE, BrowserText::SwitcherInitial))
     .child(Text::new(&showing.name).variant(TypographyStyle::Label).nowrap())
-    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(Icon::ChevronDown, IconSize::Sm, PaletteColor::MutedForeground));
     let button = if self.open.get() {
       button.background(ExtraColor::Hover.role())
     } else {
       button
     };
-    let menu = self.open.get().then(|| self.menu(ctx, &showing));
-    let popup = Popup::new(self.anchor.clone(), menu.unwrap_or_else(Element::new))
-      .open(self.open.clone())
-      .placement(Placement::BottomStart)
-      .offset(0.0, ExtraSpacing::MenuOffset.value());
+    let panel = if self.open.get() {
+      self.menu(ctx, &showing)
+    } else {
+      menu_panel(MENU_ID)
+    };
+    let popup = menu(self.anchor.clone(), self.open.clone(), panel).offset(ExtraSpacing::MenuOffset.role());
     Row::new().child(button).child(popup)
   }
 }
 
 impl Switcher {
   /// The menu: every project of the person's and every project whose browser has tabs, by name.
-  fn menu(&self, ctx: &mut Ctx, showing: &Showing) -> Element {
+  fn menu(&self, ctx: &mut Ctx, showing: &Showing) -> MenuPanel {
     let services = Services::of(ctx);
     let workspace = services.workspace.clone();
     let registered = ctx
@@ -123,8 +126,8 @@ impl Switcher {
         row(ctx, index, (&name, view.as_ref(), current, now), choose)
       })
       .collect();
-    menu_panel("browser-project-menu")
-      .width(Dimension::Px(MENU_WIDTH))
+    menu_panel(MENU_ID)
+      .width(MENU_WIDTH)
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -140,7 +143,7 @@ impl Switcher {
           ),
       )
       .with_children(rows)
-      .child(separator(ctx))
+      .child(separator())
       .child(
         Row::new()
           .width(Dimension::Pct(100.0))
@@ -152,7 +155,6 @@ impl Switcher {
               .width(Dimension::Pct(100.0)),
           ),
       )
-      .into()
   }
 }
 
@@ -247,7 +249,7 @@ fn row(
   .hovered_style(Style::new().background(ExtraColor::Hover.role()))
   .child(tile(name, ROW_TILE, BrowserText::SwitcherInitial))
   .child(text)
-  .with_children(current.then(|| icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary)));
+  .with_children(current.then(|| icon(Icon::Check, IconSize::Md, PaletteColor::Foreground)));
   button.into()
 }
 
@@ -259,7 +261,7 @@ fn tile(name: &str, side: f32, text: BrowserText) -> Row {
     .height(Dimension::Px(side))
     .flex_shrink(0.0)
     .rounded(RadiusSize::Sm)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border_inside(BorderSize::Sm, PaletteColor::Border)
     .align_items(Alignment::Center)
     .justify(Justify::Center)

@@ -5,7 +5,7 @@ use lurq::{
     ctx::Ctx,
     theme::{SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, Text},
+  components::{Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -18,7 +18,7 @@ use crate::{
   theme::ExtraSpacing,
   ui::{
     icon::Icon,
-    menu::{MenuItem, menu_panel},
+    menu::{MenuItem, MenuPanel, menu_at_end, menu_panel},
     menu_button::MenuButton,
   },
 };
@@ -28,7 +28,7 @@ const MENU_WIDTH: f32 = 320.0;
 
 /// The head's actions on the Tools tab.
 pub(super) fn actions(ctx: &mut Ctx, project: ProjectId, (menu, anchor): (&Signal<bool>, &ElementRef)) -> Vec<Element> {
-  let panel = panel(ctx, project, menu);
+  let panel = panel(ctx, project);
   let add = Row::new()
     .align_items(Alignment::Center)
     .child(MenuButton::new(
@@ -37,16 +37,11 @@ pub(super) fn actions(ctx: &mut Ctx, project: ProjectId, (menu, anchor): (&Signa
       menu.clone(),
       anchor.clone(),
     ))
-    .child(
-      Popup::new(anchor.clone(), panel)
-        .open(menu.clone())
-        .placement(Placement::BottomEnd)
-        .offset(0.0, ExtraSpacing::Snug.value()),
-    );
+    .child(menu_at_end(anchor.clone(), menu.clone(), panel));
   vec![add.into()]
 }
 
-fn panel(ctx: &mut Ctx, project: ProjectId, menu: &Signal<bool>) -> Column {
+fn panel(ctx: &mut Ctx, project: ProjectId) -> MenuPanel {
   let nav = Navigation::of(ctx);
   let command = MenuItem::opens(
     "tools-add-command",
@@ -55,7 +50,7 @@ fn panel(ctx: &mut Ctx, project: ProjectId, menu: &Signal<bool>) -> Column {
   )
   .icon(Icon::Terminal)
   .detail(ctx.t("tools.newDetail"))
-  .render(ctx, menu);
+  .render(ctx);
   let others = [
     ("tools.http", Icon::Globe, "tools.menuSecretsReason"),
     ("tools.databaseQuery", Icon::Database, "tools.menuSecretsReason"),
@@ -63,7 +58,7 @@ fn panel(ctx: &mut Ctx, project: ProjectId, menu: &Signal<bool>) -> Column {
     ("tools.pullRequest", Icon::GitPullRequest, "tools.menuPushReason"),
   ];
   let mut panel = menu_panel("tools-add-menu")
-    .width(Dimension::Px(MENU_WIDTH))
+    .width(MENU_WIDTH)
     .child(
       Column::new()
         .width(Dimension::Pct(100.0))
@@ -81,7 +76,7 @@ fn panel(ctx: &mut Ctx, project: ProjectId, menu: &Signal<bool>) -> Column {
         ctx.t(reason),
       )
       .icon(icon)
-      .render(ctx, menu),
+      .render(ctx),
     );
   }
   panel

@@ -172,9 +172,12 @@ impl Live {
     });
   }
 
-  /// Presses the window's own close control (the title bar's ×, or the macOS close light).
+  /// Presses the window's own close control (the title bar's ×, or the macOS close light's place), which asks the
+  /// window to close; a headless tree does not hand that request to the window's close handler
+  /// (`lifecycle::hook`), so the test then asks the flow as the handler does.
   fn press_close(&mut self) {
     self.click("window-close");
+    self.services().close.request(|| ());
   }
 
   /// Whether the close flow let the window close, and how the session ended then.

@@ -178,7 +178,7 @@ fn step_mark(id: &str, step: Option<usize>) -> Element {
     .flex_shrink(0.0)
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Full.role())
     .with_children(step.map(|step| Text::new(&step.to_string()).variant(ServicesText::StepNumber.role())))

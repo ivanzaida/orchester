@@ -60,18 +60,18 @@ pub(super) fn row(ctx: &mut Ctx, state: &MemoryState, memory: &Memory, of: &RowO
     mark: icon(
       words::glyph(memory.content().kind()),
       IconSize::Lg,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     )
     .into(),
     name: (
       &said(memory),
       if given {
-        PaletteColor::TextPrimary
+        PaletteColor::Foreground
       } else {
-        PaletteColor::TextMuted
+        PaletteColor::MutedForeground
       },
     ),
-    line: agent_row::line(&id, &line, PaletteColor::TextMuted).into(),
+    line: agent_row::line(&id, &line, PaletteColor::MutedForeground).into(),
     tag: Some(end(ctx, memory, of.latest, &id)),
     version: None,
   })
@@ -120,7 +120,7 @@ fn end(ctx: &Ctx, memory: &Memory, latest: bool, id: &str) -> Row {
     .with_children(
       memory
         .is_pinned()
-        .then(|| icon(Icon::Pin, IconSize::Md, PaletteColor::TextPrimary).id(format!("{id}-pinned"))),
+        .then(|| icon(Icon::Pin, IconSize::Md, PaletteColor::Foreground).id(format!("{id}-pinned"))),
     )
     .with_children(latest.then(|| badge(&format!("{id}-latest"), BadgeTone::Info, &ctx.t("memory.row.latest"))))
     .with_children(tags.iter().next().map(|tag| tag_chip(&format!("{id}-tag"), tag)))
@@ -128,7 +128,7 @@ fn end(ctx: &Ctx, memory: &Memory, latest: bool, id: &str) -> Row {
       Text::new(&ctx.t_args("memory.hub.moreTags", [("count", more.to_string())]))
         .id(format!("{id}-more-tags"))
         .variant(HubText::RowLine.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
     }))
 }

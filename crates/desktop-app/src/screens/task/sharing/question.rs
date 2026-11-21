@@ -25,7 +25,7 @@ use crate::{
     task::{PageState, TaskContext},
   },
   services::Services,
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -129,8 +129,8 @@ impl Component for ShareQuestion {
       .width(Dimension::Pct(100.0))
       .padding(ExtraSpacing::Inset.role())
       .spacing(ExtraSpacing::Loose.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .background(PaletteColor::Card)
+      .border(Border::inside(BorderSize::Sm, PaletteColor::Input))
       .rounded(ExtraRadius::Tile.role())
       .child(
         Text::new(&ctx.t_args(
@@ -199,7 +199,7 @@ fn lines(
   };
   let mut lines = vec![line(
     "task-share-goes",
-    (Icon::CloudUpload, PaletteColor::TextSecondary),
+    (Icon::CloudUpload, ExtraColor::TextSecondary.role()),
     &goes,
   )];
   if let Some(similar) = props
@@ -221,12 +221,12 @@ fn lines(
   }
   lines.push(line(
     "task-share-tags",
-    (Icon::Tag, PaletteColor::TextSecondary),
+    (Icon::Tag, ExtraColor::TextSecondary.role()),
     &ctx.t_args("task.share.tags", [("project", key)]),
   ));
   lines.push(line(
     "task-share-stays",
-    (Icon::Archive, PaletteColor::TextSecondary),
+    (Icon::Archive, ExtraColor::TextSecondary.role()),
     &ctx.t("task.share.stays"),
   ));
   lines

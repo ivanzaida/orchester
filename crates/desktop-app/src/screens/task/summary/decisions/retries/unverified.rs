@@ -16,7 +16,7 @@ use orchester_core::{resource::StepKey, run::UnverifiedCheck};
 use orchester_workspace::tasks::detail::RunView;
 
 use crate::{
-  theme::{DecisionSpacing, DecisionText, ExtraSpacing, IconSize, TaskText},
+  theme::{DecisionSpacing, DecisionText, ExtraColor, ExtraSpacing, IconSize, TaskText},
   ui::{
     card::{CardSurface, card_frame},
     chat::links,
@@ -46,7 +46,7 @@ pub fn section(ctx: &mut Ctx, run: &RunView, step: &StepKey) -> Option<Element> 
     .map(|(index, check)| check_row(ctx, (index, check), &on_link))
     .collect();
   // Rows a hairline apart, as the latest attempt's steps.
-  let list = card_frame("task-unverified", CardSurface::Raised).with_children(rows);
+  let list = card_frame("task-unverified", CardSurface::Raised).children(rows);
   Some(
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -61,18 +61,18 @@ pub fn section(ctx: &mut Ctx, run: &RunView, step: &StepKey) -> Option<Element> 
 fn check_row(ctx: &mut Ctx, (index, check): (usize, &UnverifiedCheck), on_link: &LinkHandler) -> Column {
   let id = format!("task-unverified-{index}");
   let text = MarkdownView::new(format!("{id}-check"), check.check.as_str(), on_link.clone())
-    .style(DecisionText::Subhead.role(), PaletteColor::TextPrimary)
+    .style(DecisionText::Subhead.role(), PaletteColor::Foreground)
     .render(ctx);
   let name = Row::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::CircleDashed, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(Icon::CircleDashed, IconSize::Sm, ExtraColor::TextSecondary.role()))
     .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(text));
   // A check listed without a reason has no line for one.
   let reason = (!check.reason.is_empty()).then(|| {
     let text = MarkdownView::new(format!("{id}-reason"), check.reason.as_str(), on_link.clone())
-      .style(TypographyStyle::Description, PaletteColor::TextSecondary)
+      .style(TypographyStyle::Description, ExtraColor::TextSecondary.role())
       .render(ctx);
     Row::new()
       .width(Dimension::Pct(100.0))

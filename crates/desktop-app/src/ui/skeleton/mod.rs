@@ -3,37 +3,35 @@
 //! skeleton` `UWoGx`). A bone is a `border` block, radius 4, as large as the part it stands for and where it will
 //! stand, so the content replaces it in place. A [`Skeleton`] shows its bones only after
 //! [`SKELETON_DELAY`](crate::theme::SKELETON_DELAY), so a fast reading never flashes them, or under a page's
-//! [`FromFirstFrame`] at once; they pulse gently unless
-//! the operating system asks for reduced motion (`appearance::motion`), when they stay still, and lower rows fade
-//! ([`fading`]). The screen's reading words stay its accessible name. lurq plays the pulse on its animation clock and
-//! asks for frames only while a pulsing skeleton is in the window's tree. `rows` holds the shapes screens share: lines
+//! [`FromFirstFrame`] at once; each bone is lurq's `ui::Skeleton`, which pulse gently in one phase, in the theme's
+//! steps (`theme::kit::skeleton`), unless the operating system asks for reduced motion, when they stay still, and
+//! lower rows fade ([`fading`]). The screen's reading words stay its accessible name. lurq asks for a frame only when a
+//! pulsing bone's pose changes. `rows` holds the shapes screens share: lines
 //! of words, row groups and their rows.
 
 mod rows;
 
 use std::{
-  sync::{Arc, OnceLock},
+  sync::Arc,
   time::{Duration, Instant},
 };
 
 use lurq::{
-  animation::{AnimatableProperty, Animation, Easing, Keyframes, KeyframesId, StepPosition},
   app::{
-    Tree,
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Timeout},
-    theme::{PaletteColor, RadiusSize},
   },
   components::{Column, Row},
   core::Signal,
   node::{Element, dimension::Dimension},
+  ui::{Skeleton as UiSkeleton, SkeletonPart},
 };
 
 pub use self::rows::{
   BoneRow, Words, button, chevron, count, count_in_room, field, group, line, lines, list, outline, read_back, select,
   status, switch, unit_field,
 };
-use crate::theme::{ExtraRadius, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE, SKELETON_PULSE, SKELETON_STEPS};
+use crate::theme::{SKELETON_DELAY, SKELETON_FADE};
 
 /// A list's rows while they are read: each row's bone widths, its name, the line under it and what stands at its end.
 pub type RowBones = &'static [(f32, f32, f32)];
@@ -176,7 +174,7 @@ impl Component for Delayed {
         .flex(1.0)
         .min_height(Dimension::Px(0.0)),
     };
-    frame.child(pulsing(bones))
+    frame.child(bones)
   }
 }
 
@@ -188,6 +186,12 @@ pub trait Fades {
 impl Fades for Row {
   fn faded(self, opacity: f32) -> Self {
     self.opacity(opacity)
+  }
+}
+
+impl Fades for UiSkeleton {
+  fn faded(self, opacity: f32) -> Self {
+    self.style(SkeletonPart::Root, |style| style.opacity(opacity))
   }
 }
 
@@ -227,62 +231,13 @@ pub fn fading_up<T: Fades>(mut lines: Vec<T>) -> Vec<T> {
   faded
 }
 
-/// The pulse's keyframes, registered once per window tree by [`install`]; the loader's turn is 1.
-const PULSE: KeyframesId = KeyframesId::new(2);
-
-/// Whether the operating system asks for reduced motion, once it was read when the app started; until then, and when
-/// it cannot be read, skeletons pulse.
-static STILL: OnceLock<bool> = OnceLock::new();
-
-/// Registers the pulse with a window's tree.
-pub fn install(tree: &mut Tree) {
-  tree.register_keyframes_in_phase(
-    Keyframes::new(PULSE)
-      .frame(0.0, |frame| {
-        frame.set(AnimatableProperty::Opacity, 1.0);
-      })
-      .frame(0.5, |frame| {
-        frame.set(AnimatableProperty::Opacity, SKELETON_DIM);
-      })
-      .frame(1.0, |frame| {
-        frame.set(AnimatableProperty::Opacity, 1.0);
-      }),
-  );
-}
-
-/// Keeps what the operating system said about reduced motion: `still` skeletons do not pulse. The first answer stays.
-pub fn hold_still(still: bool) {
-  STILL.get_or_init(|| still);
-}
-
-/// Whether the operating system asks for reduced motion: what moves in the app (a pulse, the typing dots) stays still.
-pub fn is_still() -> bool {
-  STILL.get().copied().unwrap_or(false)
-}
-
-/// `skeleton`, pulsing unless the operating system asks for reduced motion.
-pub fn pulsing(skeleton: Column) -> Column {
-  if is_still() {
-    return skeleton;
-  }
-  let steps = Easing::Steps {
-    count: SKELETON_STEPS,
-    position: StepPosition::JumpEnd,
-  };
-  skeleton.animation(Animation::new(PULSE).duration(SKELETON_PULSE).easing(steps).infinite())
-}
-
-/// A bone `width` × `height`.
-pub fn bone(width: f32, height: f32) -> Column {
-  Column::new()
-    .width(Dimension::Px(width))
-    .height(Dimension::Px(height))
-    .flex_shrink(0.0)
-    .rounded(RadiusSize::Sm)
-    .background(PaletteColor::Border)
+/// A bone `width` × `height`: lurq's `ui::Skeleton` in the theme's recipe (`theme::kit::skeleton`), pulsing in the
+/// theme's steps.
+pub fn bone(width: f32, height: f32) -> UiSkeleton {
+  UiSkeleton::block(width, height).flex_shrink(0.0)
 }
 
 /// A round bone `side` across, for a status mark.
-pub fn round_bone(side: f32) -> Column {
-  bone(side, side).rounded(ExtraRadius::Full.role())
+pub fn round_bone(side: f32) -> UiSkeleton {
+  UiSkeleton::circle(side).flex_shrink(0.0)
 }

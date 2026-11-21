@@ -17,28 +17,28 @@ fn agent_picker_roles_follow_the_design() {
       11.0,
       1.2,
       FontWeight::Normal,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       AgentPickerText::Name,
       12.0,
       1.2,
       FontWeight::Medium,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       AgentPickerText::Runs,
       11.5,
       1.2,
       FontWeight::Normal,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
     (
       AgentPickerText::Foot,
       12.0,
       1.2,
       FontWeight::Normal,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
     ),
     // The field's name (`GyeX6`) and what it runs on (`X7UJ9`).
     (
@@ -46,14 +46,14 @@ fn agent_picker_roles_follow_the_design() {
       12.5,
       1.3,
       FontWeight::Medium,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ),
     (
       AgentPickerText::FieldRuns,
       12.0,
       1.3,
       FontWeight::Normal,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
     ),
   ] {
     let style = theme.typography_style(role.role());

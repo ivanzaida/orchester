@@ -35,7 +35,7 @@ use crate::{
   },
   ui::{
     icon::{Icon, icon},
-    menu::{menu_at_end, menu_panel},
+    menu::{MenuPanel, menu_at_end, menu_panel},
     pressable::{Focus, Press},
   },
 };
@@ -107,9 +107,9 @@ impl Component for ModeControl {
       .rounded(RadiusSize::Sm)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(icon(Icon::Flag, IconSize::Xs, PaletteColor::TextSecondary))
+      .child(icon(Icon::Flag, IconSize::Xs, ExtraColor::TextSecondary.role()))
       .child(Text::new(&words).variant(LeadingText::Way.role()).nowrap())
-      .child(icon(Icon::ChevronDown, IconSize::Xs, PaletteColor::TextMuted));
+      .child(icon(Icon::ChevronDown, IconSize::Xs, PaletteColor::MutedForeground));
     let control = if open {
       control.background(ExtraColor::Hover.role())
     } else {
@@ -128,7 +128,7 @@ impl Component for ModeControl {
 impl ModeControl {
   /// The menu: *Follow*, which has the conversation only follow the target, and *Lead to the end*, the way it is
   /// taken now.
-  fn menu(&self, ctx: &Ctx, props: &ModeProps) -> Column {
+  fn menu(&self, ctx: &Ctx, props: &ModeProps) -> MenuPanel {
     let id = format!("{}-menu", props.id);
     let (change, target) = (props.change.clone(), props.target);
     let follow = item(
@@ -154,10 +154,7 @@ impl ModeControl {
       true,
       self.closing(|| {}),
     );
-    menu_panel(&id)
-      .width(Dimension::Px(CEILINGS_FORM_WIDTH))
-      .child(follow)
-      .child(lead)
+    menu_panel(&id).width(CEILINGS_FORM_WIDTH).child(follow).child(lead)
   }
 
   /// A press that closes the menu, then does `chosen`.
@@ -174,9 +171,9 @@ impl ModeControl {
 /// `current` one.
 fn item(id: &str, (glyph, name, means): (Icon, &str, &str), current: bool, press: Press) -> Element {
   let tone = if current {
-    PaletteColor::TextPrimary
+    PaletteColor::Foreground
   } else {
-    PaletteColor::TextSecondary
+    ExtraColor::TextSecondary.role()
   };
   let words = Column::new()
     .flex(1.0)
@@ -206,7 +203,7 @@ fn item(id: &str, (glyph, name, means): (Icon, &str, &str), current: bool, press
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .child(icon(glyph, IconSize::Base, tone))
     .child(words)
-    .with_children(current.then(|| icon(Icon::Check, IconSize::Base, PaletteColor::TextSecondary)));
+    .with_children(current.then(|| icon(Icon::Check, IconSize::Base, ExtraColor::TextSecondary.role())));
   if current {
     row.background(ExtraColor::Hover.role()).into()
   } else {

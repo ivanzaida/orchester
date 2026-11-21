@@ -26,7 +26,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskList, TaskListTab, TaskView},
   services::accounts::{Accounts, account_name},
-  theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
+  theme::{ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     agent_mark::AgentMark,
     icon::{Icon, icon},
@@ -109,7 +109,7 @@ fn run_line(
   let (glyph, color) = if at_work.lost {
     (Icon::CirclePause, PaletteColor::Warning)
   } else {
-    (Icon::LoaderCircle, PaletteColor::TextSecondary)
+    (Icon::LoaderCircle, ExtraColor::TextSecondary.role())
   };
   // A run that lost its runner keeps its age, as the runner-away state draws it (05 `JzNRO`).
   let age = at_work
@@ -124,7 +124,7 @@ fn run_line(
       &format!("{id}-title"),
       &at_work.title,
       ExtraTypography::Strong.role(),
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
     ))
     .child(step(ctx, &id, at_work))
     .child(agent(ctx, &id, at_work, accounts))
@@ -149,8 +149,8 @@ fn step(ctx: &Ctx, id: &str, at_work: &AtWorkLine) -> Row {
   let current = at_work.step.as_ref().map_or(0, |step| step.number);
   let dashes = (1..=steps).map(|number| {
     let fill = match number.cmp(&current) {
-      std::cmp::Ordering::Less => PaletteColor::TextMuted,
-      std::cmp::Ordering::Equal => PaletteColor::TextPrimary,
+      std::cmp::Ordering::Less => PaletteColor::MutedForeground,
+      std::cmp::Ordering::Equal => PaletteColor::Foreground,
       std::cmp::Ordering::Greater => PaletteColor::Border,
     };
     Column::new()
@@ -188,7 +188,7 @@ fn step(ctx: &Ctx, id: &str, at_work: &AtWorkLine) -> Row {
       Text::new(&name)
         .id(format!("{id}-step-name"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)

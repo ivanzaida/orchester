@@ -13,7 +13,7 @@ fn projects_roles_follow_the_returning_start() {
     (offer.font_size, offer.line_height, offer.weight, &*offer.font_family),
     (12.5, 1.45, FontWeight::Normal, "Geist")
   );
-  assert_eq!(offer.color, theme.palette_color(PaletteColor::TextSecondary));
+  assert_eq!(offer.color, theme.palette_color(ExtraColor::TextSecondary.role()));
   // The folders searched for an agent CLI (`qMnzd` in `U4QvYO`): mono 11.5 on 1.3 `text_muted`.
   let searched = theme.typography_style(ProjectsText::SearchedFolders.role());
   assert_eq!(
@@ -25,7 +25,7 @@ fn projects_roles_follow_the_returning_start() {
     ),
     (11.5, 1.3, FontWeight::Normal, "Geist Mono")
   );
-  assert_eq!(searched.color, theme.palette_color(PaletteColor::TextMuted));
+  assert_eq!(searched.color, theme.palette_color(PaletteColor::MutedForeground));
   // *All projects* (`SxLos`): 20/600 on 1.3, tracked -0.2.
   let title = theme.typography_style(ProjectsText::Title.role());
   assert_eq!(
@@ -38,5 +38,5 @@ fn projects_roles_follow_the_returning_start() {
     (value.font_size, value.line_height, value.weight),
     (12.0, 1.35, FontWeight::Normal)
   );
-  assert_eq!(value.color, theme.palette_color(PaletteColor::TextSecondary));
+  assert_eq!(value.color, theme.palette_color(ExtraColor::TextSecondary.role()));
 }

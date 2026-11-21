@@ -74,18 +74,18 @@ fn region_box(ctx: &Ctx, (path, at): (&str, &str), region: &ConflictRegion) -> E
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(icon(Icon::GitCompareArrows, IconSize::Md, PaletteColor::Danger))
+    .child(icon(Icon::GitCompareArrows, IconSize::Md, PaletteColor::Destructive))
     .child(
       Text::new(&ctx.t("review_page.conflict.title"))
         .variant(ExtraTypography::InspectorSection.role())
-        .color(PaletteColor::Danger)
+        .color(PaletteColor::Destructive)
         .nowrap(),
     )
     .child(
       Text::new(&lines)
         .id(format!("{id}-lines"))
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     );
   let base = Column::new()
@@ -97,8 +97,8 @@ fn region_box(ctx: &Ctx, (path, at): (&str, &str), region: &ConflictRegion) -> E
   Column::new()
     .id(id)
     .width(Dimension::Pct(100.0))
-    .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Danger))
+    .background(PaletteColor::Card)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Destructive))
     .rounded(RadiusSize::Md)
     .clip()
     .child(head)
@@ -112,7 +112,7 @@ fn base_lines(ctx: &Ctx, region: &ConflictRegion) -> Vec<Element> {
     return vec![
       Text::new(&ctx.t("review_page.conflict.removed"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .into(),
     ];
   }
@@ -122,7 +122,7 @@ fn base_lines(ctx: &Ctx, region: &ConflictRegion) -> Vec<Element> {
     .map(|line| {
       Text::new(&format!("{:<NUMBER_COLUMN$}{}", line.number, line.text))
         .variant(TypographyStyle::Mono)
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .nowrap()
         .into()
     })
@@ -145,10 +145,10 @@ pub(super) fn bar(ctx: &mut Ctx, env: &Env) -> Option<Element> {
       .padding(Padding::horizontal(SpacingSize::Lg))
       .spacing(SpacingSize::Md)
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(RadiusSize::Md)
-      .child(icon(Icon::GitCompareArrows, IconSize::Nav, PaletteColor::Danger))
+      .child(icon(Icon::GitCompareArrows, IconSize::Nav, PaletteColor::Destructive))
       .child(
         Column::new()
           .flex(1.0)
@@ -162,7 +162,7 @@ pub(super) fn bar(ctx: &mut Ctx, env: &Env) -> Option<Element> {
           )
           .child(
             Truncated::new("review-conflict-body", body, TypographyStyle::Description)
-              .color(PaletteColor::TextMuted)
+              .color(PaletteColor::MutedForeground)
               .render(ctx),
           ),
       )

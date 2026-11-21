@@ -133,7 +133,7 @@ fn sign_in_offers_itself_in_settings_on_a_first_run() {
   );
   assert!(!has(&mut window, "sign-in-ended"), "a first run names no reason");
   assert_eq!(value(&mut window, "sign-in-email"), "");
-  assert_eq!(window.text("orchester-invites-sign-in-label"), "Sign in to see invites");
+  assert_eq!(window.text("orchester-invites-sign-in-title"), "Sign in to see invites");
   assert!(has(&mut window, "orchester-servers"), "team servers stay");
   assert!(has(&mut window, "orchester-advanced"), "and Advanced");
   assert!(

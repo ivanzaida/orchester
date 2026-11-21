@@ -38,7 +38,7 @@ pub(super) fn foot(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
         Text::new(&hint)
           .id("task-archived-foot-hint")
           .variant(TypographyStyle::Description)
-          .color(PaletteColor::TextMuted)
+          .color(PaletteColor::MutedForeground)
           .nowrap(),
       )
       .into(),

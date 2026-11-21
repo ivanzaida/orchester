@@ -67,7 +67,7 @@ where
       Text::new(&ctx.t("local_hub.profile.none"))
         .id(format!("{value_id}-none"))
         .variant(HubText::Value.role())
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .into(),
     ]
   } else {

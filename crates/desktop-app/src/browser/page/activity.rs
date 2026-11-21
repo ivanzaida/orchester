@@ -98,7 +98,7 @@ fn frame(state: &str, mark: Element, (title, detail): (Arc<str>, Arc<str>), hint
       Text::new(&detail)
         .id("browser-activity-detail")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .child(Row::new().flex(1.0))

@@ -63,7 +63,7 @@ use crate::{
   theme::{AttemptSpacing, DeliverySpacing, ExtraSpacing, ExtraTypography},
   ui::{
     button::{ActionButton, ButtonKind},
-    code_box::Copier,
+    clipboard::Clipboard,
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
@@ -334,7 +334,7 @@ impl AttemptScreen {
       Copied::Failed => (Icon::CircleAlert, "merges.page.copyFailed"),
     };
     let text = details::details(ctx, shown.page, &standing.status(ctx, shown.base()));
-    let (copier, copied, reset) = (Copier::of(ctx), self.copied.clone(), self.reset.clone());
+    let (copier, copied, reset) = (Clipboard::of(ctx), self.copied.clone(), self.reset.clone());
     ActionButton::new("merge-attempt-copy-details", ButtonKind::Ghost, ctx.t(key))
       .icon(glyph)
       .on_click(move || {
@@ -466,7 +466,7 @@ fn section_head(id: &str, title: &str, (count, end): (Option<&str>, Option<Eleme
     Text::new(count)
       .id(format!("{id}-count"))
       .variant(ExtraTypography::Property.role())
-      .color(PaletteColor::TextMuted)
+      .color(PaletteColor::MutedForeground)
       .into()
   });
   section_head_with(id, title, (count, end))

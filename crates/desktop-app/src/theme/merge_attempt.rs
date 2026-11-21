@@ -9,7 +9,7 @@ use lurq::{
   layout::text_style::{FontWeight, TextStyle},
 };
 
-use super::typography::style;
+use super::{palette::text_secondary, typography::style};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AttemptText {
@@ -38,9 +38,9 @@ impl AttemptText {
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Explanation => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_secondary),
-      Self::BarBody => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
-      Self::Title => style(20.0, FontWeight::SemiBold, 1.4, 0.0, palette.text_primary),
+      Self::Explanation => style(12.0, FontWeight::Normal, 1.45, 0.0, text_secondary(palette)),
+      Self::BarBody => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.muted_foreground),
+      Self::Title => style(20.0, FontWeight::SemiBold, 1.4, 0.0, palette.foreground),
     }
   }
 }

@@ -37,7 +37,7 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
       Text::new(&ctx.t("summary.output.none"))
         .id("task-output-none")
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .width(Dimension::Pct(100.0))
         .into(),
     ]
@@ -135,10 +135,10 @@ fn row(
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
     .spacing(ExtraSpacing::Loose.role())
-    .background(PaletteColor::SurfaceRaised)
+    .background(PaletteColor::Card)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .child(icon(glyph, IconSize::Md, PaletteColor::TextSecondary))
+    .child(icon(glyph, IconSize::Md, ExtraColor::TextSecondary.role()))
     .child(
       Text::new(&title)
         .id(format!("task-output-{index}-title"))
@@ -149,11 +149,11 @@ fn row(
       Text::new(&when)
         .id(format!("task-output-{index}-when"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .nowrap(),
     )
-    .child(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(Icon::ArrowUpRight, IconSize::Base, PaletteColor::MutedForeground))
     .into()
 }

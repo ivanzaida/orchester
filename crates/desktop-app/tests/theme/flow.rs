@@ -16,7 +16,7 @@ fn flow_roles_follow_the_design() {
       10.5,
       1.2,
       FontWeight::Normal,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "Geist Mono",
     ),
     (
@@ -24,7 +24,7 @@ fn flow_roles_follow_the_design() {
       12.0,
       1.2,
       FontWeight::Normal,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "Geist",
     ),
     (
@@ -42,7 +42,7 @@ fn flow_roles_follow_the_design() {
       10.5,
       1.2,
       FontWeight::Normal,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "Geist Mono",
     ),
     (
@@ -50,7 +50,7 @@ fn flow_roles_follow_the_design() {
       11.5,
       1.2,
       FontWeight::Normal,
-      PaletteColor::TextMuted,
+      PaletteColor::MutedForeground,
       "Geist Mono",
     ),
     (
@@ -58,7 +58,7 @@ fn flow_roles_follow_the_design() {
       12.5,
       1.3,
       FontWeight::Medium,
-      PaletteColor::TextPrimary,
+      PaletteColor::Foreground,
       "Geist",
     ),
     (
@@ -66,7 +66,7 @@ fn flow_roles_follow_the_design() {
       12.0,
       1.3,
       FontWeight::Normal,
-      PaletteColor::TextSecondary,
+      ExtraColor::TextSecondary.role(),
       "Geist",
     ),
   ] {
@@ -96,7 +96,7 @@ fn the_landing_line_is_12_medium_text() {
       12.0,
       1.2,
       FontWeight::Medium,
-      app.theme().palette_color(PaletteColor::TextPrimary)
+      app.theme().palette_color(PaletteColor::Foreground)
     )
   );
 }

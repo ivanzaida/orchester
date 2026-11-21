@@ -49,7 +49,7 @@ pub(super) fn sent_line(ctx: &mut Ctx, id: &str, (project, from): (ProjectId, Fr
       .describe("sent", way)
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(icon(Icon::Waypoints, IconSize::Sm, PaletteColor::TextMuted))
+      .child(icon(Icon::Waypoints, IconSize::Sm, PaletteColor::MutedForeground))
       .with_children(words.map(|words| Text::new(&words).variant(TypographyStyle::Caption)))
       .with_children(open)
       .into(),

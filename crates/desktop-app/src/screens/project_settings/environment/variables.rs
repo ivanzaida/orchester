@@ -421,7 +421,7 @@ fn helper(ctx: &Ctx) -> Element {
     .child(crate::ui::icon::icon(
       Icon::Eye,
       crate::theme::IconSize::Sm,
-      lurq::app::theme::PaletteColor::TextMuted,
+      lurq::app::theme::PaletteColor::MutedForeground,
     ))
     .child(
       Text::new(&ctx.t("project_settings.plainText"))

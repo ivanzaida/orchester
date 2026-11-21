@@ -124,12 +124,12 @@ impl Component for PlanCard {
         at,
       ),
       PlanState::Replaced { at } => (
-        (Icon::History, PaletteColor::TextMuted, "replaced"),
+        (Icon::History, PaletteColor::MutedForeground, "replaced"),
         ctx.t_args("orchestrator.plan.replaced", [("plan", (props.number + 1).to_string())]),
         at,
       ),
       PlanState::Dismissed { at } => (
-        (Icon::CircleSlash, PaletteColor::TextMuted, "dismissed"),
+        (Icon::CircleSlash, PaletteColor::MutedForeground, "dismissed"),
         ctx.t("orchestrator.plan.dismissed"),
         at,
       ),
@@ -155,7 +155,7 @@ impl PlanCard {
       .map(|why| {
         tinted_note(
           format!("{id}-error"),
-          (Icon::CircleAlert, PaletteColor::Danger),
+          (Icon::CircleAlert, PaletteColor::Destructive),
           &message_text(ctx, &why),
         )
       });
@@ -218,7 +218,7 @@ impl PlanCard {
           .flex_shrink(0.0)
           .spacing(ExtraSpacing::Pair.role())
           .align_items(Alignment::Center)
-          .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::TextMuted))
+          .child(icon(Icon::Lock, IconSize::Xs, PaletteColor::MutedForeground))
           .child(
             Text::new(&ctx.t("orchestrator.plan.onlyYou"))
               .variant(ExtraTypography::Note.role())
@@ -349,7 +349,7 @@ fn head(ctx: &mut Ctx, props: &PlanProps) -> Row {
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(icon(Icon::ListChecks, IconSize::Md, PaletteColor::TextSecondary).flex_shrink(0.0))
+    .child(icon(Icon::ListChecks, IconSize::Md, ExtraColor::TextSecondary.role()).flex_shrink(0.0))
     .child(
       Text::new(&ctx.t_args("orchestrator.plan.title", [("steps", count.as_str())]))
         .id(format!("{id}-title"))
@@ -361,7 +361,7 @@ fn head(ctx: &mut Ctx, props: &PlanProps) -> Row {
       Text::new(&ctx.t("orchestrator.plan.nothingDone"))
         .id(format!("{id}-note"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex_shrink(1.0)
@@ -409,7 +409,7 @@ fn step_row(id: &str, number: usize, step: &PlanStep) -> Row {
         .nowrap()
         .flex_shrink(0.0),
     )
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextSecondary).flex_shrink(0.0))
+    .child(icon(glyph, IconSize::Base, ExtraColor::TextSecondary.role()).flex_shrink(0.0))
     .child(
       Text::new(step.action())
         .id(format!("{id}-action"))
@@ -423,7 +423,7 @@ fn step_row(id: &str, number: usize, step: &PlanStep) -> Row {
       Text::new(target)
         .id(format!("{id}-target"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap()
         .text_overflow(TextOverflow::Elipsis)
         .flex(1.0)

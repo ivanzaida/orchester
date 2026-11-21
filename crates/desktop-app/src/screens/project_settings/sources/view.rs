@@ -331,6 +331,6 @@ pub(super) fn outside_info(ctx: &mut Ctx) -> Element {
     })
     .collect::<Vec<_>>();
   let text = ctx.t_args("project_settings.sourcesTab.outsideInfo", [("rules", lines.join("\n"))]);
-  let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).id("settings-sources-outside-info");
+  let glyph = icon(Icon::Info, IconSize::Sm, PaletteColor::MutedForeground).id("settings-sources-outside-info");
   Tooltip::new("settings-sources-outside-info", text).wrap(ctx, glyph)
 }

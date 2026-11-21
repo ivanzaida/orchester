@@ -13,11 +13,12 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
+  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  ui::{self, Styled},
 };
 
 use super::{
@@ -59,17 +60,17 @@ impl From<FilterButton> for Element {
   fn from(button: FilterButton) -> Self {
     let (fill, stroke, text, chevron) = if button.active {
       (
-        PaletteColor::AccentMuted,
-        PaletteColor::BorderStrong,
-        PaletteColor::TextPrimary,
-        PaletteColor::TextSecondary,
+        PaletteColor::Highlight,
+        PaletteColor::Input,
+        PaletteColor::Foreground,
+        ExtraColor::TextSecondary.role(),
       )
     } else {
       (
-        PaletteColor::SurfaceInput,
+        ExtraColor::InputSurface.role(),
         PaletteColor::Border,
-        PaletteColor::TextSecondary,
-        PaletteColor::TextMuted,
+        ExtraColor::TextSecondary.role(),
+        PaletteColor::MutedForeground,
       )
     };
     let open = button.open.clone();
@@ -82,7 +83,7 @@ impl From<FilterButton> for Element {
       .background(fill)
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Md)
-      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)))
+      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Input)))
       .describe("a11y_name", button.label.clone())
       .describe("active", if button.active { "true" } else { "false" })
       .child(
@@ -127,16 +128,16 @@ impl From<FilterToggle> for Element {
   fn from(toggle: FilterToggle) -> Self {
     let (fill, stroke, text, glyph) = if toggle.on {
       (
-        PaletteColor::AccentMuted,
-        PaletteColor::BorderStrong,
-        PaletteColor::TextPrimary,
-        Some(icon(Icon::X, IconSize::Base, PaletteColor::TextSecondary)),
+        PaletteColor::Highlight,
+        PaletteColor::Input,
+        PaletteColor::Foreground,
+        Some(icon(Icon::X, IconSize::Base, ExtraColor::TextSecondary.role())),
       )
     } else {
       (
-        PaletteColor::SurfaceInput,
+        ExtraColor::InputSurface.role(),
         PaletteColor::Border,
-        PaletteColor::TextSecondary,
+        ExtraColor::TextSecondary.role(),
         None,
       )
     };
@@ -153,7 +154,7 @@ impl From<FilterToggle> for Element {
       .background(fill)
       .border(Border::inside(BorderSize::Sm, stroke))
       .rounded(RadiusSize::Md)
-      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)))
+      .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::Input)))
       .describe("a11y_name", toggle.label.clone())
       .describe("active", if toggle.on { "true" } else { "false" })
       .child(
@@ -201,7 +202,7 @@ impl From<FilterChip> for Element {
       .describe("a11y_name", label)
       .rounded(ExtraRadius::Full.role())
       .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-      .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted));
+      .child(icon(Icon::X, IconSize::Sm, PaletteColor::MutedForeground));
     Row::new()
       .id(chip.id.clone())
       .height(Dimension::Px(ControlHeight::Sm.value()))
@@ -212,7 +213,7 @@ impl From<FilterChip> for Element {
       )
       .spacing(ExtraSpacing::Pair.role())
       .align_items(Alignment::Center)
-      .background(PaletteColor::SurfaceRaised)
+      .background(PaletteColor::Card)
       .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
       .rounded(ExtraRadius::Full.role())
       .child(Text::new(&chip.facet).variant(ExtraTypography::Note.role()).nowrap())
@@ -227,28 +228,16 @@ impl From<FilterChip> for Element {
   }
 }
 
-/// The panel of a filter's menu, `width` wide, with the element id `id`; add its options as children.
-pub fn filter_menu_panel(id: &str, width: f32) -> Column {
-  Column::new()
-    .id(id.to_owned())
-    .width(Dimension::Px(width))
-    .padding(ExtraSpacing::Snug.role())
-    .spacing(ExtraSpacing::Tight.role())
-    .rounded(RadiusSize::Lg)
-    .background(PaletteColor::SurfaceRaised)
-    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
-    .box_shadow(ShadowStyle::Lg)
-}
-
-/// A filter's option `id` saying `label`, `chosen` or not, with its value's swatch where it has one (`u1ZxRL`);
-/// a press runs `toggle`, and the menu stays open. A `mono` label is an identifier, such as a model, in mono 11
-/// (`claude-opus-5-5` `aQCL8`).
+/// A filter's option `id` saying `label`, `chosen` or not, with its value's swatch where it has one (`u1ZxRL`): an
+/// item of lurq's menu that a choice, a press or Enter, toggles with `toggle` and leaves the menu open
+/// (`MenuItem::keeps_open`); the arrows and typing reach it. A `mono` label is an identifier, such as a model, in mono
+/// 11 (`claude-opus-5-5` `aQCL8`).
 pub fn filter_option(
   id: impl Into<Arc<str>>,
   (label, chosen, mono): (&str, bool, bool),
   swatch: Option<Element>,
   toggle: impl Fn() + Send + Sync + 'static,
-) -> Element {
+) -> ui::MenuItem {
   let id = id.into();
   let text = Text::new(label)
     .id(format!("{id}-label"))
@@ -257,14 +246,14 @@ pub fn filter_option(
     } else {
       TypographyStyle::Description
     })
-    .color(PaletteColor::TextPrimary)
+    .color(PaletteColor::Foreground)
     .nowrap()
     .flex(1.0)
     .min_width(Dimension::Px(0.0));
-  option_frame(&id, (label, chosen), swatch, toggle)
+  let row = option_frame(chosen, swatch)
     .height(Dimension::Px(ControlHeight::Md.value()))
-    .child(text)
-    .into()
+    .child(text);
+  option_item(&id, (label, chosen), row, toggle)
 }
 
 /// An option that says under its label what it chooses (*Earlier runs*, as *No account* in `EU0ex`), as tall as its
@@ -274,7 +263,7 @@ pub fn filter_option_explained(
   (label, detail, chosen): (&str, &str, bool),
   swatch: Option<Element>,
   toggle: impl Fn() + Send + Sync + 'static,
-) -> Element {
+) -> ui::MenuItem {
   let id = id.into();
   let words = Column::new()
     .flex(1.0)
@@ -284,7 +273,7 @@ pub fn filter_option_explained(
       Text::new(label)
         .id(format!("{id}-label"))
         .variant(TypographyStyle::Description)
-        .color(PaletteColor::TextPrimary),
+        .color(PaletteColor::Foreground),
     )
     .child(
       Text::new(detail)
@@ -292,11 +281,11 @@ pub fn filter_option_explained(
         .width(Dimension::Pct(100.0))
         .variant(TypographyStyle::Caption),
     );
-  option_frame(&id, (label, chosen), swatch, toggle)
+  let row = option_frame(chosen, swatch)
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role()))
     .align_items(Alignment::Start)
-    .child(words)
-    .into()
+    .child(words);
+  option_item(&id, (label, chosen), row, toggle)
 }
 
 /// The heading of a group of options (`Group · Codex` `ezGJl`): its icon and name in 11/500 `text_muted`,
@@ -309,33 +298,23 @@ pub fn filter_group(id: impl Into<Arc<str>>, glyph: Icon, label: &str) -> Elemen
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(glyph, IconSize::Sm, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Sm, PaletteColor::MutedForeground))
     .child(
       Text::new(label)
         .variant(TypographyStyle::FieldLabel)
-        .color(PaletteColor::TextMuted)
+        .color(PaletteColor::MutedForeground)
         .nowrap(),
     )
     .into()
 }
 
-/// An option's pressable row with its check and swatch; its words go after them.
-fn option_frame(
-  id: &Arc<str>,
-  (label, chosen): (&str, bool),
-  swatch: Option<Element>,
-  toggle: impl Fn() + Send + Sync + 'static,
-) -> lurq::components::Button {
-  pressable(toggle)
-    .id(id.clone())
+/// An option's row with its check and swatch; its words go after them.
+fn option_frame(chosen: bool, swatch: Option<Element>) -> Row {
+  Row::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::horizontal(SpacingSize::Sm))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .rounded(RadiusSize::Sm)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .describe("a11y_name", label.to_owned())
-    .describe("checked", if chosen { "true" } else { "false" })
     .child(check_mark(chosen))
     .with_children(swatch.map(|swatch| {
       Row::new()
@@ -344,6 +323,23 @@ fn option_frame(
         .align_items(Alignment::Center)
         .child(swatch)
     }))
+}
+
+/// `row` as the menu's item `id`, checked while `chosen`; a choice runs `toggle` and keeps the menu open. Its root is
+/// the kit's menu row's: radius 4, the `hover` fill under the pointer and the keys.
+fn option_item(
+  id: &Arc<str>,
+  (label, chosen): (&str, bool),
+  row: Row,
+  toggle: impl Fn() + Send + Sync + 'static,
+) -> ui::MenuItem {
+  ui::MenuItem::new(label)
+    .id(id.clone())
+    .content(row)
+    .checked(chosen)
+    .keeps_open(true)
+    .on_select(toggle)
+    .describe("checked", if chosen { "true" } else { "false" })
 }
 
 /// A group heading's height (`ezGJl`), and the box an option's swatch sits in (`Swatch box` `eOYES`).

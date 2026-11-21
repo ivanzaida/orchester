@@ -21,7 +21,7 @@ use lurq::{
 
 use super::model::{Notice, NoticeTone};
 use crate::{
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraSpacing, IconSize},
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -47,7 +47,7 @@ pub(super) fn typed_effort(
   let words = ctx.t("ui.runsOnPicker.typeEffort");
   let input = TextInput::styled(typed.value.clone(), typed_style)
     .placeholder_style(placeholder_style)
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .id(format!("{id}-effort-typed"))
     .describe("a11y_name", words.clone())
     .describe("current", current.to_string())
@@ -74,11 +74,11 @@ pub(super) fn typed_effort(
     .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
+    .background(ExtraColor::InputSurface.role())
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Sm)
     .child(input)
-    .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::TextMuted));
+    .child(icon(Icon::CornerDownLeft, IconSize::Sm, PaletteColor::MutedForeground));
   let field = if active { field } else { field.opacity(DISABLED_OPACITY) };
   let hint = Row::new()
     .width(Dimension::Pct(100.0))
@@ -124,8 +124,8 @@ pub(super) fn notes(id: &str, notes: &[&Notice]) -> Element {
 fn note(id: String, notice: &Notice) -> Element {
   let (glyph, background) = match notice.tone {
     NoticeTone::Warning => (PaletteColor::Warning, PaletteColor::WarningMuted),
-    NoticeTone::Danger => (PaletteColor::Danger, PaletteColor::SurfaceInput),
-    NoticeTone::Neutral => (PaletteColor::TextMuted, PaletteColor::SurfaceInput),
+    NoticeTone::Danger => (PaletteColor::Destructive, ExtraColor::InputSurface.role()),
+    NoticeTone::Neutral => (PaletteColor::MutedForeground, ExtraColor::InputSurface.role()),
   };
   Row::new()
     .id(id)
@@ -139,7 +139,7 @@ fn note(id: String, notice: &Notice) -> Element {
     .child(
       Text::new(&notice.text)
         .variant(crate::theme::ExtraTypography::Note.role())
-        .color(PaletteColor::TextSecondary)
+        .color(ExtraColor::TextSecondary.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

@@ -1,8 +1,8 @@
 //! The Browser window's tab strip (`Tab strip` `X1V8q`, `01c` `fPkxD`, `01d` `fWhIr`, `01e` `cmofl`): agents' tabs,
-//! a thin divider, the person's tabs and *+*, then at least 48 of room that drags the window. The tabs share the room
-//! as `fit` says; past their narrowest the strip scrolls sideways, keeps the tab shown in view and fades at a cut edge,
-//! and the overflow button before *+* counts the tabs not wholly in view, with the strongest dot among them. It
-//! measures its own room from its last layout.
+//! a thin divider, the person's tabs and *+*, then at least 48 of the bar's room that drags the window. The tabs share
+//! the room as `fit` says; past their narrowest the strip scrolls sideways, keeps the tab shown in view and fades at a
+//! cut edge, and the overflow button before *+* counts the tabs not wholly in view, with the strongest dot among them.
+//! Its room runs from where it started at its last layout to the bar's end (`chrome::END_RESERVE`).
 
 use lurq::{
   app::{
@@ -30,6 +30,7 @@ use super::{
   tab::{TAB_HEIGHT, Tab, TabProps},
 };
 use crate::{
+  chrome::END_RESERVE,
   theme::{BrowserColor, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -37,8 +38,8 @@ use crate::{
   },
 };
 
-/// *+* (`New tab` `n2KL9`), the room that always stays to drag the window, the divider's height, a cut edge's fade,
-/// and the overflow button's room (`⌄ 13 •` in `fWhIr`) before it was laid out.
+/// *+* (`New tab` `n2KL9`), the bar's room that always stays to drag the window, the divider's height, a cut edge's
+/// fade, and the overflow button's room (`⌄ 13 •` in `fWhIr`) before it was laid out.
 const NEW_TAB_WIDTH: f32 = 26.0;
 const MIN_DRAG_WIDTH: f32 = 48.0;
 const DIVIDER_HEIGHT: f32 = 16.0;
@@ -46,7 +47,8 @@ const FADE_WIDTH: f32 = 24.0;
 const OVERFLOW_WIDTH: f32 = 52.0;
 
 pub struct Strip {
-  room: Signal<Option<f32>>,
+  /// Where the strip started in the window at its last layout.
+  start: Signal<Option<f32>>,
   element: ElementRef,
   scroll: ScrollState,
   scrolled: Signal<f32>,
@@ -60,7 +62,7 @@ impl Component for Strip {
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
-      room: ctx.signal(None),
+      start: ctx.signal(None),
       element: ctx.element_ref(),
       scroll: ScrollState::new(),
       scrolled: ctx.signal(0.0),
@@ -77,7 +79,7 @@ impl Component for Strip {
       .as_ref()
       .and_then(|tab| strip.all().position(|other| &other.id == tab));
     let divider = (!strip.agents.is_empty() && !strip.person.is_empty()).then_some(strip.agents.len());
-    let whole = self.measured_room();
+    let whole = self.measured_room(ctx);
     let reserve = gap() + NEW_TAB_WIDTH + gap() + MIN_DRAG_WIDTH;
     let mut room = (whole - reserve).max(0.0);
     let mut fitted = fit::fit(room, strip.len(), shown_index, divider.is_some());
@@ -110,40 +112,31 @@ impl Component for Strip {
     let strip = Row::new()
       .id("browser-strip")
       .ref_element(self.element.clone())
-      .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Tight.role())
       .align_items(Alignment::Center)
       .child(viewport)
       .with_children(overflow)
-      .child(new_tab(ctx, &showing))
-      .child(
-        Row::new()
-          .id("browser-drag")
-          .width(Dimension::Px(MIN_DRAG_WIDTH))
-          .height(Dimension::Px(TAB_HEIGHT)),
-      )
-      .child(Row::new().flex(1.0));
-    Row::new()
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::new().left(SpacingSize::Sm))
-      .child(strip)
+      .child(new_tab(ctx, &showing));
+    Row::new().padding(Padding::new().left(SpacingSize::Sm)).child(strip)
   }
 }
 
 impl Strip {
-  /// The room the strip had at its last layout, watched from now on; the design's until it was laid out.
-  fn measured_room(&self) -> f32 {
-    let room = self.room.clone();
-    self.element.observe_rect(move |rect| {
-      if rect.width > 0.0
-        && room
-          .get_untracked()
-          .is_none_or(|known| (known - rect.width).abs() > 0.5)
-      {
-        room.set(Some(rect.width));
+  /// The room from where the strip started at its last layout, watched from now on, to the bar's end; the design's
+  /// until it was laid out.
+  fn measured_room(&self, ctx: &mut Ctx) -> f32 {
+    let start = self.start.clone();
+    // Before the frame is painted, so that its first frame already has the room it measures.
+    self.element.observe_rect_before_paint(move |rect| {
+      if start.get_untracked().is_none_or(|known| (known - rect.x).abs() > 0.5) {
+        start.set(Some(rect.x));
       }
     });
-    self.room.get().unwrap_or(fit::TAB_MAX_WIDTH * 4.0)
+    // In whole pixels, as the strip's parts are laid out.
+    let width = ctx.window().info().logical_width();
+    self.start.get().map_or(fit::TAB_MAX_WIDTH * 4.0, |start| {
+      (width - start - END_RESERVE).floor().max(0.0)
+    })
   }
 
   /// Scrolls the tab shown into view, clear of the fades, when it changes or comes back to the strip. Otherwise the
@@ -241,7 +234,7 @@ impl Strip {
         .background_gradient(Gradient::linear(
           angle,
           [
-            GradientStop::new(PaletteColor::SurfaceBase),
+            GradientStop::new(PaletteColor::Background),
             GradientStop::new(BrowserColor::FadeClear.role()),
           ],
         ))
@@ -283,7 +276,7 @@ fn new_tab(ctx: &mut Ctx, showing: &Showing) -> Element {
   .flex_shrink(0.0)
   .justify(Justify::Center)
   .rounded(RadiusSize::Md)
-  .child(icon(Icon::Plus, IconSize::Md, PaletteColor::TextMuted));
+  .child(icon(Icon::Plus, IconSize::Md, PaletteColor::MutedForeground));
   if unavailable {
     button.opacity(DISABLED_OPACITY).into()
   } else {

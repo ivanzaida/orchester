@@ -219,9 +219,9 @@ impl DiffRow {
         .into(),
       DiffRow::Line(kind, text) => {
         let (background, color, name) = match kind {
-          LineKind::Context => (ExtraColor::CodeBackground, PaletteColor::TextSecondary, "context"),
+          LineKind::Context => (ExtraColor::CodeBackground, ExtraColor::TextSecondary.role(), "context"),
           LineKind::Added => (ExtraColor::DiffAdded, PaletteColor::Success, "added"),
-          LineKind::Removed => (ExtraColor::DiffRemoved, PaletteColor::Danger, "removed"),
+          LineKind::Removed => (ExtraColor::DiffRemoved, PaletteColor::Destructive, "removed"),
         };
         Row::new()
           .width(Dimension::Pct(100.0))

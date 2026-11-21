@@ -9,7 +9,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{SpacingSize, TypographyStyle},
   },
   components::{Column, Row},
   layout::Alignment,
@@ -144,15 +144,11 @@ fn detail(ctx: &Ctx, id: &str) -> Element {
 }
 
 /// A chip (`ui::chip::badge`) whose words are not read yet: its pill, as long as words `width` long.
-fn chip(ctx: &Ctx, width: f32) -> Row {
+fn chip(ctx: &Ctx, width: f32) -> lurq::ui::Skeleton {
   let (line_height, _) = skeleton_line(ctx.theme(), TypographyStyle::FieldLabel);
-  Row::new()
-    .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Fine.role()))
-    .rounded(ExtraRadius::Full.role())
-    .background(PaletteColor::Border)
-    .child(
-      Row::new()
-        .width(Dimension::Px(width))
-        .height(Dimension::Px(line_height)),
-    )
+  let (side, over) = (
+    ctx.theme().spacing_value(SpacingSize::Sm).to_px(),
+    ExtraSpacing::Fine.value(),
+  );
+  bone(width + 2.0 * side, line_height + 2.0 * over).radius(ExtraRadius::Full.role())
 }

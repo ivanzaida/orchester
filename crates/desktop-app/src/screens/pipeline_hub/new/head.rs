@@ -8,7 +8,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::TextInputEvent,
-    theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Text, TextInput, TextInputController},
   core::Signal,
@@ -16,7 +16,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use crate::theme::{ExtraSpacing, HubText};
+use crate::theme::{ExtraSpacing, HubText, TextRole};
 
 /// The name field's width (`Name field · focused` `OH5fW`).
 const NAME_WIDTH: f32 = 340.0;
@@ -63,21 +63,21 @@ pub(super) fn head(ctx: &Ctx, head: &Head<'_>) -> Element {
 fn field(ctx: &Ctx, head: &Head<'_>) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
-    FormTextRole {
+    TextRole {
       typography: HubText::PanelTitle.role(),
       color,
     }
     .resolve(&theme.typography(), &theme.palette())
   };
   let (gained, lost) = (head.focused.clone(), head.focused.clone());
-  let mut typed = TextInput::styled(head.name.clone(), resolve(PaletteColor::TextPrimary))
-    .placeholder_style(resolve(PaletteColor::TextMuted))
+  let mut typed = TextInput::styled(head.name.clone(), resolve(PaletteColor::Foreground))
+    .placeholder_style(resolve(PaletteColor::MutedForeground))
     .placeholder(&ctx.t("pipeline_new.namePlaceholder"))
     .id("pipeline-new-name")
     .describe("a11y_name", ctx.t("pipeline_new.name"))
     .describe("state", if head.taken { "invalid" } else { "valid" })
     .width(Dimension::Pct(100.0))
-    .caret_color(PaletteColor::TextPrimary)
+    .caret_color(PaletteColor::Foreground)
     .controller(head.input.clone())
     .single_line()
     .on_focus(move || gained.set(true))
@@ -88,8 +88,8 @@ fn field(ctx: &Ctx, head: &Head<'_>) -> Element {
       .focusable(false);
   }
   let ring = match (head.taken, head.focused.get()) {
-    (true, _) => PaletteColor::Danger,
-    (false, true) => PaletteColor::BorderFocus,
+    (true, _) => PaletteColor::Destructive,
+    (false, true) => PaletteColor::Ring,
     (false, false) => PaletteColor::Border,
   };
   Row::new()
