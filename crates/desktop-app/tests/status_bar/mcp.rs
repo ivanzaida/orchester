@@ -104,6 +104,14 @@ fn status_mcp_popover_names_the_address_the_agents_and_window_control() {
   assert!(bar.texts("status-mcp-popover").is_none());
   bar.press("status-mcp");
   let popover = bar.texts("status-mcp-popover").expect("the popover opens");
+  let (strip, panel) = (bar.bounds("status-bar"), bar.bounds("status-mcp-popover"));
+  // The bar stands at the top of this test's window, so the popover flips under it.
+  let gap = (strip.y - (panel.y + panel.height)).max(panel.y - (strip.y + strip.height));
+  assert!((gap - 9.0).abs() < 0.5, "9 clear of the bar: {panel:?} by {strip:?}");
+  assert!(
+    ((strip.x + strip.width) - (panel.x + panel.width) - 12.0).abs() < 0.5,
+    "its end 12 from the bar's: {panel:?} in {strip:?}"
+  );
   for words in [
     "Orchester MCP server",
     "Listening on 127.0.0.1:47821",

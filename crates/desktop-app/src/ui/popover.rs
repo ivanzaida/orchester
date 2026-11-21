@@ -10,7 +10,7 @@ use lurq::{
     ctx::{CollisionStrategy, Ctx},
     theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
   },
-  components::{Column, Placement, Popup},
+  components::{Column, Placement},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
   ui,
@@ -77,20 +77,17 @@ pub fn popup_by_app(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, p
   popover(anchor, open, side, panel).switch_on_anchor_press(false)
 }
 
-/// `panel`, `width` wide, opened under `anchor` from its start while `open` holds, moved back just enough that it ends
-/// `end_inset` or more before `frame` does (a column it belongs in), as both were last laid out. It never flips over
-/// its anchor: give it [`room_under`] as its most height.
+/// `panel` opened 6 under `anchor` from its start while `open` holds, moved back just enough that it ends `end_inset`
+/// or more before `frame` does (a column it belongs in): lurq's `within_inset` with the `Clamp` collision. It never
+/// flips over its anchor: give it [`room_under`] as its most height.
 pub fn popover_inside(
   (anchor, frame): (&ElementRef, &ElementRef),
   open: Signal<bool>,
-  (width, end_inset): (f32, f32),
+  end_inset: f32,
   panel: impl Into<Element>,
-) -> Popup {
-  let past = (anchor.x() + width) - (frame.x() + frame.width() - end_inset);
-  Popup::new(anchor.clone(), panel)
-    .open(open)
-    .placement(Placement::BottomStart)
-    .offset(-past.max(0.0), ExtraSpacing::Snug.value())
+) -> ui::Popover {
+  popover(anchor.clone(), open, PopoverSide::Below, panel)
+    .within_inset(frame.clone(), Padding::new().right(end_inset))
     .collision(CollisionStrategy::Clamp)
 }
 
@@ -105,20 +102,21 @@ pub fn room_under(ctx: &Ctx, anchor: &ElementRef, above_bar: f32) -> Option<f32>
 }
 
 /// `panel` opened by the status bar item `item` while `open` holds, placed over the status bar `bar` (the MCP
-/// item's popover, `QqBCj`): 9 above the bar and its end 12 from the bar's, so it stays inside the window.
+/// item's popover, `QqBCj`): 9 above the bar and its end 12 from the bar's, so it stays inside the window. The item
+/// stays its trigger, where the focus goes back.
 pub fn bar_popover(
   ctx: &Ctx,
   (item, bar): (&ElementRef, &ElementRef),
   open: Signal<bool>,
   panel: impl Into<Element>,
-) -> Popup {
+) -> ui::Popover {
   let inset = ctx.theme().spacing_value(SpacingSize::Md).to_px();
-  let (x, y) = at_frame_end(item, bar, PopoverSide::Above);
-  Popup::new(item.clone(), panel)
-    .open(open)
+  ui::Popover::new(open, item.clone())
+    .placed_by(bar.clone())
     .placement(Placement::TopEnd)
-    // Over its anchor, lurq counts the offset away from it.
-    .offset(x - inset, y + ExtraSpacing::Inline.value())
+    .offset(ExtraSpacing::Inline.role())
+    .cross_offset(-inset)
+    .child(panel)
 }
 
 /// How far a popup at the end of `trigger`, over or under it, moves to open at the end of `frame`, the element
