@@ -129,8 +129,8 @@ fn collect(element: lurq::node::element::ElementRef<'_>, into: &mut Vec<String>)
 /// The update row's label and hint, and its actions' words.
 fn row(section: &mut Section) -> (String, String, Vec<String>) {
   (
-    section.text("settings-update-label"),
-    section.text("settings-update-hint"),
+    section.text("settings-update-title"),
+    section.text("settings-update-description"),
     section.texts("settings-update-actions").unwrap_or_default(),
   )
 }
@@ -201,7 +201,7 @@ fn app_updates_ui_a_download_shows_its_share_and_pauses_and_resumes() {
     total: 91_000_000,
   }));
   assert_eq!(
-    paused.text("settings-update-label"),
+    paused.text("settings-update-title"),
     "Download of Orchester 0.4.0 paused · 42%"
   );
   paused.press("settings-update-resume");
@@ -306,7 +306,7 @@ fn app_updates_ui_an_unreachable_cloud_says_when_it_last_answered() {
   let mut section = Section::of(facts(UpdateState::CloudUnreachable {
     last_checked: Some(two_hours_ago),
   }));
-  let hint = section.text("settings-update-hint");
+  let hint = section.text("settings-update-description");
   assert!(hint.starts_with("Last checked 2"), "{hint}");
   assert!(hint.ends_with("· Orchester tries again in 20 minutes"), "{hint}");
 }
@@ -349,11 +349,14 @@ fn app_updates_ui_a_copy_that_does_not_update_itself_links_the_newest_release() 
 fn app_updates_ui_channel_switch_and_last_check_are_rows_below() {
   let mut section = Section::of(facts(UpdateState::Checking));
   assert_eq!(section.text("settings-updates-title"), "Updates");
-  assert_eq!(section.text("settings-update-channel-label"), "Channel");
-  assert_eq!(section.text("settings-update-automatic-label"), "Update automatically");
+  assert_eq!(section.text("settings-update-channel-title"), "Channel");
+  assert_eq!(
+    section.text("settings-update-automatic-row-title"),
+    "Update automatically"
+  );
   let time = display::clock(Timestamp::from_unix_millis(CHECKED));
   assert_eq!(
-    section.text("settings-update-checked-hint"),
+    section.text("settings-update-checked-description"),
     format!("Orchester Cloud · {time}")
   );
   section.press("settings-update-channel-beta");

@@ -114,7 +114,7 @@ pub fn group(
   };
   let label = ctx.t("modules.form.delivery.ownBranch.label");
   let switched = own.clone();
-  let own_row = SettingRow::new("module-own-branch", label.clone())
+  let own_row = SettingRow::new("module-own-branch-row", label.clone())
     .hint(hint)
     .control(
       Toggle::new("module-own-branch", ToggleKind::Switch, held.own_branch, label)
@@ -171,7 +171,7 @@ pub(super) fn deliver_row(ctx: &mut Ctx, (own, hint): (&Signal<OwnPick>, &str), 
   let label = ctx.t("modules.form.delivery.deliver.label");
   let on = accepted && own.get().deliver_when_accepted;
   let switch = Toggle::new("module-deliver-when-accepted", ToggleKind::Switch, on, label.clone()).hide_label();
-  let row = SettingRow::new("module-deliver-when-accepted", label);
+  let row = SettingRow::new("module-deliver-when-accepted-row", label);
   if accepted {
     let switched = own.clone();
     row

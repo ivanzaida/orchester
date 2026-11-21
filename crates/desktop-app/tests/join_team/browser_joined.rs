@@ -36,11 +36,11 @@ fn join_team_browser_joined_server_shows_as_not_connected_and_connect_joins_it()
   let mut window = settings(&server);
   shows(&mut window, &connect());
   assert_eq!(
-    window.text(&format!("{}-label", row())),
+    window.text(&format!("{}-title", row())),
     server.url().trim_start_matches("http://")
   );
   assert_eq!(
-    window.text(&format!("{}-hint", row())),
+    window.text(&format!("{}-description", row())),
     "Joined · this computer isn't connected"
   );
   assert!(!has(&mut window, "orchester-no-servers"), "the server is listed");

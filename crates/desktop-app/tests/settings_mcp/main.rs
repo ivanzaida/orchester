@@ -172,7 +172,7 @@ impl Shown {
   /// Whether the server listens, as the line under *Address* says (`Address` `Z2NAcC`).
   fn listening(&mut self) -> bool {
     self
-      .texts("settings-mcp-address-hint")
+      .texts("settings-mcp-address-description")
       .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Listening")))
   }
 

@@ -79,7 +79,7 @@ fn settings_accounts_api_a_provider_is_added_with_its_key_and_listed_under_its_c
         "{:?}",
         account.setup()
       );
-      let row = format!("api-row-{}-row", account.id());
+      let row = format!("api-row-{}", account.id());
       window.until("its row", |window| shown(window, &row));
       let said = joined(&mut window, &row);
       assert!(

@@ -38,9 +38,9 @@ fn settings_accounts_an_account_opens_as_a_page_and_its_crumb_goes_back() {
       let codex = AccountCli::Codex.default_account();
       go(&mut window, None, AccountsPanel::Account);
       window.until("the list's rows", |window| {
-        shown(window, &format!("account-row-{claude}-open"))
+        shown(window, &format!("account-row-{claude}"))
       });
-      click(&mut window, &format!("account-row-{claude}-open"));
+      click(&mut window, &format!("account-row-{claude}"));
       assert_eq!(now(&window), at(Some(claude), AccountsPanel::Account));
       window.until("Claude's page", |window| shown(window, "account-page"));
       assert!(
@@ -54,7 +54,7 @@ fn settings_accounts_an_account_opens_as_a_page_and_its_crumb_goes_back() {
         "the crumb goes back to the list"
       );
       window.until("the list", |window| shown(window, "settings-accounts"));
-      click(&mut window, &format!("account-row-{codex}-open"));
+      click(&mut window, &format!("account-row-{codex}"));
       assert_eq!(now(&window), at(Some(codex), AccountsPanel::Account));
 
       back(&mut window);

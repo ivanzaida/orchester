@@ -108,7 +108,7 @@ impl Component for DailyReportSection {
       let reason = message_text(ctx, reason);
       field_error(&format!("{ID}-error"), &ctx.t_args(key, [("reason", &*reason)])).into()
     });
-    let report = SettingRow::new(ID, title)
+    let report = SettingRow::new(format!("{ID}-row"), title)
       .hint(ctx.t("settings.dailyReport.hint"))
       .info(description)
       .control(switch)

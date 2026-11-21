@@ -40,7 +40,7 @@ fn team_qa_acceptance_a_members_module_keeps_its_choice_on_this_computer() {
   // The choice is read off the UI thread: the rows show it once read.
   window.until("the choice kept here", |window| {
     window
-      .texts("module-deliver-when-accepted-hint")
+      .texts("module-deliver-when-accepted-row-description")
       .is_some_and(|hint| hint.join(" ").starts_with("The Orchestrator"))
   });
   assert!(
@@ -52,7 +52,7 @@ fn team_qa_acceptance_a_members_module_keeps_its_choice_on_this_computer() {
     "Kept on this computer: the team's server keeps neither, so each of you chooses them."
   );
   assert_eq!(
-    window.text("module-deliver-when-accepted-hint"),
+    window.text("module-deliver-when-accepted-row-description"),
     "The Orchestrator asks the team's server to deliver the branch when acceptance finds nothing; an Admin or the \
      automatic merge decides"
   );

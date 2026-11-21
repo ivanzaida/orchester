@@ -59,7 +59,7 @@ fn program_group(ctx: &mut Ctx) -> Element {
     .render(ctx);
   let path = skeleton::line(ctx, ExtraTypography::PropertyMono.role(), PROGRAM);
   let program = SettingRow::new(
-    "settings-browser-program-reading",
+    "settings-browser-program-reading-row",
     ctx.t("settings.browser.program.label"),
   )
   .hint(ctx.t("settings.browser.program.hint"))
