@@ -205,7 +205,7 @@ fn avatars_breadcrumbs_and_detail_rows_take_their_design_sizes() {
   assert_eq!(kit.texts("crumbs"), ["Kontur", "/", "Tasks", "/", "KON-12"]);
   let (first, slash, second) = (
     kit.bounds("crumbs-0"),
-    kit.bounds("crumbs-separator-1"),
+    kit.bounds("crumbs-separator"),
     kit.bounds("crumbs-1"),
   );
   assert_close(gap_after(first, slash), 6.0, "crumb to separator");
@@ -233,7 +233,7 @@ fn ancestor_crumbs_keep_their_room_and_the_page_crumb_is_cut() {
       .child(crumbs)
       .into()
   });
-  let (ancestor, page) = (kit.bounds("cut-0-label"), kit.bounds("cut-1"));
+  let (ancestor, page) = (kit.bounds("cut-0"), kit.bounds("cut-1"));
   assert!(
     ancestor.width >= 100.0,
     "the ancestor keeps its room: {}",
@@ -244,9 +244,9 @@ fn ancestor_crumbs_keep_their_room_and_the_page_crumb_is_cut() {
     page.width > 0.0 && page.x + page.width <= 260.5,
     "the page's crumb takes what is left"
   );
-  kit.rest_on("cut-0-label");
-  assert_eq!(
-    kit.texts("cut-0-label-tooltip"),
-    ["Kontur platform, billing and the partner portal"]
-  );
+  let name = "Kontur platform, billing and the partner portal";
+  let shown = |kit: &mut Kit| kit.all_texts().iter().filter(|text| *text == name).count();
+  assert_eq!(shown(&mut kit), 1, "the cut name alone");
+  kit.rest_on("cut-0");
+  assert_eq!(shown(&mut kit), 2, "and whole in its tooltip");
 }

@@ -190,7 +190,12 @@ fn crumbs(ctx: &mut Ctx, page: &Page<'_>) -> Row {
       );
     }
   }
-  breadcrumb(ctx, "files-crumbs", CrumbSeparator::Slash, crumbs).height(Dimension::Px(CRUMBS_HEIGHT))
+  Row::new()
+    .height(Dimension::Px(CRUMBS_HEIGHT))
+    .max_width(Dimension::Pct(100.0))
+    .min_width(Dimension::Px(0.0))
+    .align_items(Alignment::Center)
+    .child(breadcrumb(ctx, "files-crumbs", CrumbSeparator::Slash, crumbs))
 }
 
 /// The icon and the name: the file's, the path refused, or *Files*.

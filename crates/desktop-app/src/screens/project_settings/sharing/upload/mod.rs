@@ -400,7 +400,7 @@ async fn review_again(
 }
 
 /// Kontur › Project settings › Sharing › Link to Kontur team; the settings' crumbs put the page away with `close`.
-fn crumbs(ctx: &mut Ctx, (local, server): (&str, &str), close: impl Fn() + Clone + Send + Sync + 'static) -> Row {
+fn crumbs(ctx: &mut Ctx, (local, server): (&str, &str), close: impl Fn() + Clone + Send + Sync + 'static) -> Element {
   let crumbs = vec![
     Crumb::here(local.to_owned()).ancestor(),
     Crumb::link(ctx.t("project_settings.title"), close.clone()),

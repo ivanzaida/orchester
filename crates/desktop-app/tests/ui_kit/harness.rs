@@ -103,6 +103,14 @@ impl Kit {
     all
   }
 
+  /// Every text the window shows, an overlay's too (a tooltip lurq names no id of).
+  pub fn all_texts(&mut self) -> Vec<String> {
+    let root = self.tree.root().expect("the window has a root");
+    let mut all = Vec::new();
+    collect(root, &mut all);
+    all
+  }
+
   /// A press with the pointer at the middle of `id`.
   pub fn click(&mut self, id: &str) {
     let (x, y) = self.middle(id);
