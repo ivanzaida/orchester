@@ -158,6 +158,17 @@ pub fn menu_at_end(anchor: ElementRef, open: Signal<bool>, panel: MenuPanel) -> 
     .offset(ExtraSpacing::Snug.role())
 }
 
+/// `panel` with its corner at `point` of the window while `open` holds, as a context menu stands (a row's menu at the
+/// pointer); `anchor` (the row) is where the focus goes back, and a press of it only closes the menu. It closes as
+/// [`menu`] does.
+pub fn menu_at(anchor: ElementRef, open: Signal<bool>, point: (f32, f32), panel: MenuPanel) -> ui::Menu {
+  panel
+    .menu(anchor, open)
+    .at(Some(point))
+    .offset(0.0)
+    .switch_on_anchor_press(false)
+}
+
 /// `panel` drawn in place, for a popup of the kit's that places it (a property chip's popover, a popup placed by a
 /// frame around its control): its items are still lurq's menu's, the arrows move between them, and a choice, or Tab,
 /// sets `open` to `false`, which closes that popup.

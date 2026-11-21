@@ -112,6 +112,12 @@ fn history_rows_pin_lists_the_conversation_under_pinned_at_the_top_until_unpinne
   screen.until("the menu at the pointer", |screen| {
     screen.exists(&format!("orchestrator-history-menu-{older}"))
   });
+  let menu = screen.bounds(&format!("orchestrator-history-menu-{older}"));
+  let corner_at_pointer = (menu.x - x).abs() < 0.5 || (menu.x + menu.width - x).abs() < 0.5;
+  assert!(
+    corner_at_pointer && (menu.y - y).abs() < 0.5,
+    "the menu's corner is at the pointer, toward the start where the window has no room: {menu:?} for ({x}, {y})"
+  );
   screen.click(&format!("orchestrator-history-pin-{older}"));
   screen.until("the Pinned group", |screen| {
     screen.exists("orchestrator-history-heading-Pinned")

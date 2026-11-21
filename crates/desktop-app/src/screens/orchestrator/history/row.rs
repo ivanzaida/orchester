@@ -20,7 +20,7 @@ use lurq::{
     events::{KeyboardEvent, MouseButton, mouse_event::MouseEvent},
     theme::{PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Placement, Popup, Row, Text, TextOverflow},
+  components::{Column, Row, Text, TextOverflow},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, Style, dimension::Dimension, padding::Padding},
@@ -52,7 +52,7 @@ use crate::{
     icon::Icon,
     icon_button::IconButton,
     kbd::key_cap,
-    menu::{MenuItem, inline_menu, menu_at_end, menu_panel, separator},
+    menu::{MenuItem, menu_at, menu_at_end, menu_panel, separator},
     message::message_text,
     pressable::opening,
   },
@@ -477,16 +477,7 @@ impl ItemView {
         .render(ctx),
       );
     match self.pointer.get() {
-      // The menu's corner at the pointer: the popup is placed from the row's bottom start.
-      Some((x, y)) => {
-        let (left, top, _, height) = self.row.rect();
-        Popup::new(self.row.clone(), inline_menu(self.menu.clone(), panel))
-          .open(self.menu.clone())
-          .placement(Placement::BottomStart)
-          .offset(x - left, y - (top + height))
-          .switch_on_anchor_press(false)
-          .into()
-      }
+      Some(point) => menu_at(self.row.clone(), self.menu.clone(), point, panel).into(),
       None => menu_at_end(self.button.clone(), self.menu.clone(), panel).into(),
     }
   }

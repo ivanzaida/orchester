@@ -71,14 +71,10 @@ pub fn popover(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel:
 }
 
 /// `panel` opened 6 from `anchor` on `side` while `open` holds, which a press on `anchor` never opens: the app alone
-/// opens it (a card's question). lurq's `ui::Popover` cannot be told so (it has no `switch_on_anchor_press`), so this
-/// stays the engine's `Popup`; a press outside or Esc closes it.
-pub fn popup_by_app(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> Popup {
-  Popup::new(anchor, panel)
-    .open(open)
-    .placement(side.placement())
-    .offset(0.0, ExtraSpacing::Snug.value())
-    .switch_on_anchor_press(false)
+/// opens it (a card's question), and a press of the anchor only closes it, as a press elsewhere does. It is
+/// [`popover`] otherwise.
+pub fn popup_by_app(anchor: ElementRef, open: Signal<bool>, side: PopoverSide, panel: impl Into<Element>) -> ui::Popover {
+  popover(anchor, open, side, panel).switch_on_anchor_press(false)
 }
 
 /// `panel`, `width` wide, opened under `anchor` from its start while `open` holds, moved back just enough that it ends
