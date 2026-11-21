@@ -337,8 +337,8 @@ fn actions(ctx: &mut Ctx, props: &RowProps, (menu, lists): (&MenuPlace, &team_me
   });
   let id = format!("task-more-{key}");
   let more = if let Some(team) = &props.team {
-    task_close::more_menu(ctx, menu, (key, &id, team_menu::MENU_WIDTH), |ctx, open| {
-      team_menu::rows(ctx, (props.project, team), &id, (open, lists))
+    task_close::more_menu(ctx, menu, (key, &id, team_menu::MENU_WIDTH), |ctx, _| {
+      team_menu::rows(ctx, (props.project, team), &id, lists)
     })
   } else {
     let subject = Subject {

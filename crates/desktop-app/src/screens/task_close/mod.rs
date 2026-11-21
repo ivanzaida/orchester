@@ -22,7 +22,7 @@ use lurq::{
   components::Row,
   core::{ElementRef, Signal},
   node::Element,
-  ui,
+  ui::{self, SubmenuOpen},
 };
 use orchester_core::{
   id::{RunId, TaskId},
@@ -469,7 +469,8 @@ pub fn more_menu(
     let panel = menu_panel(&format!("{id}-panel"))
       .width(width)
       .with_children(rows(ctx, &place.open));
-    menu_at_end(place.anchor.clone(), place.open.clone(), panel)
+    // A row that opens a list beside the menu opens it on a press, as a card's menu does.
+    menu_at_end(place.anchor.clone(), place.open.clone(), panel).submenus(SubmenuOpen::Press)
   });
   Row::new().child(button).with_children(menu).into()
 }

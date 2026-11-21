@@ -14,7 +14,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
-  core::{ElementRef, Signal},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
   ui::{self, Styled},
@@ -39,6 +39,8 @@ const LABEL_HEIGHT: f32 = 16.0;
 
 enum Choice {
   Action(Press),
+  /// It opens this menu beside it.
+  Submenu(Box<ui::Menu>),
   /// It cannot be chosen now, for this reason.
   Unavailable(Arc<str>),
 }
@@ -63,14 +65,10 @@ pub struct MenuItem {
   inline: bool,
   /// The row is 40 high whatever its detail, its content centered.
   tall: bool,
-  /// The row opens a list beside the menu: a 12 `text_muted` chevron at its end.
-  submenu: bool,
   /// What the row leads to, in 11 `text_muted` at its end, where a shortcut would be.
   hint: Option<Arc<str>>,
   /// An unavailable row's reason is said elsewhere, in the menu's foot: the row is only faded.
   reason_below: bool,
-  /// What the row is, for what opens beside it.
-  at: Option<ElementRef>,
   choice: Choice,
 }
 
@@ -83,6 +81,12 @@ impl MenuItem {
   /// A row saying `label` that opens a place with `open` by a browser's rules when chosen (`navigation::link`).
   pub fn opens(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, open: Open) -> Self {
     Self::with_choice(id.into(), label.into(), Choice::Action(Press::Open(open)))
+  }
+
+  /// A row saying `label` that opens `submenu` beside the menu (a lurq submenu, given the row as its anchor): a 12
+  /// `text_muted` chevron at its end, after its keys (`Item · Move to` in `Card menu` `vV3BX`).
+  pub fn opening(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>, submenu: ui::Menu) -> Self {
+    Self::with_choice(id.into(), label.into(), Choice::Submenu(Box::new(submenu)))
   }
 
   /// A row that cannot be chosen now, for `reason`: faded, ending in a lock, the reason as its detail.
@@ -104,10 +108,8 @@ impl MenuItem {
       danger: false,
       inline: false,
       tall: false,
-      submenu: false,
       hint: None,
       reason_below: false,
-      at: None,
       choice,
     }
   }
@@ -119,26 +121,11 @@ impl MenuItem {
     self
   }
 
-  /// The row opens a list beside the menu: a chevron at its end, after its keys (`Item · Move to` in `Card menu`
-  /// `vV3BX`).
-  #[must_use]
-  pub const fn submenu(mut self) -> Self {
-    self.submenu = true;
-    self
-  }
-
   /// What the row leads to, at its end in 11 `text_muted`, right-aligned (`ready to claim` in `Reopen menu` of T4
   /// `V26A3`).
   #[must_use]
   pub fn hint(mut self, hint: impl Into<Arc<str>>) -> Self {
     self.hint = Some(hint.into());
-    self
-  }
-
-  /// The row is `at`, for what opens beside it (a card menu's list beside its *Move to*).
-  #[must_use]
-  pub fn element(mut self, at: ElementRef) -> Self {
-    self.at = Some(at);
     self
   }
 
@@ -271,7 +258,7 @@ impl MenuItem {
   fn trailing(&self) -> Option<Element> {
     match (&self.choice, self.chosen == Some(true), &self.shortcut) {
       (Choice::Unavailable(_), ..) if !self.lock => None,
-      (Choice::Action(_), false, _) if self.hint.is_some() => self.hint.as_deref().map(|hint| {
+      (Choice::Action(_) | Choice::Submenu(_), false, _) if self.hint.is_some() => self.hint.as_deref().map(|hint| {
         Text::new(hint)
           .id(format!("{}-hint", self.id))
           .variant(TypographyStyle::Caption)
@@ -297,7 +284,7 @@ impl MenuItem {
     let detail = match &self.choice {
       Choice::Unavailable(_) if self.reason_below => None,
       Choice::Unavailable(reason) => Some(reason.clone()),
-      Choice::Action(_) => self.detail.clone(),
+      Choice::Action(_) | Choice::Submenu(_) => self.detail.clone(),
     };
     let row = self.row(ctx, detail.as_deref());
     let item = ui::MenuItem::new(&self.label)
@@ -318,6 +305,7 @@ impl MenuItem {
           .on_open_aside(move |event: MouseEvent| follow(&aside, &event))
           .describe("state", "enabled")
       }
+      Choice::Submenu(submenu) => item.submenu(*submenu).describe("state", "enabled"),
       Choice::Unavailable(reason) => item
         .unavailable(&reason)
         .describe("state", "unavailable")
@@ -333,11 +321,7 @@ impl MenuItem {
   /// What the row shows: its icon, label and detail, and at its end its hint, keys, check, lock or chevron.
   fn row(&self, ctx: &mut Ctx, detail: Option<&str>) -> Row {
     let stacked = detail.is_some() && !self.inline && !self.tall;
-    let row = match &self.at {
-      Some(at) => Row::new().ref_element(at.clone()),
-      None => Row::new(),
-    };
-    row
+    Row::new()
       .width(Dimension::Pct(100.0))
       .min_height(Dimension::Px(if self.tall {
         ControlHeight::Agent.value()
@@ -362,8 +346,7 @@ impl MenuItem {
       .child(self.text(ctx, detail))
       .with_children(self.trailing())
       .with_children(
-        self
-          .submenu
+        matches!(self.choice, Choice::Submenu(_))
           .then(|| icon(Icon::ChevronRight, IconSize::Sm, PaletteColor::MutedForeground)),
       )
   }

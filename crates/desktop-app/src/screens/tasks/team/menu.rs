@@ -9,10 +9,10 @@ use std::sync::Arc;
 
 use lurq::{
   app::{
-    ctx::{Ctx, OutsidePress},
+    ctx::Ctx,
     theme::{PaletteColor, SpacingSize},
   },
-  components::{Placement, Popup, Text},
+  components::Text,
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
   ui,
@@ -32,16 +32,16 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     icon::Icon,
-    menu::{Entry, MenuItem, foot as menu_foot, inline_menu, menu_panel, separator},
+    menu::{Entry, MenuItem, foot as menu_foot, menu_panel, separator, submenu},
     status::{workflow_key, workflow_look},
   },
 };
 
 /// The menu's width (`gyG3z` in T7 `lCoNt`, 210) and its lists' (`vV3BX`, `c88il` in `07`, as T10's menus draw them); a
-/// list opens 8 past the end of the row that opens it and 9 over its top, so its first row sits beside that row.
+/// list opens 8 past the end of the row that opens it, its first row beside that row.
 pub(in crate::screens::tasks) const MENU_WIDTH: f32 = 210.0;
 const LIST_WIDTH: f32 = 200.0;
-const LIST_OFFSET: (f32, f32) = (8.0, -9.0);
+const LIST_GAP: f32 = 8.0;
 
 /// What a team task's row menu is made from: the task, as the list read it, and what it offers the person.
 #[derive(Clone, Debug, PartialEq)]
@@ -63,50 +63,43 @@ enum Page {
   Reopen,
 }
 
-impl lurq::app::component::DevtoolsInspectable for Page {}
-
-/// Which list of a row's menu is open, and what it opens beside.
+/// Whether each list of a row's menu is open, and the row it opens beside.
 #[derive(Clone)]
 pub(in crate::screens::tasks) struct Lists {
-  page: Signal<Option<Page>>,
-  open: Signal<bool>,
-  anchor: ElementRef,
+  move_to: (Signal<bool>, ElementRef),
+  reopen: (Signal<bool>, ElementRef),
 }
 
 impl Lists {
   /// The lists of the menu that `menu` keeps; they close with it, so the next time it opens it shows its own rows.
   pub fn new(ctx: &mut Ctx, menu: &MenuPlace) -> Self {
     let lists = Self {
-      page: ctx.signal(None),
-      open: ctx.signal(false),
-      anchor: ElementRef::default(),
+      move_to: (ctx.signal(false), ElementRef::default()),
+      reopen: (ctx.signal(false), ElementRef::default()),
     };
-    let (page, open) = (lists.page.clone(), lists.open.clone());
+    let (move_to, reopen) = (lists.move_to.0.clone(), lists.reopen.0.clone());
     menu.on_closed(ctx, move || {
-      page.set(None);
-      open.set(false);
+      move_to.set(false);
+      reopen.set(false);
     });
     lists
   }
 
-  /// Opens `page` beside its row; the choice closes the menu, which stays open for its list.
-  fn show(&self, page: Page, menu: &Signal<bool>) -> impl Fn() + Send + Sync + 'static {
-    let (shown, open, menu) = (self.page.clone(), self.open.clone(), menu.clone());
-    move || {
-      shown.set(Some(page));
-      open.set(true);
-      menu.set(true);
-    }
+  fn of(&self, page: Page) -> (ElementRef, Signal<bool>) {
+    let (open, anchor) = match page {
+      Page::MoveTo => &self.move_to,
+      Page::Reopen => &self.reopen,
+    };
+    (anchor.clone(), open.clone())
   }
 }
 
-/// The rows of `team`'s *More actions* menu, their ids starting with `id`; a row that opens a list keeps the menu
-/// `open` for it.
+/// The rows of `team`'s *More actions* menu, their ids starting with `id`; a row that opens a list opens it beside it.
 pub(in crate::screens::tasks) fn rows(
   ctx: &mut Ctx,
   (project, team): (ProjectId, &RowTeam),
   id: &str,
-  (open, lists): (&Signal<bool>, &Lists),
+  lists: &Lists,
 ) -> Vec<Entry> {
   let task: TaskKey = team.key.parse().expect("a task's key reads back as a task key");
   let navigation = Navigation::of(ctx);
@@ -133,18 +126,15 @@ pub(in crate::screens::tasks) fn rows(
     actions: TeamActions::of(ctx),
     lists,
   };
-  let moves = items
-    .moves(ctx, open)
-    .map(|row| items.beside(Page::MoveTo, row).render(ctx).into());
+  let moves = items.moves(ctx).map(|row| row.render(ctx).into());
   rows.extend(moves);
   rows.push(copy.render(ctx).into());
-  let changes = items.changes(ctx, open);
+  let changes = items.changes(ctx);
   if !changes.is_empty() {
     rows.push(separator());
   }
   rows.extend(changes);
   rows.extend(foot(ctx, team, offered).map(Entry::from));
-  rows.extend(items.list(ctx, open).map(Entry::from));
   rows
 }
 
@@ -183,45 +173,35 @@ impl Items<'_> {
     .icon(glyph)
   }
 
-  /// `row` of the list `page`, which that list opens beside while it is open.
-  fn beside(&self, page: Page, row: MenuItem) -> MenuItem {
-    if self.lists.page.get() != Some(page) {
-      return row;
-    }
-    row.element(self.lists.anchor.clone())
-  }
-
   /// *Move to* for a task in Backlog or Todo, while the person may.
-  fn moves(&self, ctx: &Ctx, open: &Signal<bool>) -> Option<MenuItem> {
+  fn moves(&self, ctx: &mut Ctx) -> Option<MenuItem> {
     let status = self.team.organization.status();
     let movable = matches!(status, WorkflowStatus::Backlog | WorkflowStatus::Todo);
     (self.offered.abilities.triage && movable).then(|| {
-      MenuItem::new(
+      MenuItem::opening(
         format!("{}-move", self.id),
         ctx.t("tasks.board.menu.moveTo"),
-        self.lists.show(Page::MoveTo, open),
+        self.list(ctx, Page::MoveTo),
       )
       .icon(Icon::ArrowRightLeft)
       .shortcut(ctx.t("tasks.board.keys.move"))
-      .submenu()
     })
   }
 
   /// Mark as done, Mark as blocked or Clear blocked and Cancel task for an open task, *Reopen task* for a closed one,
   /// those the person may make.
-  fn changes(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Vec<Entry> {
+  fn changes(&self, ctx: &mut Ctx) -> Vec<Entry> {
     let abilities = self.offered.abilities;
     let mut changes = Vec::new();
     if self.closed() {
       if abilities.reopen {
-        let reopen = MenuItem::new(
+        let reopen = MenuItem::opening(
           format!("{}-reopen", self.id),
           ctx.t("tasks.team.lifecycle.reopenTask"),
-          self.lists.show(Page::Reopen, open),
+          self.list(ctx, Page::Reopen),
         )
-        .icon(Icon::RotateCcw)
-        .submenu();
-        changes.push(self.beside(Page::Reopen, reopen).render(ctx).into());
+        .icon(Icon::RotateCcw);
+        changes.push(reopen.render(ctx).into());
       }
       return changes;
     }
@@ -271,9 +251,8 @@ impl Items<'_> {
     .icon(Icon::Ban)
   }
 
-  /// The open list beside its row: Backlog and Todo for *Move to*, Back to Backlog and Back to Todo for *Reopen task*.
-  fn list(&self, ctx: &mut Ctx, open: &Signal<bool>) -> Option<Element> {
-    let page = self.lists.page.get()?;
+  /// The list beside its row: Backlog and Todo for *Move to*, Back to Backlog and Back to Todo for *Reopen task*.
+  fn list(&self, ctx: &mut Ctx, page: Page) -> ui::Menu {
     let (rows, foot) = match page {
       Page::MoveTo => (self.move_rows(ctx), "tasks.team.lifecycle.moveFoot"),
       Page::Reopen => (self.reopen_rows(ctx), "tasks.team.lifecycle.reopenFoot"),
@@ -283,14 +262,8 @@ impl Items<'_> {
       .with_children(rows)
       .child(separator())
       .child(note(&format!("{}-list-foot", self.id), &ctx.t(foot)));
-    // A press elsewhere in the menu closes the list and reaches the row it is on; a choice in it closes the menu.
-    let list = Popup::new(self.lists.anchor.clone(), inline_menu(open.clone(), panel))
-      .open(self.lists.open.clone())
-      .placement(Placement::RightStart)
-      .offset(LIST_OFFSET.0, LIST_OFFSET.1)
-      .outside_press(OutsidePress::PassThrough)
-      .switch_on_anchor_press(false);
-    Some(list.into())
+    let (anchor, open) = self.lists.of(page);
+    submenu(anchor, open, LIST_GAP, panel)
   }
 
   /// Backlog and Todo, the task's own checked.

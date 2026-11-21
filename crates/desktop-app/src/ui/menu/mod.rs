@@ -14,7 +14,7 @@ use lurq::{
   components::{Column, Placement, Row, ScrollVertical, Text},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
-  ui::{self, Recipe},
+  ui::{self, MenuKeys, Recipe},
 };
 
 pub use self::item::MenuItem;
@@ -68,6 +68,7 @@ pub struct MenuPanel {
   max_height: Option<f32>,
   rules: Option<Recipe>,
   entries: Vec<ui::MenuEntry>,
+  keys: Option<MenuKeys>,
 }
 
 impl MenuPanel {
@@ -97,6 +98,33 @@ impl MenuPanel {
     self
   }
 
+  /// A section of the panel that scrolls past `max_height` (lurq's `Menu::scrolling`): its items are still the menu's,
+  /// reached by the arrows and by typing, the one the keys reach scrolled into view. Its rows stand 2 apart, as the
+  /// panel's do: lurq lays a section's content out with no gap of its own, so a 2 high spacer stands between them.
+  #[must_use]
+  pub fn scrolling(mut self, entries: impl IntoIterator<Item = impl Into<Entry>>, max_height: f32) -> Self {
+    let mut spaced = Vec::new();
+    for entry in entries {
+      if !spaced.is_empty() {
+        spaced.push(ui::MenuEntry::Element(row_gap()));
+      }
+      spaced.push(entry.into().0);
+    }
+    self.entries.push(ui::MenuEntry::Scroll {
+      entries: spaced,
+      max_height,
+    });
+    self
+  }
+
+  /// The menu leaves the focus in the field `keys` was made with (lurq's `Menu::keeps_focus`): while it has the focus,
+  /// Up and Down move the active item, Enter chooses it and Esc closes the menu; every other key is the field's.
+  #[must_use]
+  pub fn keeps_focus(mut self, keys: &MenuKeys) -> Self {
+    self.keys = Some(keys.clone());
+    self
+  }
+
   /// lurq's menu of this panel, shown at `anchor` while `open` holds.
   fn menu(self, anchor: ElementRef, open: Signal<bool>) -> ui::Menu {
     self.fill(ui::Menu::new(open, anchor))
@@ -110,6 +138,9 @@ impl MenuPanel {
     }
     if let Some(rules) = &self.rules {
       menu = menu.rules(rules);
+    }
+    if let Some(keys) = &self.keys {
+      menu = menu.keeps_focus(keys);
     }
     if let Some(width) = self.width {
       menu = menu.style(ui::MenuPart::Panel, |style| style.width(width));
@@ -129,7 +160,16 @@ pub fn menu_panel(id: &str) -> MenuPanel {
     max_height: None,
     rules: None,
     entries: Vec::new(),
+    keys: None,
   }
+}
+
+/// The 2 between two rows of a section that scrolls ([`MenuPanel::scrolling`]), as the panel's gap is.
+fn row_gap() -> Element {
+  Row::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(ExtraSpacing::Tight.value()))
+    .into()
 }
 
 /// The panel of a filter's menu, `width` wide, with the element id `id` (`CLI menu` `tEymU`).
@@ -156,6 +196,12 @@ pub fn menu_at_end(anchor: ElementRef, open: Signal<bool>, panel: MenuPanel) -> 
     .menu(anchor, open)
     .placement(Placement::BottomEnd)
     .offset(ExtraSpacing::Snug.role())
+}
+
+/// `panel` as the submenu of a row ([`MenuItem::opening`]), open while `open` holds, `gap` past the row's end with its
+/// first row level with it: a choice in it closes it and the menus it hangs from.
+pub fn submenu(anchor: ElementRef, open: Signal<bool>, gap: f32, panel: MenuPanel) -> ui::Menu {
+  panel.menu(anchor, open).offset(gap)
 }
 
 /// `panel` with its corner at `point` of the window while `open` holds, as a context menu stands (a row's menu at the

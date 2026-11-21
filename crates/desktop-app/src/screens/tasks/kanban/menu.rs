@@ -10,15 +10,16 @@ use std::sync::Arc;
 
 use lurq::{
   app::{
-    ctx::{Ctx, OutsidePress},
+    ctx::Ctx,
     theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Placement, Popup, Text},
+  components::{Column, Text},
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension, padding::Padding},
-  ui,
+  ui::{self, SubmenuOpen},
 };
 use orchester_core::{
+  id::TaskId,
   project::TaskKey,
   task::organization::{Priority, WorkflowStatus},
 };
@@ -38,84 +39,90 @@ use crate::{
   ui::{
     clipboard::Clipboard,
     icon::Icon,
-    menu::{Entry, MenuItem, inline_menu, menu_at_end, menu_panel, separator},
+    menu::{Entry, MenuItem, menu_at_end, menu_panel, separator, submenu},
     status::{priority_look, workflow_key, workflow_look},
   },
 };
 
-/// The menu's width (`vV3BX`) and its lists' (`c88il`); a list opens 8 past the end of the row that opens it and 9
-/// over its top, so its first row sits beside that row.
+/// The menu's width (`vV3BX`) and its lists' (`c88il`); a list opens 8 past the end of the row that opens it, its
+/// first row beside that row.
 const MENU_WIDTH: f32 = 220.0;
 const LIST_WIDTH: f32 = 200.0;
-const LIST_OFFSET: (f32, f32) = (8.0, -9.0);
+const LIST_GAP: f32 = 8.0;
 
-/// What a card's menu opens from: whether it is open and what it opens beside, and the same for its list, which opens
-/// beside the row that opens it.
-pub struct MenuHandles<'a> {
-  pub open: &'a Signal<bool>,
-  pub anchor: &'a ElementRef,
-  pub list_open: &'a Signal<bool>,
-  pub list_anchor: &'a ElementRef,
+/// The lists a card's menu opens beside its rows, in the order of those rows.
+const LISTS: [MenuPage; 3] = [MenuPage::MoveTo, MenuPage::Priority, MenuPage::Tags];
+
+/// Whether each of a card menu's lists (Move to, Priority, Tags) is open, and the row it opens beside, made once with
+/// the card. A list follows the board's open menu page, which the keys set too, and a person opening or closing one
+/// sets that page.
+pub struct Lists {
+  open: [Signal<bool>; 3],
+  anchors: [ElementRef; 3],
 }
 
-/// The menu of `card`, open while `handles.open` holds, beside `handles.anchor`, with the list it opened beside it.
-pub fn card_menu(ctx: &mut Ctx, card: &CardModel, handles: &MenuHandles<'_>) -> ui::Menu {
-  let state = BoardState::of(ctx);
-  let page = state
-    .menu
-    .get()
-    .0
-    .filter(|(task, _)| *task == card.row.id)
-    .map_or(MenuPage::Commands, |(_, page)| page);
-  let id = format!("task-menu-{}", card.row.key);
-  let open = handles.open;
-  let rows = commands(ctx, card, &state, (open, page, handles.list_anchor));
-  let list = match page {
-    MenuPage::Commands => None,
-    MenuPage::MoveTo => Some(move_to(ctx, card)),
-    MenuPage::Priority => Some(priorities(ctx, card, &state)),
-    MenuPage::Tags => Some(tags(ctx, card, &state)),
-  };
-  // A press elsewhere in the menu closes the list and reaches the row it is on.
-  let list = list.map(|rows| {
-    let panel = menu_panel(&format!("{id}-list")).width(LIST_WIDTH).with_children(rows);
-    // A choice in the list closes the card's menu, which holds it.
-    Popup::new(handles.list_anchor.clone(), inline_menu(open.clone(), panel))
-      .open(handles.list_open.clone())
-      .placement(Placement::RightStart)
-      .offset(LIST_OFFSET.0, LIST_OFFSET.1)
-      .outside_press(OutsidePress::PassThrough)
-      .switch_on_anchor_press(false)
-  });
-  let panel = menu_panel(&id)
-    .width(MENU_WIDTH)
-    .with_children(rows)
-    .with_children(list.map(Element::from));
-  menu_at_end(handles.anchor.clone(), open.clone(), panel)
-}
+impl Lists {
+  pub fn new(ctx: &mut Ctx, task: TaskId, menu: &Signal<OpenMenu>) -> Self {
+    let open = [ctx.signal(false), ctx.signal(false), ctx.signal(false)];
+    for (list, page) in open.iter().zip(LISTS) {
+      let menu = menu.clone();
+      ctx.watch(list, move |open: &bool| {
+        let held = menu.get_untracked().0.filter(|(held, _)| *held == task);
+        match held {
+          Some((_, shown)) if *open && shown != page => menu.set(OpenMenu(Some((task, page)))),
+          Some((_, shown)) if !*open && shown == page => menu.set(OpenMenu(Some((task, MenuPage::Commands)))),
+          _ => {}
+        }
+      });
+    }
+    Self {
+      open,
+      anchors: Default::default(),
+    }
+  }
 
-/// Opens the list `page` of `card`'s menu beside it.
-fn opens(
-  state: &BoardState,
-  open: &Signal<bool>,
-  card: &CardModel,
-  page: MenuPage,
-) -> impl Fn() + Send + Sync + 'static {
-  let (menu, open, task) = (state.menu.clone(), open.clone(), card.row.id);
-  move || {
-    menu.set(OpenMenu(Some((task, page))));
-    open.set(true);
+  /// Opens the list of `page` and closes the others.
+  pub fn follow(&self, page: Option<MenuPage>) {
+    for (list, shown) in self.open.iter().zip(LISTS) {
+      let open = page == Some(shown);
+      if list.get_untracked() != open {
+        list.set(open);
+      }
+    }
+  }
+
+  fn of(&self, page: MenuPage) -> (ElementRef, Signal<bool>) {
+    let index = LISTS.iter().position(|list| *list == page).expect("a list is one of LISTS");
+    (self.anchors[index].clone(), self.open[index].clone())
   }
 }
 
-/// The menu's commands; a read-only card's (`Dropping::locked`) only opens its task and copies its key. The row of the
-/// open list `page` is what that list opens beside.
-fn commands(
-  ctx: &mut Ctx,
-  card: &CardModel,
-  state: &BoardState,
-  (open, page, list_anchor): (&Signal<bool>, MenuPage, &ElementRef),
-) -> Vec<Entry> {
+/// The menu of `card`, open while `open` holds, beside `anchor`, its rows opening their lists beside them.
+pub fn card_menu(ctx: &mut Ctx, card: &CardModel, (open, anchor): (&Signal<bool>, &ElementRef), lists: &Lists) -> ui::Menu {
+  let id = format!("task-menu-{}", card.row.key);
+  let rows = commands(ctx, card, lists);
+  let panel = menu_panel(&id).width(MENU_WIDTH).with_children(rows);
+  menu_at_end(anchor.clone(), open.clone(), panel).submenus(SubmenuOpen::Press)
+}
+
+/// The list of `page` beside its row.
+fn list(ctx: &mut Ctx, card: &CardModel, page: MenuPage, lists: &Lists) -> ui::Menu {
+  let state = BoardState::of(ctx);
+  let rows = match page {
+    MenuPage::Priority => priorities(ctx, card, &state),
+    MenuPage::Tags => tags(ctx, card, &state),
+    MenuPage::MoveTo | MenuPage::Commands => move_to(ctx, card),
+  };
+  let panel = menu_panel(&format!("task-menu-{}-list", card.row.key))
+    .width(LIST_WIDTH)
+    .with_children(rows);
+  let (anchor, open) = lists.of(page);
+  submenu(anchor, open, LIST_GAP, panel)
+}
+
+/// The menu's commands; a read-only card's (`Dropping::locked`) only opens its task and copies its key.
+fn commands(ctx: &mut Ctx, card: &CardModel, lists: &Lists) -> Vec<Entry> {
+  let state = BoardState::of(ctx);
   let dropping = Dropping::of(ctx);
   let busy = state.busy() || dropping.closer.busy();
   let id = |name: &str| format!("task-menu-{}-{name}", card.row.key);
@@ -128,14 +135,6 @@ fn commands(
   .icon(Icon::ArrowUpRight)
   .shortcut(ctx.t("tasks.board.keys.enter"));
   let waiting = ctx.t("task_close.menu.busy");
-  let changing = |name: &str, label: Arc<str>, glyph: Icon, list: MenuPage| {
-    if busy {
-      return MenuItem::unavailable(id(name), label, waiting.clone()).icon(glyph);
-    }
-    MenuItem::new(id(name), label, opens(state, open, card, list))
-      .icon(glyph)
-      .submenu()
-  };
   let mut rows: Vec<Entry> = vec![open_task.render(ctx).into(), separator()];
   if dropping.locked(card) {
     rows.push(copy_key(ctx, card));
@@ -165,13 +164,12 @@ fn commands(
     ),
   ] {
     let (label, keys) = (ctx.t(key), ctx.t(shortcut));
-    let row = changing(name, label, glyph, list).shortcut(keys);
-    let row = if list == page {
-      row.element(list_anchor.clone())
+    let row = if busy {
+      MenuItem::unavailable(id(name), label, waiting.clone())
     } else {
-      row
+      MenuItem::opening(id(name), label, self::list(ctx, card, list, lists))
     };
-    rows.push(row.render(ctx).into());
+    rows.push(row.icon(glyph).shortcut(keys).render(ctx).into());
   }
   rows.push(copy_key(ctx, card));
   rows.extend(run_again(ctx, card, (&dropping, busy)));
